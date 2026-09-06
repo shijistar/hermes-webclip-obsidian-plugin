@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **Extractor restored as a published npm package** — reverses the earlier
+  "bundled-only" decision: `@tiny-codes/web-clip-extractor` is published again
+  (version 0.3.0, metadata updated to the renamed repository) and the plugin
+  consumes it via a repo-root `package.json` dependency; the
+  `npm-publish.yml` workflow is kept. Runtime resolution is
+  npm-installed-first (`plugin_root/node_modules/...`), with the bundled
+  `extractor/` subdirectory and the legacy sibling as fallbacks. `install.sh`
+  installs the npm dependency and runs `npx playwright install chromium`
+  explicitly (an npm dependency's `prepare` hook is skipped under npm's
+  default allow-scripts policy). Plugin version bumped 0.9.0 → 0.10.0.
 - **Plugin renamed to `webclip-obsidian`** — the manifest name (and thus the
   installed plugin directory `plugins/webclip-obsidian`, replacing
   `plugins/web-to-obsidian`) changed to match the repo's branding; install

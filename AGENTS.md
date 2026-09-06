@@ -72,8 +72,11 @@ npm test                  # node --test
 npm run check             # node --check on each src module
 ```
 
-`npm install` (no flags) runs the package's `prepare` hook
-(`npx playwright install chromium`) automatically.
+The extractor is published to npm as `@tiny-codes/web-clip-extractor`; the
+plugin consumes it as a dependency. In a source checkout the bundled
+`extractor/` directory doubles as the package (run `npm install` there to
+install deps; `npm install` alone also runs the package's `prepare` hook,
+`npx playwright install chromium`).
 
 ## Versioning rules
 
@@ -82,8 +85,8 @@ The project tracks module versions in **three** places. The CHANGELOG uses
 
 | Place                    | Field                    | Current           |
 | ------------------------ | ------------------------ | ----------------- |
-| `plugin.yaml`            | `version`                | 0.9.0             |
-| `extractor/package.json` | `version`                | 0.2.0             |
+| `plugin.yaml`            | `version`                | 0.10.0            |
+| `extractor/package.json` | `version`                | 0.3.0             |
 | `skill/SKILL.md`         | frontmatter `version`    | 1.4.2             |
 | `CHANGELOG.md`           | `## YYYY-MM-DD` headings | 2026-09-06 latest |
 
@@ -122,6 +125,39 @@ Any **new feature or behavior change** MUST:
 
 Pure docs/refactor changes that do not alter behavior do not require a version
 bump, but a CHANGELOG entry is encouraged when user-visible.
+
+### 2.1 Git tags for module versions
+
+Every module version bump MUST also create a git tag of the form
+`<type>@<version>` on the bump commit, so each published module version is
+addressable by tag:
+
+| Module               | Tag prefix                | Example                 |
+| -------------------- | ------------------------- | ----------------------- |
+| plugin               | `plugin@`                 | `plugin@0.10.0`         |
+| extractor            | `web-clip-extractor@`     | `web-clip-extractor@0.3.0` |
+| skill                | `skill@`                  | `skill@1.4.2`           |
+
+- The version value comes from the module's version field
+  (`plugin.yaml`, `extractor/package.json`, `skill/SKILL.md` frontmatter).
+- Create the tag only for modules whose version actually changed in the
+  commit.
+- If a tag with the same name already exists (e.g. after a rebase or a
+  same-version re-publish), replace it: delete the old tag and re-create it
+  on the new commit (local rewrite; see also Git workflow below on force
+  pushes — tag replacement is allowed, do not force-push branches).
+
+### 2.2 Date tags for changelog releases
+
+When a new `## YYYY-MM-DD` entry is added to `CHANGELOG.md`, also create a
+date tag of the form `vYYYY-MM-DD` on that commit (matching the changelog
+heading), e.g. `v2026-09-06`.
+
+- If a tag for that date already exists, **delete the old tag and create the
+  new one** pointing at the latest commit (a date may have multiple version
+  changes; only the newest tag survives).
+- This tag marks the repository state at the end of that date's release
+  history.
 
 ## Git workflow
 

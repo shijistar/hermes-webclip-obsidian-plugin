@@ -628,7 +628,27 @@ class ExtractorTests(unittest.TestCase):
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor(Path("/plugin"), "https://example.com")
 
-    def test_extractor_dir_prefers_bundled_subdirectory(self):
+    def test_extractor_dir_prefers_plugin_local_npm_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plugin_root = root / "plugin_root"
+            plugin_root.mkdir(parents=True)
+            npm_pkg = (
+                plugin_root / "node_modules" / "@tiny-codes" / "web-clip-extractor"
+            )
+            (npm_pkg / "src").mkdir(parents=True)
+            (npm_pkg / "src" / "cli.mjs").write_text(
+                "#!/usr/bin/env node\n", encoding="utf-8"
+            )
+            # A bundled extractor also exists; npm install must win.
+            direct = plugin_root / "extractor"
+            (direct / "src").mkdir(parents=True)
+            (direct / "src" / "cli.mjs").write_text(
+                "#!/usr/bin/env node\n", encoding="utf-8"
+            )
+            self.assertEqual(clip._extractor_dir(plugin_root), npm_pkg)
+
+    def test_extractor_dir_falls_back_to_bundled_subdirectory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plugin_root = root / "plugin_root"
@@ -638,29 +658,7 @@ class ExtractorTests(unittest.TestCase):
             (direct / "src" / "cli.mjs").write_text(
                 "#!/usr/bin/env node\n", encoding="utf-8"
             )
-            # A legacy npm install also exists; bundled subdirectory must win.
-            npm_pkg = (
-                plugin_root / "node_modules" / "@tiny-codes" / "web-clip-extractor"
-            )
-            (npm_pkg / "src").mkdir(parents=True)
-            (npm_pkg / "src" / "cli.mjs").write_text(
-                "#!/usr/bin/env node\n", encoding="utf-8"
-            )
             self.assertEqual(clip._extractor_dir(plugin_root), direct)
-
-    def test_extractor_dir_falls_back_to_legacy_npm_install(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            plugin_root = root / "plugin_root"
-            plugin_root.mkdir(parents=True)
-            npm_pkg = (
-                plugin_root / "node_modules" / "@tiny-codes" / "web-clip-extractor"
-            )
-            (npm_pkg / "src").mkdir(parents=True)
-            (npm_pkg / "src" / "cli.mjs").write_text(
-                "#!/usr/bin/env node\n", encoding="utf-8"
-            )
-            self.assertEqual(clip._extractor_dir(plugin_root), npm_pkg)
 
     def test_extractor_dir_falls_back_to_legacy_source_repo_sibling(self):
         with tempfile.TemporaryDirectory() as tmp:

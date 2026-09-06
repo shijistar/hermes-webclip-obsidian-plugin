@@ -14,7 +14,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 
 - Hermes Agent with standalone plugin support.
 - Python 3.11+ and PyYAML.
-- Node.js 18+ (`extractor/node_modules` must be installed).
+- Node.js 18+ (`node_modules` must contain `@tiny-codes/web-clip-extractor`).
 - Git for default synchronization.
 - Playwright Chromium (via the extractor) for dynamic fallback.
 
@@ -35,9 +35,9 @@ plugin manager:
 ```bash
 REPO=/path/to/hermes-webclip-obsidian-plugin
 hermes plugins install "file://$REPO" --enable
-cd "$HERMES_HOME/plugins/webclip-obsidian/extractor"
-npm install                         # also runs `npx playwright install chromium` via the prepare hook
-cd ..
+cd "$HERMES_HOME/plugins/webclip-obsidian"
+npm install                         # pulls @tiny-codes/web-clip-extractor into node_modules
+npx playwright install chromium     # Chromium for the dynamic-page fallback
 cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/webclip-obsidian/config.toml"
 # symlink the skill so the agent auto-discovers the workflow:
 ln -s "$REPO/skill" "$HERMES_HOME/skills/productivity/web-clip-to-obsidian"
@@ -50,11 +50,11 @@ follow-up steps.
 
 > The installed plugin is a clone of the repository. `hermes plugins install`
 > clones the repo root (the plugin package), so the bundled `extractor/`
-> directory and `skill/` are preserved in the installed copy. Running
-> `npm install` inside `extractor/` installs the Node dependencies there, and
-> the extractor's `prepare` hook takes care of Playwright Chromium. At runtime
-> the plugin resolves the extractor at `<plugin_root>/extractor` (with legacy
-> fallbacks for older npm-installed copies).
+> directory and `skill/` are preserved in the installed copy. At runtime the
+> plugin prefers the published npm extractor installed at
+> `<plugin_root>/node_modules/@tiny-codes/web-clip-extractor`; a source
+> checkout without `npm install` falls back to the bundled
+> `<plugin_root>/extractor`.
 
 ## Configuration
 

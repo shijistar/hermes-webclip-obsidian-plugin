@@ -19,8 +19,10 @@ and [`PLUGIN.md`](../PLUGIN.md) for how the plugin drives this extractor.
 
 ## Install
 
-The extractor is part of the `hermes-webclip-obsidian-plugin` repository (no
-npm publish). In a source checkout, install dependencies and Chromium with:
+The extractor is published to npm as `@tiny-codes/web-clip-extractor`; the
+Hermes plugin consumes it as a dependency (`npm install` inside the plugin
+pulls it into `node_modules`). In this repository's source checkout the
+`extractor/` directory **is** that package — install dependencies with:
 
 ```bash
 npm install
