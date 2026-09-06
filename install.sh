@@ -18,7 +18,7 @@
 #   5. Print restart instructions
 #
 # Usage:
-#   ./install.sh [--hermes-home DIR] [--profile NAME] [--skip-plugin-install]
+#   ./install.sh [--profile NAME] [--hermes-home DIR] [--skip-plugin-install]
 #
 # Defaults:
 #   HERMES_HOME = $HERMES_HOME if set (not already a profile), else ~/.hermes
@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
     --skip-plugin-install)
       SKIP_PLUGIN_INSTALL=1; shift ;;
     -h|--help)
-      sed -n '2,20p' "$0"; exit 0 ;;
+      sed -n '2,21p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
