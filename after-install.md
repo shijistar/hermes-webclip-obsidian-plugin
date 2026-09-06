@@ -8,6 +8,9 @@ cd "$HERMES_HOME/plugins/webclip-obsidian"
 # post-install.sh auto-detects HERMES_HOME and the profile by walking up
 # from its own location to the nearest .hermes directory — no flags needed.
 ./post-install.sh
+
+# custom Hermes home
+./post-install.sh --hermes-home /path/to/custom-hermes
 ```
 
 What it does:

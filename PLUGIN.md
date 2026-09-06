@@ -30,6 +30,7 @@ walking up from its own location to the nearest `.hermes` directory:
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
+./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
 ```
 
 Manual steps (what `./post-install.sh` automates), for a git checkout using Hermes'

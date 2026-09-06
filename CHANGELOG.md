@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **`post-install.sh` supports a custom Hermes home via `--hermes-home DIR`** —
+  when the flag is given it is used verbatim as `HERMES_HOME` (custom home);
+  otherwise the nearest `.hermes` directory above the script is used. The
+  profile is derived per a fixed rule: the `profiles/<name>/` path segment
+  when present and existing, else the single profile under
+  `HERMES_HOME/profiles/` if there is exactly one, else `HERMES_HOME` itself
+  (default profile). Plugin version bumped 0.12.0 → 0.13.0.
 - **`post-install.sh` auto-detects Hermes paths by walking up to `.hermes`** —
   the script no longer needs `--hermes-home` / `--profile`: it walks up from
   its own location to the nearest `.hermes` directory for `HERMES_HOME`, and

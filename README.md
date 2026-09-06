@@ -47,6 +47,7 @@ auto-detected by walking up from the script's location to the nearest
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
+./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
 # review <profile>/plugins/webclip-obsidian/config.toml (vault, destination, ...)
 # restart your Hermes gateway service from a separate shell
 ```
@@ -56,7 +57,9 @@ cd /path/to/hermes-webclip-obsidian-plugin
 dependencies, Playwright Chromium, the skill symlink, and `config.toml` —
 it does not re-install the plugin. Re-running it upgrades the extractor
 dependencies and refreshes the skill symlink. To also run
-`hermes plugins install`, pass `--install-plugin`. Step-by-step manual
+`hermes plugins install`, pass `--install-plugin`. `HERMES_HOME` is detected
+automatically (nearest `.hermes` directory above the script) or can be set
+explicitly with `--hermes-home DIR`. Step-by-step manual
 commands are documented in [`PLUGIN.md`](PLUGIN.md#install).
 
 Then clip articles:

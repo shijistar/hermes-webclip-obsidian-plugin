@@ -8,12 +8,13 @@
 #   <HERMES_HOME>/plugins/webclip-obsidian/                    (default profile)
 #   <HERMES_HOME>/profiles/<name>/plugins/webclip-obsidian/    (named profile)
 # so HERMES_HOME is found by walking up from this script's own path until a
-# `.hermes` directory is hit, and the profile is derived from the
-# `profiles/<name>/` path segment when present. No flags are required.
+# `.hermes` directory is hit (or by the explicit `--hermes-home DIR` flag),
+# and the profile is derived from the `profiles/<name>/` path segment when
+# present, falling back to HERMES_HOME itself (default profile).
 #
 # Steps performed:
-#   0. Walk up from SCRIPT_DIR to find HERMES_HOME (.hermes directory) and
-#      derive PROFILE_DIR, PLUGIN_DIR, SKILLS_DIR.
+#   0. Resolve HERMES_HOME (--hermes-home or .hermes walk-up) and derive
+#      PROFILE_DIR, PLUGIN_DIR, SKILLS_DIR.
 #   1. Optionally `hermes plugins install <this-repo> --enable` — only when
 #      `--install-plugin` is passed. By default the plugin is assumed to have
 #      been installed already (`hermes plugins install` is the bootstrap), so
@@ -27,10 +28,11 @@
 #   5. Print restart instructions
 #
 # Usage:
-#   ./post-install.sh [--install-plugin]
+#   ./post-install.sh [--hermes-home DIR] [--install-plugin]
 #
 # Defaults:
-#   HERMES_HOME  = nearest `.hermes` directory above this script
+#   HERMES_HOME  = nearest `.hermes` directory above this script, or the
+#                  value of --hermes-home when given
 #   profile      = the profile containing this script (from the
 #                  `profiles/<name>/` path segment), or the default profile
 #                  (HERMES_HOME itself) when the script is not under a
@@ -44,22 +46,26 @@ set -euo pipefail
 # ---------------------------------------------------------------- defaults
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+HERMES_HOME_ARG=""
 INSTALL_PLUGIN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --hermes-home)
+      HERMES_HOME_ARG="$2"; shift 2 ;;
     --install-plugin)
       INSTALL_PLUGIN=1; shift ;;
     -h|--help)
-      sed -n '2,35p' "$0"; exit 0 ;;
+      sed -n '2,36p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 # -------------------------------------------------- derive Hermes home paths
-# Walk up from SCRIPT_DIR until a `.hermes` directory is found; that is
-# HERMES_HOME. The installed layouts are:
+# If --hermes-home is given it is used verbatim as HERMES_HOME (custom home).
+# Otherwise walk up from SCRIPT_DIR until a `.hermes` directory is found. The
+# installed layouts are:
 #   <HERMES_HOME>/plugins/webclip-obsidian/                 → default profile
 #   <HERMES_HOME>/profiles/<name>/plugins/webclip-obsidian/ → named profile
 _find_hermes_home() {
@@ -74,18 +80,34 @@ _find_hermes_home() {
   return 1
 }
 
-if ! HERMES_HOME="$(_find_hermes_home "$SCRIPT_DIR")"; then
-  echo "[error] Could not locate a .hermes directory above $SCRIPT_DIR" >&2
+if [[ -n "$HERMES_HOME_ARG" ]]; then
+  HERMES_HOME="$HERMES_HOME_ARG"
+elif ! HERMES_HOME="$(_find_hermes_home "$SCRIPT_DIR")"; then
+  echo "[error] Could not locate a .hermes directory above $SCRIPT_DIR \
+(use --hermes-home DIR to point at a custom Hermes home)" >&2
   exit 1
 fi
 
-# Detect a named profile from the path segment `profiles/<name>/`.
+# PROFILE_DIR rules:
+#   1. if the script lives under <HERMES_HOME>/profiles/<name>/ and that
+#      directory exists → PROFILE_DIR = <HERMES_HOME>/profiles/<name>;
+#   2. else if <HERMES_HOME>/profiles/ contains exactly one profile → use it;
+#   3. else PROFILE_DIR = HERMES_HOME (default profile).
 PROFILE_DIR="$HERMES_HOME"
+_derived_profile=""
 if [[ "$SCRIPT_DIR" == *"/profiles/"* ]]; then
   _profiles_idx="${SCRIPT_DIR%%/plugins/*}"       # strip trailing /plugins/*
   if [[ "$_profiles_idx" == *"/profiles/"* ]]; then
-    PROFILE_DIR="${_profiles_idx#*"$HERMES_HOME/"}"
-    PROFILE_DIR="$HERMES_HOME/$PROFILE_DIR"
+    _derived_profile="${_profiles_idx#*"/profiles/"}"
+    _derived_profile="${_derived_profile%%/*}"
+  fi
+fi
+if [[ -n "$_derived_profile" && -d "$HERMES_HOME/profiles/$_derived_profile" ]]; then
+  PROFILE_DIR="$HERMES_HOME/profiles/$_derived_profile"
+elif [[ -d "$HERMES_HOME/profiles" ]]; then
+  _profiles_candidates=("$HERMES_HOME"/profiles/*/)
+  if [[ ${#_profiles_candidates[@]} -eq 1 && -d "${_profiles_candidates[0]}" ]]; then
+    PROFILE_DIR="$(cd "${_profiles_candidates[0]}" && pwd)"
   fi
 fi
 
