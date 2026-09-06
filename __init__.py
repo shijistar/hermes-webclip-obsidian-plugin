@@ -1,4 +1,4 @@
-"""Hermes registration for the standalone web-to-Obsidian plugin."""
+"""Hermes registration for the standalone webclip-obsidian plugin."""
 
 from pathlib import Path
 

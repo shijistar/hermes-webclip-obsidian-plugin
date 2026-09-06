@@ -138,7 +138,7 @@ class ClipConfig:
         if not sync_branch or not _SAFE_BRANCH_NAME.fullmatch(sync_branch):
             raise ClipError("The configured Git sync branch is unsafe.")
         default_lock = Path(
-            "~/.hermes/workspace/cache/url-to-obsidian/vault.lock"
+            "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
         ).expanduser()
         lock_file = Path(
             values.get("WEB_TO_OBSIDIAN_LOCK_FILE", str(default_lock))
@@ -146,7 +146,7 @@ class ClipConfig:
         if lock_file == vault or vault in lock_file.parents:
             raise ClipError("The shared lock file must be outside the Obsidian vault.")
         default_pending_root = Path(
-            "~/.hermes/workspace/cache/url-to-obsidian/pending-state"
+            "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
         ).expanduser()
         pending_root = Path(
             values.get("WEB_TO_OBSIDIAN_PENDING_ROOT", str(default_pending_root))

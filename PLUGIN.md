@@ -66,8 +66,8 @@ vault = "~/obsidian/shijistar"
 destination = "Inbox"
 images = "images"
 sync_branch = "master"
-lock_file = "~/.hermes/workspace/cache/url-to-obsidian/vault.lock"
-pending_root = "~/.hermes/workspace/cache/url-to-obsidian/pending-state"
+lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
+pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 ```
 
 - `vault` — the Obsidian vault root.
