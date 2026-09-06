@@ -1,0 +1,14 @@
+plugin.yaml
+  h_99cad05bea77d1 2-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "2252ff38758ee2a61d821ef502034ce1e0bc5677",
+  "prompts": {},
+  "humans": {
+    "h_99cad05bea77d1": {
+      "author": "Fengbao Li <shijistar@gmail.com>"
+    }
+  }
+}
