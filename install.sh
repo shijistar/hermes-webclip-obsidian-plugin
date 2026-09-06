@@ -1,26 +1,17 @@
 #!/usr/bin/env bash
 #
-# install.sh — one-shot installer for the webclip-obsidian plugin stack.
-#
-# Lives at the repo root, which IS the plugin package (plugin.yaml sits at the
-# root). `hermes plugins install` clones the whole repository, so installed
-# copies retain `skill/`, `extractor/`, `config.example.toml` and this script
-# — every step below resolves paths relative to the script's own directory and
-# no extra source-repo argument is needed.
+# One-shot installer for the webclip-obsidian plugin dependencies stack. This script installs the necessary dependencies for the webclip-obsidian plugin.
 #
 # Steps performed:
-#   0. Resolve HERMES_HOME / profile (--hermes-home, --profile)
-#   1. Optionally `hermes plugins install <this-repo> --enable` — only when
+#   1. Resolve HERMES_HOME / profile (--hermes-home, --profile)
+#   2. `npm install` in the `extractor/` directory, which extracts markdown from web pages
+#   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
+#   4. Copy `config.example.toml` → `config.toml` if absent
+#   5. Optionally `hermes plugins install <this-repo> --enable` — only when
 #      `--install-plugin` is passed. By default the plugin is assumed to have
 #      been installed already (`hermes plugins install` is the bootstrap), so
 #      this step is skipped.
-#   2. `npm install` in the plugin dir (pulls the published
-#      @tiny-codes/web-clip-extractor dependency into node_modules), then
-#      `npx playwright install chromium` explicitly — an npm dependency's
-#      `prepare` hook is not run under npm's default allow-scripts policy.
-#   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
-#   4. Copy `config.example.toml` → `config.toml` if absent
-#   5. Print restart instructions
+#   6. Print restart instructions
 #
 # Usage:
 #   ./install.sh [--profile NAME] [--hermes-home DIR] [--install-plugin]
@@ -50,7 +41,7 @@ while [[ $# -gt 0 ]]; do
     --install-plugin)
       INSTALL_PLUGIN=1; shift ;;
     -h|--help)
-      sed -n '2,21p' "$0"; exit 0 ;;
+      sed -n '2,18p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
