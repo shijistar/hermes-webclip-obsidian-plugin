@@ -48,10 +48,14 @@ cd /path/to/hermes-webclip-obsidian-plugin
 # restart your Hermes gateway service from a separate shell
 ```
 
-`install.sh` is idempotent — re-running it upgrades the extractor dependencies
-and refreshes the skill symlink. For a custom Hermes home (no profile), pass
-`--hermes-home "$HOME/.hermes"`. Step-by-step manual commands are documented
-in [`PLUGIN.md`](PLUGIN.md#install).
+`install.sh` assumes the plugin is **already installed** (via
+`hermes plugins install`) and by default only wires up the extractor
+dependencies, Playwright Chromium, the skill symlink, and `config.toml` —
+it does not re-install the plugin. Re-running it upgrades the extractor
+dependencies and refreshes the skill symlink. To also run
+`hermes plugins install`, pass `--install-plugin`. For a custom Hermes home
+(no profile), pass `--hermes-home "$HOME/.hermes"`. Step-by-step manual
+commands are documented in [`PLUGIN.md`](PLUGIN.md#install).
 
 Then clip articles:
 

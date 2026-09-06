@@ -10,7 +10,10 @@
 #
 # Steps performed:
 #   0. Resolve HERMES_HOME / profile (--hermes-home, --profile)
-#   1. `hermes plugins install <this-repo> --enable` (skipped with --skip-plugin-install)
+#   1. Optionally `hermes plugins install <this-repo> --enable` — only when
+#      `--install-plugin` is passed. By default the plugin is assumed to have
+#      been installed already (`hermes plugins install` is the bootstrap), so
+#      this step is skipped.
 #   2. `npm install` in the plugin dir (pulls the published
 #      @tiny-codes/web-clip-extractor dependency into node_modules), then
 #      `npx playwright install chromium` explicitly — an npm dependency's
@@ -20,12 +23,14 @@
 #   5. Print restart instructions
 #
 # Usage:
-#   ./install.sh [--profile NAME] [--hermes-home DIR] [--skip-plugin-install]
+#   ./install.sh [--profile NAME] [--hermes-home DIR] [--install-plugin]
 #
 # Defaults:
 #   HERMES_HOME = $HERMES_HOME if set (not already a profile), else ~/.hermes
 #   profile     = default (root ~/.hermes)
 #   plugin src  = this repo root (the script's own directory)
+#   install     = do NOT run `hermes plugins install` (pass --install-plugin
+#                 to run it)
 #
 set -euo pipefail
 
@@ -34,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HERMES_HOME_ARG=""
 PROFILE_ARG=""
-SKIP_PLUGIN_INSTALL=0
+INSTALL_PLUGIN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,8 +47,8 @@ while [[ $# -gt 0 ]]; do
       HERMES_HOME_ARG="$2"; shift 2 ;;
     --profile)
       PROFILE_ARG="$2"; shift 2 ;;
-    --skip-plugin-install)
-      SKIP_PLUGIN_INSTALL=1; shift ;;
+    --install-plugin)
+      INSTALL_PLUGIN=1; shift ;;
     -h|--help)
       sed -n '2,21p' "$0"; exit 0 ;;
     *)
@@ -88,9 +93,7 @@ info "Profile dir = $PROFILE_DIR"
 info "Plugin src  = $PLUGIN_SRC"
 
 # ------------------------------------------------------- 1. install plugin
-if [[ "$SKIP_PLUGIN_INSTALL" -eq 1 ]]; then
-  info "Skipping \`hermes plugins install\` (--skip-plugin-install)"
-else
+if [[ "$INSTALL_PLUGIN" -eq 1 ]]; then
   if [[ -d "$PLUGIN_DIR" ]]; then
     ok "Plugin already installed at $PLUGIN_DIR (reinstall with \`hermes plugins install --force\`)"
   else
@@ -98,9 +101,11 @@ else
     HERMES_HOME="$HERMES_HOME" \
       hermes plugins install "file://$PLUGIN_SRC" --enable
   fi
+else
+  info "Skipping \`hermes plugins install\` (install assumed already done; pass --install-plugin to run it)"
 fi
 
-test -d "$PLUGIN_DIR" || die "Plugin dir not found at $PLUGIN_DIR (run hermes plugins install first)"
+test -d "$PLUGIN_DIR" || die "Plugin dir not found at $PLUGIN_DIR (run hermes plugins install first — or pass --install-plugin)"
 
 # We operate on the INSTALLED plugin dir; if this script is already running
 # from the installed dir, PLUGIN_DIR == SCRIPT_DIR and nothing extra is needed.

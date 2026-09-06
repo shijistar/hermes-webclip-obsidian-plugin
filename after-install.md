@@ -17,8 +17,10 @@ cd "$HERMES_HOME/plugins/webclip-obsidian"
 
 What it does:
 
-1. `hermes plugins install` — clones this repository (the plugin package;
-   `plugin.yaml` sits at the repo root) and enables the plugin.
+1. (Default) does **not** re-install the plugin — the plugin was already
+   installed via `hermes plugins install` (this guide runs right after it).
+   If the plugin is *not* installed yet, pass `--install-plugin` to run
+   `hermes plugins install "file://<repo>" --enable`.
 2. `npm install` — pulls the published `@tiny-codes/web-clip-extractor`
    dependency into `node_modules`, followed by an explicit
    `npx playwright install chromium` for the dynamic-page fallback.

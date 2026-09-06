@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **`install.sh` defaults to not re-installing the plugin** — the plugin is
+  installed once via `hermes plugins install`, then `install.sh` wires up the
+  extractor npm dependency, Playwright Chromium, the skill symlink, and
+  `config.toml`. Running `hermes plugins install` from the script now requires
+  the explicit `--install-plugin` flag (replaces `--skip-plugin-install`).
+  Plugin version bumped 0.10.0 → 0.11.0.
 - **Extractor restored as a published npm package** — reverses the earlier
   "bundled-only" decision: `@tiny-codes/web-clip-extractor` is published again
   (version 0.3.0, metadata updated to the renamed repository) and the plugin

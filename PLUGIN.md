@@ -20,9 +20,11 @@ See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 
 ## Install
 
-The recommended way is the one-shot installer bundled in this repository (it
-wires up the plugin, the extractor npm dependencies + Playwright Chromium, and
-the skill symlink):
+The recommended way is the one-shot installer bundled in this repository
+(it wires up the extractor npm dependencies + Playwright Chromium, the skill
+symlink, and `config.toml`; the plugin itself is assumed to be already
+installed via `hermes plugins install` — pass `--install-plugin` to have the
+script run that step too):
 
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
