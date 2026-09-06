@@ -28,10 +28,10 @@ script run that step too):
 
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
-./install.sh --profile coder        # or --hermes-home /path/to/hermes-home
+./post-install.sh --profile coder        # or --hermes-home /path/to/hermes-home
 ```
 
-Manual steps (what `./install.sh` automates), for a git checkout using Hermes'
+Manual steps (what `./post-install.sh` automates), for a git checkout using Hermes'
 plugin manager:
 
 ```bash

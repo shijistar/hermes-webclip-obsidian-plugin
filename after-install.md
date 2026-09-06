@@ -6,20 +6,17 @@ The plugin is installed. Finish setup with the bundled one-shot installer:
 cd "$HERMES_HOME/plugins/webclip-obsidian"
 
 # CASE 1: install for the default profile
-./install.sh
+./post-install.sh
 
-# CASE 2: install for a specific profile
-./install.sh --profile <profile-name>
-
-# CASE 3: install for a specific Hermes home
-./install.sh --hermes-home <hermes-home-path>
+# CASE 2: install for different hermes home
+./post-install.sh --hermes-home <hermes-home-path>
 ```
 
 What it does:
 
 1. (Default) does **not** re-install the plugin — the plugin was already
    installed via `hermes plugins install` (this guide runs right after it).
-   If the plugin is *not* installed yet, pass `--install-plugin` to run
+   If the plugin is _not_ installed yet, pass `--install-plugin` to run
    `hermes plugins install "file://<repo>" --enable`.
 2. `npm install` — pulls the published `@tiny-codes/web-clip-extractor`
    dependency into `node_modules`, followed by an explicit

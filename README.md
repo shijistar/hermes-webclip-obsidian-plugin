@@ -43,12 +43,12 @@ npm dependencies + Playwright Chromium, and the skill symlink:
 
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
-./install.sh --profile coder        # or --hermes-home /path/to/hermes-home; default = ~/.hermes
+./post-install.sh --profile coder        # or --hermes-home /path/to/hermes-home; default = ~/.hermes
 # review <profile>/plugins/webclip-obsidian/config.toml (vault, destination, ...)
 # restart your Hermes gateway service from a separate shell
 ```
 
-`install.sh` assumes the plugin is **already installed** (via
+`post-install.sh` assumes the plugin is **already installed** (via
 `hermes plugins install`) and by default only wires up the extractor
 dependencies, Playwright Chromium, the skill symlink, and `config.toml` —
 it does not re-install the plugin. Re-running it upgrades the extractor

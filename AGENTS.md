@@ -6,12 +6,12 @@ dated notes into an Obsidian vault, and synchronizes them via guarded Git.
 
 ## Modules
 
-| Path           | What it is                                                                 | Key files                                                                                                         |
-| -------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| repo root      | Hermes plugin package: config, safe vault writes, image handling, Git sync | `__init__.py`, `web_to_obsidian.py`, `plugin.yaml`, `config.example.toml`, `config.toml`                          |
-| `extractor/`   | Hardened Node.js extraction engine (Defuddle static + Playwright fallback) | `src/cli.mjs`, `src/extractor.mjs`, `src/network-policy.mjs`, `package.json`                                      |
-| `skill/`       | Hermes agent skill teaching the clip-to-Obsidian workflow                  | `SKILL.md`, `references/*.md`                                                                                     |
-| `tests/`       | Python plugin test suites                                                  | `conftest.py`, `test_web_to_obsidian.py`, `test_integration.py`, `test_plugin.py`, `test_security_regressions.py` |
+| Path         | What it is                                                                 | Key files                                                                                                         |
+| ------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| repo root    | Hermes plugin package: config, safe vault writes, image handling, Git sync | `__init__.py`, `web_to_obsidian.py`, `plugin.yaml`, `config.example.toml`, `config.toml`                          |
+| `extractor/` | Hardened Node.js extraction engine (Defuddle static + Playwright fallback) | `src/cli.mjs`, `src/extractor.mjs`, `src/network-policy.mjs`, `package.json`                                      |
+| `skill/`     | Hermes agent skill teaching the clip-to-Obsidian workflow                  | `SKILL.md`, `references/*.md`                                                                                     |
+| `tests/`     | Python plugin test suites                                                  | `conftest.py`, `test_web_to_obsidian.py`, `test_integration.py`, `test_plugin.py`, `test_security_regressions.py` |
 
 The repo root **is** the plugin package: `plugin.yaml`, `__init__.py`, and
 `web_to_obsidian.py` live at the root, and the extractor is a bundled
@@ -31,7 +31,7 @@ hermes-webclip-obsidian-plugin/
 ├── __init__.py                 # entry point: /webclip + resume tool
 ├── web_to_obsidian.py          # core logic
 ├── plugin.yaml                 # plugin metadata + version
-├── install.sh                  # one-shot installer (ships with hermes plugins install)
+├── post-install.sh                  # one-shot installer (ships with hermes plugins install)
 ├── config.toml                 # local non-secret config (tracked; edit per install)
 ├── config.example.toml         # Configuration template
 ├── after-install.md            # Follow-up steps shown by `hermes plugins install`
@@ -132,11 +132,11 @@ Every module version bump MUST also create a git tag of the form
 `<type>@<version>` on the bump commit, so each published module version is
 addressable by tag:
 
-| Module               | Tag prefix                | Example                 |
-| -------------------- | ------------------------- | ----------------------- |
-| plugin               | `plugin@`                 | `plugin@0.10.0`         |
-| extractor            | `web-clip-extractor@`     | `web-clip-extractor@0.3.0` |
-| skill                | `skill@`                  | `skill@1.4.2`           |
+| Module    | Tag prefix            | Example                    |
+| --------- | --------------------- | -------------------------- |
+| plugin    | `plugin@`             | `plugin@0.10.0`            |
+| extractor | `web-clip-extractor@` | `web-clip-extractor@0.3.0` |
+| skill     | `skill@`              | `skill@1.4.2`              |
 
 - The version value comes from the module's version field
   (`plugin.yaml`, `extractor/package.json`, `skill/SKILL.md` frontmatter).

@@ -14,7 +14,7 @@
 #   6. Print restart instructions
 #
 # Usage:
-#   ./install.sh [--profile NAME] [--hermes-home DIR] [--install-plugin]
+#   ./post-install.sh [--profile NAME] [--hermes-home DIR] [--install-plugin]
 #
 # Defaults:
 #   HERMES_HOME = $HERMES_HOME if set (not already a profile), else ~/.hermes
