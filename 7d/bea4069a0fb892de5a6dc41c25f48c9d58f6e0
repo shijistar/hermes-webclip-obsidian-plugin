@@ -1,0 +1,25 @@
+after-install.md
+  h_99cad05bea77d1 9,11-12,19
+  h_99cad05bea77d1 31
+post-install.sh
+  h_99cad05bea77d1 1-164
+README.md
+  h_99cad05bea77d1 46,51
+  h_99cad05bea77d1 104
+PLUGIN.md
+  h_99cad05bea77d1 31,34
+AGENTS.md
+  h_99cad05bea77d1 10,34,136
+  h_99cad05bea77d1 9,11-14,135,137-139,191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "7dbea4069a0fb892de5a6dc41c25f48c9d58f6e0",
+  "prompts": {},
+  "humans": {
+    "h_99cad05bea77d1": {
+      "author": "Fengbao Li <shijistar@gmail.com>"
+    }
+  }
+}
