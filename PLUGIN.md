@@ -24,11 +24,13 @@ The recommended way is the one-shot installer bundled in this repository
 (it wires up the extractor npm dependencies + Playwright Chromium, the skill
 symlink, and `config.toml`; the plugin itself is assumed to be already
 installed via `hermes plugins install` — pass `--install-plugin` to have the
-script run that step too):
+script run that step too). It auto-detects `HERMES_HOME` and the profile by
+walking up from its own location to the nearest `.hermes` directory:
 
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
-./post-install.sh --profile coder        # or --hermes-home /path/to/hermes-home
+./post-install.sh                     # auto-detects HERMES_HOME / profile
+./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
 ```
 
 Manual steps (what `./post-install.sh` automates), for a git checkout using Hermes'

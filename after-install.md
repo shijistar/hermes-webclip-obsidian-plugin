@@ -5,11 +5,12 @@ The plugin is installed. Finish setup with the bundled one-shot installer:
 ```bash
 cd "$HERMES_HOME/plugins/webclip-obsidian"
 
-# CASE 1: install for the default profile
+# post-install.sh auto-detects HERMES_HOME and the profile by walking up
+# from its own location to the nearest .hermes directory — no flags needed.
 ./post-install.sh
 
-# CASE 2: install for different hermes home
-./post-install.sh --hermes-home <hermes-home-path>
+# custom Hermes home
+./post-install.sh --hermes-home /path/to/custom-hermes
 ```
 
 What it does:

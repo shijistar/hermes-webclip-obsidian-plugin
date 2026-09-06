@@ -1,27 +1,45 @@
 #!/usr/bin/env bash
 #
-# One-shot installer for the webclip-obsidian plugin dependencies stack. This script installs the necessary dependencies for the webclip-obsidian plugin.
+# post-install.sh — one-shot post-install setup for the webclip-obsidian
+# plugin stack.
+#
+# This script lives inside the installed plugin directory. `hermes plugins
+# install` clones the whole repository into:
+#   <HERMES_HOME>/plugins/webclip-obsidian/                    (default profile)
+#   <HERMES_HOME>/profiles/<name>/plugins/webclip-obsidian/    (named profile)
+# so HERMES_HOME is found by walking up from this script's own path until a
+# `.hermes` directory is hit (or by the explicit `--hermes-home DIR` flag),
+# and the profile is derived from the `profiles/<name>/` path segment when
+# present, falling back to HERMES_HOME itself (default profile).
 #
 # Steps performed:
-#   1. Resolve HERMES_HOME / profile (--hermes-home, --profile)
-#   2. `npm install` in the `extractor/` directory, which extracts markdown from web pages
-#   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
-#   4. Copy `config.example.toml` → `config.toml` if absent
-#   5. Optionally `hermes plugins install <this-repo> --enable` — only when
+#   0. Resolve HERMES_HOME (--hermes-home or .hermes walk-up) and derive
+#      PROFILE_DIR, PLUGIN_DIR, SKILLS_DIR.
+#   1. Optionally `hermes plugins install <this-repo> --enable` — only when
 #      `--install-plugin` is passed. By default the plugin is assumed to have
 #      been installed already (`hermes plugins install` is the bootstrap), so
 #      this step is skipped.
-#   6. Print restart instructions
+#   2. `npm install` in the plugin dir (pulls the published
+#      @tiny-codes/web-clip-extractor dependency into node_modules), then
+#      `npx playwright install chromium` explicitly — an npm dependency's
+#      `prepare` hook is not run under npm's default allow-scripts policy.
+#   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
+#   4. Copy `config.example.toml` → `config.toml` if absent
+#   5. Print restart instructions
 #
 # Usage:
-#   ./post-install.sh [--profile NAME] [--hermes-home DIR] [--install-plugin]
+#   ./post-install.sh [--hermes-home DIR] [--install-plugin]
 #
 # Defaults:
-#   HERMES_HOME = $HERMES_HOME if set (not already a profile), else ~/.hermes
-#   profile     = default (root ~/.hermes)
-#   plugin src  = this repo root (the script's own directory)
-#   install     = do NOT run `hermes plugins install` (pass --install-plugin
-#                 to run it)
+#   HERMES_HOME  = nearest `.hermes` directory above this script, or the
+#                  value of --hermes-home when given
+#   profile      = the profile containing this script (from the
+#                  `profiles/<name>/` path segment), or the default profile
+#                  (HERMES_HOME itself) when the script is not under a
+#                  profile's plugins dir
+#   plugin src   = this repo root (the script's own directory)
+#   install      = do NOT run `hermes plugins install` (pass --install-plugin
+#                  to run it)
 #
 set -euo pipefail
 
@@ -29,44 +47,72 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HERMES_HOME_ARG=""
-PROFILE_ARG=""
 INSTALL_PLUGIN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --hermes-home)
       HERMES_HOME_ARG="$2"; shift 2 ;;
-    --profile)
-      PROFILE_ARG="$2"; shift 2 ;;
     --install-plugin)
       INSTALL_PLUGIN=1; shift ;;
     -h|--help)
-      sed -n '2,18p' "$0"; exit 0 ;;
+      sed -n '2,32p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
-# Resolve HERMES_HOME (profile base dir).
+# -------------------------------------------------- derive Hermes home paths
+# If --hermes-home is given it is used verbatim as HERMES_HOME (custom home).
+# Otherwise walk up from SCRIPT_DIR until a `.hermes` directory is found. The
+# installed layouts are:
+#   <HERMES_HOME>/plugins/webclip-obsidian/                 → default profile
+#   <HERMES_HOME>/profiles/<name>/plugins/webclip-obsidian/ → named profile
+_find_hermes_home() {
+  local dir="$1"
+  while [[ -n "$dir" && "$dir" != "/" ]]; do
+    if [[ -d "$dir/.hermes" ]]; then
+      printf '%s\n' "$dir/.hermes"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  return 1
+}
+
 if [[ -n "$HERMES_HOME_ARG" ]]; then
   HERMES_HOME="$HERMES_HOME_ARG"
-elif [[ -z "${HERMES_HOME:-}" || "$HERMES_HOME" == *"/profiles/"* ]]; then
-  # When HERMES_HOME is unset or already points at a profile (gateway injects
-  # the active profile), fall back to the user default so `--profile` keeps
-  # working instead of nesting under the running profile.
-  HERMES_HOME="$HOME/.hermes"
+elif ! HERMES_HOME="$(_find_hermes_home "$SCRIPT_DIR")"; then
+  echo "[error] Could not locate a .hermes directory above $SCRIPT_DIR \
+(use --hermes-home DIR to point at a custom Hermes home)" >&2
+  exit 1
 fi
 
-# A named profile lives under <HERMES_HOME>/profiles/<name>.
-if [[ -n "$PROFILE_ARG" ]]; then
-  PROFILE_DIR="$HERMES_HOME/profiles/$PROFILE_ARG"
-  PLUGIN_DIR="$PROFILE_DIR/plugins/webclip-obsidian"
-  SKILLS_DIR="$PROFILE_DIR/skills/productivity"
-else
-  PROFILE_DIR="$HERMES_HOME"
-  PLUGIN_DIR="$HERMES_HOME/plugins/webclip-obsidian"
-  SKILLS_DIR="$HERMES_HOME/skills/productivity"
+# PROFILE_DIR rules:
+#   1. if the script lives under <HERMES_HOME>/profiles/<name>/ and that
+#      directory exists → PROFILE_DIR = <HERMES_HOME>/profiles/<name>;
+#   2. else if <HERMES_HOME>/profiles/ contains exactly one profile → use it;
+#   3. else PROFILE_DIR = HERMES_HOME (default profile).
+PROFILE_DIR="$HERMES_HOME"
+_derived_profile=""
+if [[ "$SCRIPT_DIR" == *"/profiles/"* ]]; then
+  _profiles_idx="${SCRIPT_DIR%%/plugins/*}"       # strip trailing /plugins/*
+  if [[ "$_profiles_idx" == *"/profiles/"* ]]; then
+    _derived_profile="${_profiles_idx#*"/profiles/"}"
+    _derived_profile="${_derived_profile%%/*}"
+  fi
 fi
+if [[ -n "$_derived_profile" && -d "$HERMES_HOME/profiles/$_derived_profile" ]]; then
+  PROFILE_DIR="$HERMES_HOME/profiles/$_derived_profile"
+elif [[ -d "$HERMES_HOME/profiles" ]]; then
+  _profiles_candidates=("$HERMES_HOME"/profiles/*/)
+  if [[ ${#_profiles_candidates[@]} -eq 1 && -d "${_profiles_candidates[0]}" ]]; then
+    PROFILE_DIR="$(cd "${_profiles_candidates[0]}" && pwd)"
+  fi
+fi
+
+PLUGIN_DIR="$PROFILE_DIR/plugins/webclip-obsidian"
+SKILLS_DIR="$PROFILE_DIR/skills/productivity"
 
 # The plugin package this script ships with is SCRIPT_DIR itself (repo root).
 PLUGIN_SRC="$SCRIPT_DIR"

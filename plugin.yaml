@@ -1,5 +1,5 @@
 name: webclip-obsidian
-version: 0.11.0
-description: "Safely clip public web articles into an Obsidian vault with guarded Git synchronization."
+version: 0.12.0
+description: 'Safely clip public web articles into an Obsidian vault with guarded Git synchronization.'
 platforms:
   - linux

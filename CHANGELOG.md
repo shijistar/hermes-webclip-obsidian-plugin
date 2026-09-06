@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- **`post-install.sh` supports a custom Hermes home via `--hermes-home DIR`** —
+  when the flag is given it is used verbatim as `HERMES_HOME` (custom home);
+  otherwise the nearest `.hermes` directory above the script is used. The
+  profile is derived per a fixed rule: the `profiles/<name>/` path segment
+  when present and existing, else the single profile under
+  `HERMES_HOME/profiles/` if there is exactly one, else `HERMES_HOME` itself
+  (default profile). Plugin version bumped 0.12.0 → 0.13.0.
+- **`post-install.sh` auto-detects Hermes paths by walking up to `.hermes`** —
+  the script no longer needs `--hermes-home` / `--profile`: it walks up from
+  its own location to the nearest `.hermes` directory for `HERMES_HOME`, and
+  derives the profile from a `profiles/<name>/` path segment when present
+  (defaulting to `HERMES_HOME` itself otherwise). `PLUGIN_DIR` and
+  `SKILLS_DIR` are then built from those. Plugin version bumped 0.11.0 →
+  0.12.0.
 - **`install.sh` defaults to not re-installing the plugin** — the plugin is
   installed once via `hermes plugins install`, then `install.sh` wires up the
   extractor npm dependency, Playwright Chromium, the skill symlink, and
