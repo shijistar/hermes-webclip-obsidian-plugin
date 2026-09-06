@@ -1,13 +1,14 @@
-# url-to-obsidian
+# hermes-webclip-obsidian-plugin
 
 A **web clipping pipeline for Obsidian**: extract any public web article as
 clean Markdown, save it as a dated note in your Obsidian vault, and — when the
 vault is a Git repository — synchronize the note with guarded automatic commit
 & push.
 
-The project is a small monorepo of three parts:
+The repository **is** the Hermes plugin package (the `plugin.yaml` sits at the
+repo root), with two more parts in the same tree:
 
-- [`plugin/`](plugin/README.md) — the Hermes plugin (`/webclip` command +
+- [`PLUGIN.md`](PLUGIN.md) — the Hermes plugin (`/webclip` command +
   `web_to_obsidian_resume_pending` tool) implementing config, safe vault
   writes, image handling, and Git synchronization.
 - [`extractor/`](extractor/README.md) — a hardened Node.js extraction engine
@@ -37,20 +38,20 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 Requirements: `Hermes Agent`, `Python` 3.11+, `Node.js` 18+, `Git`, `PyYAML`.
 
-The one-shot installer (inside the plugin package) wires up the plugin, the
-extractor npm package, Playwright Chromium, and the skill symlink:
+The one-shot installer (at the repo root) wires up the plugin, the extractor
+npm dependencies + Playwright Chromium, and the skill symlink:
 
 ```bash
-cd /path/to/url-to-obsidian/plugin
+cd /path/to/hermes-webclip-obsidian-plugin
 ./install.sh --profile coder        # or --hermes-home /path/to/hermes-home; default = ~/.hermes
 # review <profile>/plugins/web-to-obsidian/config.toml (vault, destination, ...)
 # restart your Hermes gateway service from a separate shell
 ```
 
-`plugin/install.sh` is idempotent — re-running it upgrades the extractor npm
-package and refreshes the skill symlink. For a custom Hermes home (no profile),
-pass `--hermes-home "$HOME/.hermes"`. Step-by-step manual commands are
-documented in [`plugin/README.md`](plugin/README.md#install).
+`install.sh` is idempotent — re-running it upgrades the extractor dependencies
+and refreshes the skill symlink. For a custom Hermes home (no profile), pass
+`--hermes-home "$HOME/.hermes"`. Step-by-step manual commands are documented
+in [`PLUGIN.md`](PLUGIN.md#install).
 
 Then clip articles:
 
@@ -61,14 +62,14 @@ Then clip articles:
 ```
 
 Full usage, flags, and safety documentation live in
-[`plugin/README.md`](plugin/README.md).
+[`PLUGIN.md`](PLUGIN.md).
 
 ## Configuration
 
-All configuration lives in `plugin/config.toml` (vault, destination, images
-directory, sync branch, lock file, pending root). See
-[`plugin/README.md`](plugin/README.md#configuration) for the full field list,
-and the legacy environment-variable fallback.
+All configuration lives in `config.toml` at the repo root (vault, destination,
+images directory, sync branch, lock file, pending root). See
+[`PLUGIN.md`](PLUGIN.md#configuration) for the full field list, and the legacy
+environment-variable fallback.
 
 ## Tests
 
@@ -80,7 +81,7 @@ npm run check
 
 # Python plugin (from repo root)
 cd ..
-python3 -m pytest plugin/tests/ -v
+python3 -m pytest tests/ -v
 ```
 
 The automated tests use fixtures, temporary directories, and temporary Git
@@ -90,8 +91,8 @@ repositories; they do not write the configured real Vault.
 
 | Topic                           | Where                                                       |
 | ------------------------------- | ----------------------------------------------------------- |
-| Install / config / usage        | [`plugin/README.md`](plugin/README.md)                      |
-| Plugin network/Vault/Git safety | [`plugin/README.md`](plugin/README.md)                      |
+| Install / config / usage        | [`PLUGIN.md`](PLUGIN.md)                                    |
+| Plugin network/Vault/Git safety | [`PLUGIN.md`](PLUGIN.md)                                    |
 | Extractor CLI & error codes     | [`extractor/README.md`](extractor/README.md)                |
 | Extractor network policy        | [`extractor/README.md`](extractor/README.md#network-safety) |
 | Agent skill deployment          | [`skill/README.md`](skill/README.md)                        |

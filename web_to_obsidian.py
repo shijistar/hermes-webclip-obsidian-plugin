@@ -1620,25 +1620,24 @@ def _extractor_dir(plugin_root: Path) -> Path:
 
     Resolution order (first match wins):
 
-    1. **Plugin-local npm install** — ``plugin_root/node_modules`` contains
-       the published ``@tiny-codes/web-clip-extractor`` package (installed
-       with ``npm install`` inside the plugin directory). This is the
-       production layout after ``hermes plugins install`` pulls the plugin
-       from git: extractor version rides along with the plugin version.
-    2. **Source-repo sibling** — extractor at ``plugin_root.parent /
-       "extractor"`` (the monorepo layout where ``plugin/`` and
-       ``extractor/`` sit side by side).
-    3. **Legacy subdirectory** — extractor directly under *plugin_root*
-       (pre-restructure layout).
+    1. **Bundled subdirectory** — ``plugin_root/extractor`` (the repo root is
+       the plugin package, so the extractor ships inside the plugin and no npm
+       package is published anymore).
+    2. **Legacy plugin-local npm install** — ``plugin_root/node_modules``
+       contains the old published ``@tiny-codes/web-clip-extractor`` package
+       (from installs before the extractor stopped being published).
+    3. **Legacy source-repo sibling** — extractor at ``plugin_root.parent /
+       "extractor"`` (old monorepo layout where ``plugin/`` and ``extractor/``
+       sat side by side).
     """
+    direct = plugin_root / "extractor"
+    if (direct / "src" / "cli.mjs").is_file():
+        return direct
     npm_pkg = (
         plugin_root / "node_modules" / "@tiny-codes" / "web-clip-extractor"
     )
     if (npm_pkg / "src" / "cli.mjs").is_file():
         return npm_pkg
-    direct = plugin_root / "extractor"
-    if (direct / "src" / "cli.mjs").is_file():
-        return direct
     return plugin_root.parent / "extractor"
 
 

@@ -12,8 +12,8 @@ save a dated Markdown note, and commit & push it to the Obsidian vault Git.
 
 ## Version
 
-`SKILL.md` frontmatter `version` is the skill version (currently `1.3.0`).
-The plugin version is tracked separately in `../plugin/plugin.yaml` and
+`SKILL.md` frontmatter `version` is the skill version (currently `1.4.2`).
+The plugin version is tracked separately in `../plugin.yaml` and
 `../CHANGELOG.md`.
 
 ## Deploy to a Hermes profile
@@ -22,12 +22,12 @@ Symlink (not copy) the skill into the profile's skills directory so the repo
 stays the single source of truth:
 
 ```bash
-ln -s /path/to/url-to-obsidian/skill \
+ln -s /path/to/hermes-webclip-obsidian-plugin/skill \
       ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
 ```
 
 The skill is designed to be used together with the plugin symlink
-(`~/.hermes/profiles/<profile>/plugins/web-to-obsidian -> <repo>/plugin`).
+(`~/.hermes/profiles/<profile>/plugins/web-to-obsidian -> <repo>`).
 
 ## Reference index
 

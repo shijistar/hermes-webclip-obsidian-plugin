@@ -1,6 +1,8 @@
 {
   "name": "@tiny-codes/web-clip-extractor",
   "version": "0.2.0",
+  "private": true,
+  "description": "Node.js content-extraction engine for the hermes-webclip-obsidian-plugin (bundled, not published to npm).",
   "type": "module",
   "engines": {
     "node": ">=18"
@@ -11,14 +13,6 @@
     "extractor",
     "obsidian"
   ],
-  "homepage": "https://github.com/shijistar/url-to-obsidian",
-  "bugs": {
-    "url": "https://github.com/shijistar/url-to-obsidian/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/shijistar/url-to-obsidian.git"
-  },
   "license": "MIT",
   "author": "Fengbao Li <shijistar@gmail.com>",
   "sideEffects": false,

@@ -4,8 +4,8 @@ The Node.js content-extraction engine for the web-to-obsidian Hermes plugin. It
 fetches a public web page over a hardened network policy and returns normalized
 article metadata plus Markdown.
 
-See `../CHANGELOG.md` for version history and `../plugin/README.md` for how the
-plugin drives this extractor.
+See the repository root [`CHANGELOG.md`](../CHANGELOG.md) for version history
+and [`PLUGIN.md`](../PLUGIN.md) for how the plugin drives this extractor.
 
 ## Requirements
 
@@ -13,13 +13,22 @@ plugin drives this extractor.
 - Locked dependencies from `package-lock.json` (`npm ci --ignore-scripts`)
 - Playwright Chromium for the browser fallback (`npx playwright install chromium`
   after `npm ci` — `--ignore-scripts` intentionally skips the download that
-  Playwright's postinstall normally performs).
+  Playwright's postinstall normally performs). The package ships a `prepare`
+  hook (`npx playwright install chromium`) so a plain `npm install` inside this
+  directory installs Chromium automatically.
 
 ## Install
 
+The extractor is part of the `hermes-webclip-obsidian-plugin` repository (no
+npm publish). In a source checkout, install dependencies and Chromium with:
+
 ```bash
-npm install @tiny-codes/web-clip-extractor
+npm install
 ```
+
+which runs the `prepare` hook (`npx playwright install chromium`) automatically.
+For CI or locked installs use `npm ci --ignore-scripts` and then
+`npx playwright install chromium` when a browser is actually needed.
 
 ## Dependencies
 

@@ -1,8 +1,38 @@
 # Changelog
 
-All notable changes to the url-to-obsidian plugin will be documented in this file.
+All notable changes to the hermes-webclip-obsidian-plugin will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+
+## 2026-09-06
+
+### Changed
+- **Plugin package moved to the repository root** — `plugin.yaml`, `__init__.py`,
+  `web_to_obsidian.py`, `config.toml`, `config.example.toml`, `install.sh`,
+  `after-install.md`, and `tests/` now live at the repo root, which **is** the
+  plugin package. `hermes plugins install` clones the whole repository, so the
+  installed copy retains `extractor/`, `skill/`, and the config example; the
+  one-shot installer resolves the skill and config example from its own
+  directory and no longer needs `--repo`/`$REPO_ROOT`. Plugin version bumped
+  0.7.0 → 0.8.0; skill 1.4.1 → 1.4.2 for the updated paths/install flow.
+- **Plugin README preserved as `PLUGIN.md`** — the former `plugin/README.md`
+  was migrated to `PLUGIN.md` at the repo root (not discarded); root
+  `README.md`, `extractor/README.md`, `AGENTS.md`, and skill docs now link to
+  it.
+- **Extractor is bundled, not published** — the `.github/workflows/npm-publish.yml`
+  workflow was removed and the root `package.json` npm-dependency was dropped.
+  The extractor is resolved at `<plugin_root>/extractor` (bundled subdirectory
+  first; legacy npm-installed copy and source sibling remain as fallbacks).
+  `extractor/package.json` is marked `private` and publish metadata removed.
+- **Playwright Chromium installs via the extractor `prepare` hook** —
+  `extractor/package.json` already ran `npx playwright install chromium` in
+  `prepare`; `install.sh` now runs `npm install` inside `extractor/` (where the
+  hook fires) instead of a separate explicit Playwright step. CI uses
+  `npm ci --ignore-scripts` so tests do not download browsers.
+- **`__init__.py` deferred-imports `web_to_obsidian` inside `register()`** —
+  the repo root doubles as a Python package directory, so top-level relative
+  imports broke bare `import` from pytest/REPL; imports moved into
+  `register()` where Hermes provides the package context.
 
 ## 2026-09-05
 

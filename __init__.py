@@ -2,9 +2,11 @@
 
 from pathlib import Path
 
-from .web_to_obsidian import build_handler, build_resume_tool
-
-
+# NOTE: submodule imports stay inside register() on purpose. Hermes loads this
+# package via spec_from_file_location with a proper __package__, so relative
+# imports work at register time; but a bare `import <repo>` from pytest or a
+# REPL has no package context and must not fail while merely importing this
+# module (the repo root doubles as the root package directory).
 _RESUME_PENDING_SCHEMA = {
     "type": "object",
     "properties": {
@@ -20,6 +22,8 @@ _RESUME_PENDING_SCHEMA = {
 
 
 def register(ctx) -> None:
+    from .web_to_obsidian import build_handler, build_resume_tool
+
     plugin_root = Path(__file__).resolve().parent
     handler = build_handler(plugin_root)
     ctx.register_command(

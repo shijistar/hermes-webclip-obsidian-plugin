@@ -2,27 +2,28 @@
 #
 # install.sh — one-shot installer for the web-to-obsidian plugin stack.
 #
-# Lives INSIDE the plugin package so it is copied along by
-# `hermes plugins install` and runnable right from the installed plugin dir.
+# Lives at the repo root, which IS the plugin package (plugin.yaml sits at the
+# root). `hermes plugins install` clones the whole repository, so installed
+# copies retain `skill/`, `extractor/`, `config.example.toml` and this script
+# — every step below resolves paths relative to the script's own directory and
+# no extra source-repo argument is needed.
 #
 # Steps performed:
-#   0. Locate the source repo (for the skill symlink + config example):
-#      --repo, else detect parent (source checkout) or $REPO_ROOT env.
-#   1. `hermes plugins install <repo>/plugin --enable` (skipped with --skip-plugin-install)
-#   2. `npm install` + `npx playwright install chromium` in the plugin dir
+#   0. Resolve HERMES_HOME / profile (--hermes-home, --profile)
+#   1. `hermes plugins install <this-repo> --enable` (skipped with --skip-plugin-install)
+#   2. `npm install` inside the bundled `extractor/` package — the package's
+#      `prepare` hook runs `npx playwright install chromium` automatically.
 #   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
 #   4. Copy `config.example.toml` → `config.toml` if absent
 #   5. Print restart instructions
 #
 # Usage:
-#   ./install.sh [--hermes-home DIR] [--profile NAME] [--repo DIR] [--skip-plugin-install]
+#   ./install.sh [--hermes-home DIR] [--profile NAME] [--skip-plugin-install]
 #
 # Defaults:
 #   HERMES_HOME = $HERMES_HOME if set (not already a profile), else ~/.hermes
 #   profile     = default (root ~/.hermes)
-#   source repo = detected from script location when this is a source checkout;
-#                 otherwise pass --repo /path/to/url-to-obsidian (required for
-#                 the skill symlink step).
+#   plugin src  = this repo root (the script's own directory)
 #
 set -euo pipefail
 
@@ -31,7 +32,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HERMES_HOME_ARG=""
 PROFILE_ARG=""
-REPO_ARG=""
 SKIP_PLUGIN_INSTALL=0
 
 while [[ $# -gt 0 ]]; do
@@ -40,12 +40,10 @@ while [[ $# -gt 0 ]]; do
       HERMES_HOME_ARG="$2"; shift 2 ;;
     --profile)
       PROFILE_ARG="$2"; shift 2 ;;
-    --repo)
-      REPO_ARG="$2"; shift 2 ;;
     --skip-plugin-install)
       SKIP_PLUGIN_INSTALL=1; shift ;;
     -h|--help)
-      sed -n '2,18p' "$0"; exit 0 ;;
+      sed -n '2,20p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -72,27 +70,11 @@ else
   SKILLS_DIR="$HERMES_HOME/skills/productivity"
 fi
 
-# The plugin package this script ships with is SCRIPT_DIR itself.
+# The plugin package this script ships with is SCRIPT_DIR itself (repo root).
 PLUGIN_SRC="$SCRIPT_DIR"
 
-# Locate the source repo (parent checkout can provide skill/ + config.example).
-# Priority: --repo > $REPO_ROOT env > parent-dir has skill/ (source checkout).
-if [[ -n "$REPO_ARG" ]]; then
-  REPO_ROOT="$(cd "$REPO_ARG" && pwd)"
-elif [[ -n "${REPO_ROOT:-}" ]]; then
-  REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
-elif [[ -d "$SCRIPT_DIR/../skill" ]]; then
-  REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-else
-  # Installed copy (hermes plugins install) — skill not shipped with the plugin.
-  REPO_ROOT=""
-fi
-
-if [[ -n "$REPO_ROOT" ]]; then
-  SKILL_SRC="$REPO_ROOT/skill"
-else
-  SKILL_SRC=""
-fi
+# The skill ships inside the plugin package (repo root / installed copy).
+SKILL_SRC="$SCRIPT_DIR/skill"
 
 info()  { printf '\033[1;34m[install]\033[0m %s\n' "$*"; }
 ok()    { printf '\033[1;32m[ok]\033[0m %s\n' "$*"; }
@@ -102,7 +84,6 @@ die()   { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 info "HERMES_HOME = $HERMES_HOME"
 info "Profile dir = $PROFILE_DIR"
 info "Plugin src  = $PLUGIN_SRC"
-[[ -n "$REPO_ROOT" ]] && info "Repo root   = $REPO_ROOT"
 
 # ------------------------------------------------------- 1. install plugin
 if [[ "$SKIP_PLUGIN_INSTALL" -eq 1 ]]; then
@@ -127,21 +108,19 @@ if [[ "$(cd "$SCRIPT_DIR" && pwd)" != "$(cd "$INSTALLED_PLUGIN_DIR" && pwd)" ]];
 fi
 
 # ----------------------------------------- 2. extractor npm + playwright
-if [[ -f "$INSTALLED_PLUGIN_DIR/package.json" ]]; then
-  info "Installing extractor npm package in $INSTALLED_PLUGIN_DIR ..."
-  (cd "$INSTALLED_PLUGIN_DIR" && npm install)
-  info "Installing Playwright Chromium ..."
-  (cd "$INSTALLED_PLUGIN_DIR" && npx playwright install chromium)
-  ok "Extractor installed"
+# The extractor is a bundled package at <plugin>/extractor. Running `npm install`
+# inside it triggers the package's `prepare` hook, which runs
+# `npx playwright install chromium` — no separate Playwright step needed.
+if [[ -f "$INSTALLED_PLUGIN_DIR/extractor/package.json" ]]; then
+  info "Installing extractor dependencies in $INSTALLED_PLUGIN_DIR/extractor ..."
+  (cd "$INSTALLED_PLUGIN_DIR/extractor" && npm install)
+  ok "Extractor installed (prepare hook ran npx playwright install chromium)"
 else
-  warn "No package.json in $INSTALLED_PLUGIN_DIR — extractor npm install skipped"
+  warn "No package.json in $INSTALLED_PLUGIN_DIR/extractor — extractor npm install skipped"
 fi
 
 # ------------------------------------------------------- 3. skill symlink
-if [[ -z "$SKILL_SRC" ]]; then
-  warn "Source repo not found; skipping skill symlink."
-  warn "Re-run with --repo /path/to/url-to-obsidian to link the skill."
-elif [[ ! -d "$SKILL_SRC" ]]; then
+if [[ ! -d "$SKILL_SRC" ]]; then
   warn "Skill dir not found at $SKILL_SRC; skipping skill symlink."
 else
   mkdir -p "$SKILLS_DIR"
@@ -158,9 +137,6 @@ if [[ ! -f "$INSTALLED_PLUGIN_DIR/config.toml" ]]; then
   if [[ -f "$SCRIPT_DIR/config.example.toml" ]]; then
     info "Bootstrapping config.toml from config.example.toml"
     cp "$SCRIPT_DIR/config.example.toml" "$INSTALLED_PLUGIN_DIR/config.toml"
-  elif [[ -n "$REPO_ROOT" && -f "$REPO_ROOT/plugin/config.example.toml" ]]; then
-    info "Bootstrapping config.toml from $REPO_ROOT/plugin/config.example.toml"
-    cp "$REPO_ROOT/plugin/config.example.toml" "$INSTALLED_PLUGIN_DIR/config.toml"
   fi
 fi
 if [[ -f "$INSTALLED_PLUGIN_DIR/config.toml" ]]; then
@@ -174,7 +150,7 @@ cat <<EOF
 
 \033[1;32mInstall summary\033[0m
   Plugin:     $INSTALLED_PLUGIN_DIR
-  Extractor:  $INSTALLED_PLUGIN_DIR/node_modules/@tiny-codes/web-clip-extractor
+  Extractor:  $INSTALLED_PLUGIN_DIR/extractor
   Skill:      $SKILLS_DIR/web-clip-to-obsidian
   Config:     $INSTALLED_PLUGIN_DIR/config.toml
 

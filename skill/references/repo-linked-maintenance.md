@@ -1,4 +1,4 @@
-# Repo-linked maintenance rule for url-to-obsidian
+# Repo-linked maintenance rule for hermes-webclip-obsidian-plugin
 
 Use this note when working on the `web-clip-to-obsidian` skill or the `web-to-obsidian` plugin.
 
@@ -6,7 +6,7 @@ Use this note when working on the `web-clip-to-obsidian` skill or the `web-to-ob
 
 Both are symlinked from the same source repo:
 
-- source repo: `~/.hermes/workspace/repository/url-to-obsidian`
+- source repo: `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin`
 - plugin symlink target: that repo root
 - skill symlink target: `that repo/skill/`
 
@@ -15,7 +15,7 @@ Therefore, do **not** treat the installed profile-local skill/plugin as an isola
 ## What to do instead
 
 1. Decide whether the lesson is truly class-level and durable, not just a one-session failure.
-2. If yes, make the change in the source repo (`~/.hermes/workspace/repository/url-to-obsidian`).
+2. If yes, make the change in the source repo (`~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin`).
 3. Keep the repo and remote aligned by submitting the change upstream via PR.
 4. Avoid leaving local-only behavior/documentation drift between the installed symlinked skill/plugin and the remote source of truth.
 

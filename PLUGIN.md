@@ -3,28 +3,29 @@
 A synchronous Hermes standalone plugin that clips a **public** web article
 into an Obsidian Vault and optionally performs guarded Git synchronization.
 
-This directory is the Hermes plugin package: `plugin.yaml`, `__init__.py`
+This repository **is** the Hermes plugin package: `plugin.yaml`, `__init__.py`
 (registration entry point), `web_to_obsidian.py` (core logic), and the TOML
-config. The Node.js extraction engine lives in its sibling `../extractor/`.
+config all live at the repo root. The Node.js extraction engine is the
+bundled `extractor/` subdirectory.
 
-See `../CHANGELOG.md` for version history.
+See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 
 ## Requirements
 
 - Hermes Agent with standalone plugin support.
 - Python 3.11+ and PyYAML.
-- Node.js 18+ (`plugin/node_modules` must contain `@tiny-codes/web-clip-extractor`).
+- Node.js 18+ (`extractor/node_modules` must be installed).
 - Git for default synchronization.
 - Playwright Chromium (via the extractor) for dynamic fallback.
 
 ## Install
 
-The recommended way is the one-shot installer bundled in this directory (it
-wires up the plugin, the extractor npm package, Playwright Chromium, and the
-skill symlink):
+The recommended way is the one-shot installer bundled in this repository (it
+wires up the plugin, the extractor npm dependencies + Playwright Chromium, and
+the skill symlink):
 
 ```bash
-cd /path/to/url-to-obsidian/plugin
+cd /path/to/hermes-webclip-obsidian-plugin
 ./install.sh --profile coder        # or --hermes-home /path/to/hermes-home
 ```
 
@@ -32,27 +33,28 @@ Manual steps (what `./install.sh` automates), for a git checkout using Hermes'
 plugin manager:
 
 ```bash
-REPO=/path/to/url-to-obsidian
-hermes plugins install "file://$REPO/plugin" --enable
-cd "$HERMES_HOME/plugins/web-to-obsidian"
-npm install
-npx playwright install chromium
-cp "$REPO/plugin/config.example.toml" "$HERMES_HOME/plugins/web-to-obsidian/config.toml"
+REPO=/path/to/hermes-webclip-obsidian-plugin
+hermes plugins install "file://$REPO" --enable
+cd "$HERMES_HOME/plugins/web-to-obsidian/extractor"
+npm install                         # also runs `npx playwright install chromium` via the prepare hook
+cd ..
+cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/web-to-obsidian/config.toml"
 # symlink the skill so the agent auto-discovers the workflow:
 ln -s "$REPO/skill" "$HERMES_HOME/skills/productivity/web-clip-to-obsidian"
 ```
 
 For a named profile, set `HERMES_HOME` to that profile before the commands.
 Review `config.toml` before restarting the Gateway. `after-install.md` in the
-plugin directory is printed by `hermes plugins install` and contains these
+repository root is printed by `hermes plugins install` and contains these
 follow-up steps.
 
-> The installed plugin is a clone of `$REPO/plugin`. After `npm install`, the
-> extractor lives at `<plugin_root>/node_modules/@tiny-codes/web-clip-extractor`
-> and is resolved first at runtime. When developing from a source checkout
-> (no `npm install`), the plugin falls back to the source-repo sibling
-> `plugin_root.parent / "extractor"` (legacy layouts where the extractor sat
-> directly under the plugin root are also tolerated).
+> The installed plugin is a clone of the repository. `hermes plugins install`
+> clones the repo root (the plugin package), so the bundled `extractor/`
+> directory and `skill/` are preserved in the installed copy. Running
+> `npm install` inside `extractor/` installs the Node dependencies there, and
+> the extractor's `prepare` hook takes care of Playwright Chromium. At runtime
+> the plugin resolves the extractor at `<plugin_root>/extractor` (with legacy
+> fallbacks for older npm-installed copies).
 
 ## Configuration
 
@@ -108,7 +110,7 @@ untrusted extractor process.
 from web_to_obsidian import ClipService
 from pathlib import Path
 
-service = ClipService(Path("."))          # run from the plugin directory
+service = ClipService(Path("."))          # run from the repository root
 result = service.run("<url> [flags]")     # ClipResult | PendingClipResult
 # If PendingClipResult: service.resume_pending("yes" | "no")
 print(result.user_message())
@@ -143,7 +145,7 @@ The plugin drives the Node extractor via `run_extractor_with_fallback()`:
 
 - URLs reject credentials, fragments, unsafe ports, malformed hosts, and
   non-HTTP schemes.
-- Every redirect is revalidated; see `../extractor/README.md` for the
+- Every redirect is revalidated; see `extractor/README.md` for the
   extractor-side network policy.
 - The extractor child receives only an allowlisted environment and runs in a
   new POSIX process group. Timeout/output-limit cleanup terminates the
@@ -211,8 +213,8 @@ response.
 
 ## Tests
 
-Python tests are colocated with the plugin in `tests/` (same directory). Run
-pytest from the plugin directory:
+Python tests are colocated with the plugin in `tests/` (repo root). Run pytest
+from the repository root:
 
 ```bash
 python3 -m pytest tests/ -v
@@ -220,5 +222,5 @@ python3 -m pytest tests/ -v
 
 The tests use fixtures, temporary directories, and temporary Git
 repositories; they do not write the configured real Vault. A `tests/conftest.py`
-injects the plugin directory (`..`) into `sys.path` so `import web_to_obsidian`
+injects the repository root (`..`) into `sys.path` so `import web_to_obsidian`
 resolves here.
