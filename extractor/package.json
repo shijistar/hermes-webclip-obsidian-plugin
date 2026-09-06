@@ -28,7 +28,8 @@
   ],
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/cli.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs"
+    "check": "node --check src/cli.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs",
+    "prepare": "npx playwright install chromium"
   },
   "dependencies": {
     "defuddle": "^0.19.2",
