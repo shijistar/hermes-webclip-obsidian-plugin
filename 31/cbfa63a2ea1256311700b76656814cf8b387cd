@@ -1,0 +1,14 @@
+post-install.sh
+  h_99cad05bea77d1 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "31cbfa63a2ea1256311700b76656814cf8b387cd",
+  "prompts": {},
+  "humans": {
+    "h_99cad05bea77d1": {
+      "author": "Fengbao Li <shijistar@gmail.com>"
+    }
+  }
+}
