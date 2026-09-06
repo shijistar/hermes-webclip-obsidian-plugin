@@ -1,0 +1,27 @@
+CHANGELOG.md
+  h_99cad05bea77d1 10,47,51,62,69,78,83,90,94,100,106,114,120,122,133,139
+config.toml
+  h_99cad05bea77d1 6-7
+PLUGIN.md
+  h_99cad05bea77d1 69-70
+  h_99cad05bea77d1 226
+__init__.py
+  h_99cad05bea77d1 1
+config.example.toml
+  h_99cad05bea77d1 6-7
+skill/SKILL.md
+  h_99cad05bea77d1 57-58,123,157
+web_to_obsidian.py
+  h_99cad05bea77d1 141,149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "72492f023ba2f0334a8bed6215d918fff9d712b9",
+  "prompts": {},
+  "humans": {
+    "h_99cad05bea77d1": {
+      "author": "Fengbao Li <shijistar@gmail.com>"
+    }
+  }
+}
