@@ -1,6 +1,6 @@
 # Repo-linked maintenance rule for hermes-webclip-obsidian-plugin
 
-Use this note when working on the `web-clip-to-obsidian` skill or the `web-to-obsidian` plugin.
+Use this note when working on the `web-clip-to-obsidian` skill or the `webclip-obsidian` plugin.
 
 ## Durable rule
 

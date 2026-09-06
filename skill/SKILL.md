@@ -26,7 +26,7 @@ developing):
 
 ```
 Source repo:     ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/
-Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/web-to-obsidian/ → source repo (root)
+Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/ → source repo (root)
 Skill symlink:   ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/ → source repo/skill/
 Config:          <source repo>/config.toml
 ```
@@ -35,7 +35,7 @@ Deploy via symlink (not copies):
 
 ```bash
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin \
-      ~/.hermes/profiles/<profile>/plugins/web-to-obsidian
+      ~/.hermes/profiles/<profile>/plugins/webclip-obsidian
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
       ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
 ```
@@ -43,7 +43,7 @@ ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
 `config.toml` lives at the plugin package root (`config.toml` in the repo) and is
 tracked in git with sensible defaults — each profile keeps its own local
 config by editing the file at the installed plugin path
-(`<profile>/plugins/web-to-obsidian/config.toml`) or copying the example:
+(`<profile>/plugins/webclip-obsidian/config.toml`) or copying the example:
 `cp config.example.toml config.toml` in the source repo.
 
 Default config:
@@ -97,7 +97,7 @@ print(result.user_message())
 CLI shortcut (string handler):
 
 ```bash
-cd ~/.hermes/profiles/<profile>/plugins/web-to-obsidian && \
+cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
 python3 -c "
 import sys; sys.path.insert(0, '.')
 from web_to_obsidian import build_handler; from pathlib import Path

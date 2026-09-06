@@ -586,7 +586,7 @@ class ExtractorTests(unittest.TestCase):
 
         with mock.patch.object(clip.subprocess, "Popen", return_value=process) as popen:
             result = clip.run_extractor(
-                Path("/plugins/web-to-obsidian/plugin"),
+                Path("/plugins/webclip-obsidian/plugin"),
                 "https://example.com/article",
                 no_browser=True,
             )
@@ -597,7 +597,7 @@ class ExtractorTests(unittest.TestCase):
             args[0],
             [
                 "node",
-                "/plugins/web-to-obsidian/extractor/src/cli.mjs",
+                "/plugins/webclip-obsidian/extractor/src/cli.mjs",
                 "https://example.com/article",
                 "--no-browser",
             ],

@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## 2026-09-06
 
 ### Changed
+- **Plugin renamed to `webclip-obsidian`** — the manifest name (and thus the
+  installed plugin directory `plugins/webclip-obsidian`, replacing
+  `plugins/web-to-obsidian`) changed to match the repo's branding; install
+  paths in `install.sh`, `after-install.md`, `PLUGIN.md`, READMEs, the skill
+  docs, and the extractor User-Agent were updated accordingly. Plugin version
+  bumped 0.8.0 → 0.9.0.
 - **Plugin package moved to the repository root** — `plugin.yaml`, `__init__.py`,
   `web_to_obsidian.py`, `config.toml`, `config.example.toml`, `install.sh`,
   `after-install.md`, and `tests/` now live at the repo root, which **is** the

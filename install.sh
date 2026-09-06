@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install.sh — one-shot installer for the web-to-obsidian plugin stack.
+# install.sh — one-shot installer for the webclip-obsidian plugin stack.
 #
 # Lives at the repo root, which IS the plugin package (plugin.yaml sits at the
 # root). `hermes plugins install` clones the whole repository, so installed
@@ -62,11 +62,11 @@ fi
 # A named profile lives under <HERMES_HOME>/profiles/<name>.
 if [[ -n "$PROFILE_ARG" ]]; then
   PROFILE_DIR="$HERMES_HOME/profiles/$PROFILE_ARG"
-  PLUGIN_DIR="$PROFILE_DIR/plugins/web-to-obsidian"
+  PLUGIN_DIR="$PROFILE_DIR/plugins/webclip-obsidian"
   SKILLS_DIR="$PROFILE_DIR/skills/productivity"
 else
   PROFILE_DIR="$HERMES_HOME"
-  PLUGIN_DIR="$HERMES_HOME/plugins/web-to-obsidian"
+  PLUGIN_DIR="$HERMES_HOME/plugins/webclip-obsidian"
   SKILLS_DIR="$HERMES_HOME/skills/productivity"
 fi
 

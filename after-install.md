@@ -3,7 +3,7 @@
 The plugin is installed. Finish setup with the bundled one-shot installer:
 
 ```bash
-cd "$HERMES_HOME/plugins/web-to-obsidian"
+cd "$HERMES_HOME/plugins/webclip-obsidian"
 
 # CASE 1: install for the default profile
 ./install.sh

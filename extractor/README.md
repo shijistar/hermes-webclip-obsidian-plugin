@@ -1,6 +1,6 @@
 # web-clip-extractor
 
-The Node.js content-extraction engine for the web-to-obsidian Hermes plugin. It
+The Node.js content-extraction engine for the webclip-obsidian Hermes plugin. It
 fetches a public web page over a hardened network policy and returns normalized
 article metadata plus Markdown.
 

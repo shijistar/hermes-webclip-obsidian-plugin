@@ -71,7 +71,7 @@ class PluginRegistrationTests(unittest.TestCase):
         options = clip.ClipOptions("https://example.com", False, False, False)
         config.vault = Path("/tmp/vault")
         config.sync_branch = "master"
-        config.lock_file = Path("/tmp/test-web-to-obsidian.lock")
+        config.lock_file = Path("/tmp/test-webclip-obsidian.lock")
         order = []
         with (
             mock.patch.object(clip, "parse_clip_args", return_value=options),

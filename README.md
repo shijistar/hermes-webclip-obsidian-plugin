@@ -44,7 +44,7 @@ npm dependencies + Playwright Chromium, and the skill symlink:
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin
 ./install.sh --profile coder        # or --hermes-home /path/to/hermes-home; default = ~/.hermes
-# review <profile>/plugins/web-to-obsidian/config.toml (vault, destination, ...)
+# review <profile>/plugins/webclip-obsidian/config.toml (vault, destination, ...)
 # restart your Hermes gateway service from a separate shell
 ```
 

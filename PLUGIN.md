@@ -1,4 +1,4 @@
-# web-to-obsidian plugin
+# webclip-obsidian plugin
 
 A synchronous Hermes standalone plugin that clips a **public** web article
 into an Obsidian Vault and optionally performs guarded Git synchronization.
@@ -35,10 +35,10 @@ plugin manager:
 ```bash
 REPO=/path/to/hermes-webclip-obsidian-plugin
 hermes plugins install "file://$REPO" --enable
-cd "$HERMES_HOME/plugins/web-to-obsidian/extractor"
+cd "$HERMES_HOME/plugins/webclip-obsidian/extractor"
 npm install                         # also runs `npx playwright install chromium` via the prepare hook
 cd ..
-cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/web-to-obsidian/config.toml"
+cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/webclip-obsidian/config.toml"
 # symlink the skill so the agent auto-discovers the workflow:
 ln -s "$REPO/skill" "$HERMES_HOME/skills/productivity/web-clip-to-obsidian"
 ```

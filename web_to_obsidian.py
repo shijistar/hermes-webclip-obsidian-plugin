@@ -558,7 +558,7 @@ def _perform_pinned_remote_image_request(
             approved.request_target,
             headers={
                 "Host": approved.host_header,
-                "User-Agent": "Mozilla/5.0 Hermes web-to-obsidian",
+                "User-Agent": "Mozilla/5.0 Hermes webclip-obsidian",
                 "Accept": "image/*,*/*;q=0.8",
                 "Accept-Encoding": "identity",
                 "Connection": "close",
