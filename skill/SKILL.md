@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares a URL wanting to save/read-later in Obsidian, or says "clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>".
-version: 1.4.2
+version: 1.4.3
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -172,6 +172,7 @@ print(result.user_message())
 - **Git sync tests need upstream**: `GitSync.preflight()` requires the branch to have an upstream. In unit tests, always call `git push -u origin <branch>` after the initial commit, before calling `preflight()`.
 - **Batch processing pitfalls**: When clipping 10+ articles sequentially, the vault worktree can get dirty between clips (especially after failed local-images clips that leave deleted images on disk). Never run a blanket `git checkout -- .` — it discards uncommitted manual note edits too. Inspect `git status --short` first: if it only shows generated residue under `Inbox/` and `images/`, clean only those paths (`git checkout -- Inbox/ images/`); if it shows any user edit, commit/stash it manually before continuing. Also, 163.com and other sites rate-limit rapid sequential requests — add a 2-second delay between clips. See `references/batch-processing.md` for the full proven workflow (pre-extract → sequential clip with cleanup → summary table).
 - **SPA / client-side rendered pages**: Some sites (e.g., kimi.com, certain modern SPAs) render content entirely via JavaScript — the HTML response contains no article content, only JS bundles. The Node.js extractor, `web_extract`, and curl all return empty/boilerplate. Without a real browser session, these cannot be extracted. Report to user as requiring manual browser access. Do NOT save the empty shell as a note.
+- **Re-clip localize orphans the previous-generation image dir**: the image dir slug uses the article's published date (e.g. re-clip on 2026-09-07 of a 2026-06-11 article writes `images/2026-06-11-agent-skill/` and leaves the old `images/2026-09-03-agent-skill/` unreferenced). To clean orphans: (1) resolve every md image link to its repo-relative path and diff against `git ls-files images/` — never match bare basenames, because old and new dirs share identical filenames and `git grep -F <basename>` false-positives on the note referencing the NEW dir; (2) double-check each orphan's FULL path has zero tree hits before `git rm`; (3) remove in one `chore(images):` commit, keep `images/.gitkeep` (placeholder, not an image). Deletion is safe: file content stays in git history.
 
 ## Commit Message
 

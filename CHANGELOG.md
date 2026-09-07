@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Covered by new `tests/test_post_install.py` (first-time bootstrap, refresh
   preservation, refresh without user config, backup-failure abort,
   restore-failure with retained backup). Plugin version bumped 0.13.0 → 0.14.0.
+- **Skill pitfall: orphaned previous-generation image dirs on re-clip** —
+  documents that re-clipping a localized note writes a new published-date
+  image dir and orphans the old one, and how to clean orphans safely
+  (repo-relative path matching, never bare basenames — old and new dirs share
+  identical filenames). Skill version bumped 1.4.2 → 1.4.3.
 
 ## 2026-09-06
 
