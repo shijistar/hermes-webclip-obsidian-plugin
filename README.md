@@ -61,9 +61,11 @@ cd /path/to/hermes-webclip-obsidian-plugin
 dependencies (whose `prepare` hook installs Playwright Chromium), the skill
 symlink, and `config.toml` — it does not re-install the plugin. Re-running it
 upgrades the extractor dependencies and refreshes the skill symlink. To also run
-`hermes plugins install`, pass `--install-plugin`. `HERMES_HOME` is detected
-automatically (nearest `.hermes` directory above the script) or can be set
-explicitly with `--hermes-home DIR`. Step-by-step manual
+`hermes plugins install`, pass `--install-plugin` — on an already-installed
+plugin this refreshes it (`hermes plugins install --force`) and preserves
+your existing `config.toml` (backed up before, restored after). `HERMES_HOME`
+is detected automatically (nearest `.hermes` directory above the script) or
+can be set explicitly with `--hermes-home DIR`. Step-by-step manual
 commands are documented in [`PLUGIN.md`](PLUGIN.md#install).
 
 Then clip articles:
