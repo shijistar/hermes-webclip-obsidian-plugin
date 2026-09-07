@@ -88,19 +88,32 @@ environment-variable fallback.
 
 ## Tests
 
-```bash
-# Node extractor
-cd extractor
-npm test
-npm run check
+The automated tests use fixtures, temporary directories, and temporary Git
+repositories; they do not write the configured real Vault.
 
-# Python plugin (from repo root)
-cd ..
+### Python plugin
+
+Configure the test environment once (mirrors CI in
+`.github/workflows/reusable-test.yml`):
+
+```bash
+python3 -m pip install --upgrade pip
+pip install pytest pyyaml        # or: pip install -r requirements-dev.txt (when present)
+```
+
+Run the suite from the repo root:
+
+```bash
 python3 -m pytest tests/ -v
 ```
 
-The automated tests use fixtures, temporary directories, and temporary Git
-repositories; they do not write the configured real Vault.
+### Node extractor
+
+```bash
+cd extractor
+npm test
+npm run check
+```
 
 ## Documentation map
 
