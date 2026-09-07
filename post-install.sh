@@ -19,10 +19,9 @@
 #      `--install-plugin` is passed. By default the plugin is assumed to have
 #      been installed already (`hermes plugins install` is the bootstrap), so
 #      this step is skipped.
-#   2. `npm install` in the plugin dir (pulls the published
-#      @tiny-codes/web-clip-extractor dependency into node_modules), then
-#      `npx playwright install chromium` explicitly — an npm dependency's
-#      `prepare` hook is not run under npm's default allow-scripts policy.
+#   2. `npm install` in the bundled `extractor/` directory — the package's
+#      `prepare` hook (`npx playwright install chromium`) installs the
+#      Playwright browser automatically.
 #   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
 #   4. Copy `config.example.toml` → `config.toml` if absent
 #   5. Print restart instructions
@@ -151,20 +150,18 @@ if [[ "$(cd "$SCRIPT_DIR" && pwd)" != "$(cd "$INSTALLED_PLUGIN_DIR" && pwd)" ]];
   info "Script runs from $SCRIPT_DIR; installing dependencies into $INSTALLED_PLUGIN_DIR"
 fi
 
-# ----------------------------------------- 2. extractor npm + playwright
-# The plugin declares @tiny-codes/web-clip-extractor as an npm dependency
-# (installed into plugin/node_modules). The extractor also ships inside the
-# plugin as <plugin>/extractor for source checkouts. Because npm dependencies'
-# `prepare` hooks are skipped under npm's default allow-scripts policy, we run
-# `npx playwright install chromium` explicitly here.
-if [[ -f "$INSTALLED_PLUGIN_DIR/package.json" ]]; then
-  info "Installing extractor npm package in $INSTALLED_PLUGIN_DIR ..."
-  (cd "$INSTALLED_PLUGIN_DIR" && npm install)
-  info "Installing Playwright Chromium ..."
-  (cd "$INSTALLED_PLUGIN_DIR" && npx playwright install chromium)
-  ok "Extractor installed"
+# ----------------------------------------- 2. extractor npm install
+# The extractor is the bundled `extractor/` subdirectory (the repo root IS the
+# plugin package). `npm install` inside it installs the Node dependencies and
+# runs the package's `prepare` hook (`npx playwright install chromium`), which
+# downloads the Playwright browser automatically.
+EXTRACTOR_DIR="$INSTALLED_PLUGIN_DIR/extractor"
+if [[ -f "$EXTRACTOR_DIR/package.json" ]]; then
+  info "Installing extractor npm dependencies in $EXTRACTOR_DIR ..."
+  (cd "$EXTRACTOR_DIR" && npm install)
+  ok "Extractor installed (Playwright Chromium via prepare hook)"
 else
-  warn "No package.json in $INSTALLED_PLUGIN_DIR — extractor npm install skipped"
+  warn "No package.json in $EXTRACTOR_DIR — extractor npm install skipped"
 fi
 
 # ------------------------------------------------------- 3. skill symlink
@@ -198,7 +195,7 @@ cat <<EOF
 
 \033[1;32mInstall summary\033[0m
   Plugin:     $INSTALLED_PLUGIN_DIR
-  Extractor:  $INSTALLED_PLUGIN_DIR/node_modules/@tiny-codes/web-clip-extractor
+  Extractor:  $INSTALLED_PLUGIN_DIR/extractor
   Skill:      $SKILLS_DIR/web-clip-to-obsidian
   Config:     $INSTALLED_PLUGIN_DIR/config.toml
 

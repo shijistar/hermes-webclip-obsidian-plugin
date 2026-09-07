@@ -39,7 +39,8 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 Requirements: `Hermes Agent`, `Python` 3.11+, `Node.js` 18+, `Git`, `PyYAML`.
 
 The one-shot installer (at the repo root) wires up the plugin, the extractor
-npm dependencies + Playwright Chromium, and the skill symlink. It is normally
+dependencies (its `prepare` hook installs Playwright Chromium), and the skill
+symlink. It is normally
 run from the *installed* plugin directory; `HERMES_HOME` and the profile are
 auto-detected by walking up from the script's location to the nearest
 `.hermes` directory, so no flags are needed:
@@ -54,9 +55,9 @@ cd /path/to/hermes-webclip-obsidian-plugin
 
 `post-install.sh` assumes the plugin is **already installed** (via
 `hermes plugins install`) and by default only wires up the extractor
-dependencies, Playwright Chromium, the skill symlink, and `config.toml` —
-it does not re-install the plugin. Re-running it upgrades the extractor
-dependencies and refreshes the skill symlink. To also run
+dependencies (whose `prepare` hook installs Playwright Chromium), the skill
+symlink, and `config.toml` — it does not re-install the plugin. Re-running it
+upgrades the extractor dependencies and refreshes the skill symlink. To also run
 `hermes plugins install`, pass `--install-plugin`. `HERMES_HOME` is detected
 automatically (nearest `.hermes` directory above the script) or can be set
 explicitly with `--hermes-home DIR`. Step-by-step manual

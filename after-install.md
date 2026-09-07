@@ -19,9 +19,10 @@ What it does:
    installed via `hermes plugins install` (this guide runs right after it).
    If the plugin is _not_ installed yet, pass `--install-plugin` to run
    `hermes plugins install "file://<repo>" --enable`.
-2. `npm install` — pulls the published `@tiny-codes/web-clip-extractor`
-   dependency into `node_modules`, followed by an explicit
-   `npx playwright install chromium` for the dynamic-page fallback.
+2. `npm install` in the bundled `extractor/` directory — installs the Node
+   dependencies; the package's `prepare` hook runs
+   `npx playwright install chromium`, so the Playwright browser is installed
+   automatically (no separate step needed).
 3. Symlinks the `web-clip-to-obsidian` skill into the profile's skills dir
    (the skill ships inside the installed copy, so no source-repo argument is
    needed).

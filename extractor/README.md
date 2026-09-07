@@ -19,10 +19,11 @@ and [`PLUGIN.md`](../PLUGIN.md) for how the plugin drives this extractor.
 
 ## Install
 
-The extractor is published to npm as `@tiny-codes/web-clip-extractor`; the
-Hermes plugin consumes it as a dependency (`npm install` inside the plugin
-pulls it into `node_modules`). In this repository's source checkout the
-`extractor/` directory **is** that package — install dependencies with:
+The extractor is published to npm as `@tiny-codes/web-clip-extractor` so the
+Hermes plugin can consume it; in this repository the `extractor/` directory
+**is** that package (the plugin resolves it as the bundled
+`<plugin_root>/extractor`, preferring a published install in
+`<plugin_root>/node_modules` when present). Install dependencies with:
 
 ```bash
 npm install
