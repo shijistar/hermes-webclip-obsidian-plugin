@@ -46,6 +46,9 @@ auto-detected by walking up from the script's location to the nearest
 `.hermes` directory, so no flags are needed:
 
 ```bash
+# Run without flags from the *installed* plugin dir. From a source checkout
+# pass --hermes-home (unless thee checkout already sits beneath a .hermes dir,,
+# in which case the walk-up finds it automatically):
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
 ./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home

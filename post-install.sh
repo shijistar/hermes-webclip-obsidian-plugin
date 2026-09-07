@@ -152,15 +152,23 @@ else
 fi
 
 # ------------------------------------------------------- 3. skill symlink
+SKILL_LINK="$SKILLS_DIR/web-clip-to-obsidian"
 if [[ ! -d "$SKILL_SRC" ]]; then
   warn "Skill dir not found at $SKILL_SRC; skipping skill symlink."
 else
   mkdir -p "$SKILLS_DIR"
-  if [[ -e "$SKILLS_DIR/web-clip-to-obsidian" || -L "$SKILLS_DIR/web-clip-to-obsidian" ]]; then
-    ok "Skill already linked at $SKILLS_DIR/web-clip-to-obsidian"
+  if [[ -L "$SKILL_LINK" ]]; then
+    if [[ "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
+      ok "Skill already linked at $SKILL_LINK"
+    else
+      info "Replacing stale skill symlink $SKILL_LINK → $SKILL_SRC"
+      ln -sfn "$SKILL_SRC" "$SKILL_LINK"
+    fi
+  elif [[ -e "$SKILL_LINK" ]]; then
+    warn "$SKILL_LINK exists as a regular file or directory — remove it manually for the installer to manage the skill symlink"
   else
-    info "Symlinking skill $SKILL_SRC → $SKILLS_DIR/web-clip-to-obsidian"
-    ln -s "$SKILL_SRC" "$SKILLS_DIR/web-clip-to-obsidian"
+    info "Symlinking skill $SKILL_SRC → $SKILL_LINK"
+    ln -s "$SKILL_SRC" "$SKILL_LINK"
   fi
 fi
 

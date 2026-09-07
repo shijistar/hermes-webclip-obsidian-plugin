@@ -30,6 +30,9 @@ script run that step too). It auto-detects `HERMES_HOME` and the profile by
 walking up from its own location to the nearest `.hermes` directory:
 
 ```bash
+# Run without flags from the *installed* plugin dir. From a source checkout
+# pass --hermes-home (unless thee checkout already sits beneath a .hermes dir,,
+# in which case the walk-up finds it automatically):
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
 ./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home

@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import tempfile
 import time
@@ -10,6 +11,16 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+
+
+def _proc_alive(pid: int) -> bool:
+    """True while `/proc/<pid>` has a live (non-zombie) process entry.///"""
+    try:
+        status = Path(f"/proc/{pid}/status").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return False
+    m = re.search(r"^State:\s*(\S)", status, re.MULTILINE)
+    return bool(m) and m.group(1) not in ("Z", "X")
 
 
 SUCCESS = {
@@ -81,9 +92,9 @@ class ExtractorIsolationRegressionTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 5)
             grandchild = int(pid_file.read_text(encoding="utf-8"))
             deadline = time.monotonic() + 3
-            while Path(f"/proc/{grandchild}").exists() and time.monotonic() < deadline:
+            while _proc_alive(grandchild) and time.monotonic() < deadline:
                 time.sleep(0.05)
-            self.assertFalse(Path(f"/proc/{grandchild}").exists())
+            self.assertFalse(_proc_alive(grandchild))
 
 
 class VaultIdempotencyRegressionTests(unittest.TestCase):
