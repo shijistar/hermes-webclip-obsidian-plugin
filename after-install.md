@@ -16,6 +16,12 @@ What it does:
 2. Symlinks the `web-clip-to-obsidian` skill into the profile's skills dir
 3. Bootstraps `config.toml` from `config.example.toml` if absent.
 
+<!-- If the plugin is _not_ installed yet (or you want to refresh an existing
+install), pass `--install-plugin`. On an existing install this performs a
+forced reinstall (`hermes plugins install --force`) and **preserves your
+`config.toml`** — it is backed up before the reinstall and restored
+afterwards; first-time installs are unchanged. -->
+
 Then review `config.toml`, restart your Hermes gateway service from a separate
 shell, and clip with `/webclip <url>`. You can also run the clip with natural
 language: `clip to obsidian <url>`

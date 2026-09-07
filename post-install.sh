@@ -25,7 +25,8 @@
 #                  profile's plugins dir
 #   plugin src   = this repo root (the script's own directory)
 #   install      = do NOT run `hermes plugins install` (pass --install-plugin
-#                  to run it)
+#                  to run it; on an existing plugin dir this refreshes it and
+#                  preserves config.toml)
 #
 set -euo pipefail
 
@@ -116,9 +117,31 @@ info "Profile dir = $PROFILE_DIR"
 info "Plugin src  = $PLUGIN_SRC"
 
 # ------------------------------------------------------- 1. install plugin
+# `--install-plugin` on an existing plugin dir is a REFRESH: the current
+# config.toml is backed up first, `hermes plugins install --force` replaces
+# the plugin dir, then the backup is restored — user config is never lost.
+CONFIG_BACKUP=""
 if [[ "$INSTALL_PLUGIN" -eq 1 ]]; then
   if [[ -d "$PLUGIN_DIR" ]]; then
-    ok "Plugin already installed at $PLUGIN_DIR (reinstall with \`hermes plugins install --force\`)"
+    if [[ -f "$PLUGIN_DIR/config.toml" ]]; then
+      CONFIG_BACKUP="$(mktemp "${TMPDIR:-/tmp}/webclip-config.XXXXXX")" \
+        || die "Could not create a backup location for config.toml; aborting refresh (plugin left untouched)"
+      if ! cp "$PLUGIN_DIR/config.toml" "$CONFIG_BACKUP" \
+        || ! cmp -s "$PLUGIN_DIR/config.toml" "$CONFIG_BACKUP"; then
+        rm -f "$CONFIG_BACKUP"
+        die "Could not back up $PLUGIN_DIR/config.toml; aborting refresh (plugin left untouched)"
+      fi
+      ok "Backed up config.toml → $CONFIG_BACKUP"
+    fi
+    info "Refreshing plugin (forced reinstall) from $PLUGIN_SRC ..."
+    if ! HERMES_HOME="$HERMES_HOME" \
+      hermes plugins install "file://$PLUGIN_SRC" --force --enable; then
+      if [[ -n "$CONFIG_BACKUP" ]]; then
+        warn "Plugin reinstall failed — config backup kept at: $CONFIG_BACKUP"
+        warn "Restore it manually with: cp \"$CONFIG_BACKUP\" \"$PLUGIN_DIR/config.toml\""
+      fi
+      die "Plugin reinstall failed (hermes plugins install --force)"
+    fi
   else
     info "Installing plugin from $PLUGIN_SRC ..."
     HERMES_HOME="$HERMES_HOME" \
@@ -129,6 +152,20 @@ else
 fi
 
 test -d "$PLUGIN_DIR" || die "Plugin dir not found at $PLUGIN_DIR (run hermes plugins install first — or pass --install-plugin)"
+
+# Restore the user's config.toml after a forced refresh (issue #20). Skipped
+# on first-time installs and non-`--install-plugin` runs (no backup taken).
+if [[ -n "$CONFIG_BACKUP" ]]; then
+  if [[ ! -f "$CONFIG_BACKUP" ]]; then
+    warn "Config backup $CONFIG_BACKUP is missing — skipping restore (config.toml may be the fresh default)"
+  elif ! cp "$CONFIG_BACKUP" "$PLUGIN_DIR/config.toml" \
+    || ! cmp -s "$CONFIG_BACKUP" "$PLUGIN_DIR/config.toml"; then
+    die "Could not restore config.toml from $CONFIG_BACKUP — your config is preserved at: $CONFIG_BACKUP (restore manually with: cp \"$CONFIG_BACKUP\" \"$PLUGIN_DIR/config.toml\")"
+  else
+    rm -f "$CONFIG_BACKUP"
+    ok "Restored config.toml from backup"
+  fi
+fi
 
 # We operate on the INSTALLED plugin dir; if this script is already running
 # from the installed dir, PLUGIN_DIR == SCRIPT_DIR and nothing extra is needed.

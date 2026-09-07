@@ -4,6 +4,20 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-09-07
+
+### Added
+
+- **`post-install.sh --install-plugin` refresh preserves user `config.toml`** —
+  when the plugin directory already exists, `--install-plugin` now performs a
+  forced refresh (`hermes plugins install --force`): the existing `config.toml`
+  is backed up first, the plugin dir is replaced, and the backup is restored
+  afterwards. Backup / reinstall / restore failures abort with a clear error
+  and keep the backup for manual recovery; first-time installs are unchanged.
+  Covered by new `tests/test_post_install.py` (first-time bootstrap, refresh
+  preservation, refresh without user config, backup-failure abort,
+  restore-failure with retained backup). Plugin version bumped 0.13.0 → 0.14.0.
+
 ## 2026-09-06
 
 ### Changed

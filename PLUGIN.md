@@ -26,7 +26,9 @@ The recommended way is the one-shot installer bundled in this repository
 (it wires up the extractor npm dependencies + Playwright Chromium, the skill
 symlink, and `config.toml`; the plugin itself is assumed to be already
 installed via `hermes plugins install` — pass `--install-plugin` to have the
-script run that step too). It auto-detects `HERMES_HOME` and the profile by
+script run that step too; on an existing install this refreshes it with
+`hermes plugins install --force` and preserves your `config.toml`). It
+auto-detects `HERMES_HOME` and the profile by
 walking up from its own location to the nearest `.hermes` directory:
 
 ```bash
