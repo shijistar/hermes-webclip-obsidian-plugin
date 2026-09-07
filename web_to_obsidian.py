@@ -138,7 +138,7 @@ class ClipConfig:
         if not sync_branch or not _SAFE_BRANCH_NAME.fullmatch(sync_branch):
             raise ClipError("The configured Git sync branch is unsafe.")
         default_lock = Path(
-            "~/.hermes/workspace/cache/url-to-obsidian/vault.lock"
+            "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
         ).expanduser()
         lock_file = Path(
             values.get("WEB_TO_OBSIDIAN_LOCK_FILE", str(default_lock))
@@ -146,7 +146,7 @@ class ClipConfig:
         if lock_file == vault or vault in lock_file.parents:
             raise ClipError("The shared lock file must be outside the Obsidian vault.")
         default_pending_root = Path(
-            "~/.hermes/workspace/cache/url-to-obsidian/pending-state"
+            "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
         ).expanduser()
         pending_root = Path(
             values.get("WEB_TO_OBSIDIAN_PENDING_ROOT", str(default_pending_root))
@@ -558,7 +558,7 @@ def _perform_pinned_remote_image_request(
             approved.request_target,
             headers={
                 "Host": approved.host_header,
-                "User-Agent": "Mozilla/5.0 Hermes web-to-obsidian",
+                "User-Agent": "Mozilla/5.0 Hermes webclip-obsidian",
                 "Accept": "image/*,*/*;q=0.8",
                 "Accept-Encoding": "identity",
                 "Connection": "close",
@@ -1618,12 +1618,25 @@ def _extractor_environment() -> dict[str, str]:
 def _extractor_dir(plugin_root: Path) -> Path:
     """Locate the standalone Node.js extractor package.
 
-    The extractor is a sibling of the Hermes plugin package in the source
-    repository (``extractor/`` at the repo root, ``plugin/`` beside it). A
-    legacy layout where the plugin lived directly at the repo root is also
-    tolerated, in which case the extractor is a direct subdirectory of
-    *plugin_root*.
+    Resolution order (first match wins):
+
+    1. **Plugin-local npm install** — ``plugin_root/node_modules`` contains
+       the published ``@tiny-codes/web-clip-extractor`` package (installed
+       with ``npm install`` inside the plugin directory). This is the
+       production layout after ``hermes plugins install`` pulls the plugin:
+       the extractor npm package rides with the plugin version.
+    2. **Bundled subdirectory** — ``plugin_root/extractor`` (the repo root is
+       the plugin package, so a source checkout ships the extractor inside the
+       plugin and it can be used without an npm install).
+    3. **Legacy source-repo sibling** — extractor at ``plugin_root.parent /
+       "extractor"`` (old monorepo layout where ``plugin/`` and ``extractor/``
+       sat side by side).
     """
+    npm_pkg = (
+        plugin_root / "node_modules" / "@tiny-codes" / "web-clip-extractor"
+    )
+    if (npm_pkg / "src" / "cli.mjs").is_file():
+        return npm_pkg
     direct = plugin_root / "extractor"
     if (direct / "src" / "cli.mjs").is_file():
         return direct

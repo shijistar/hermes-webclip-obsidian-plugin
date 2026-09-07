@@ -1,44 +1,68 @@
-# web-to-obsidian plugin
+# webclip-obsidian plugin
 
 A synchronous Hermes standalone plugin that clips a **public** web article
 into an Obsidian Vault and optionally performs guarded Git synchronization.
 
-This directory is the Hermes plugin package: `plugin.yaml`, `__init__.py`
+This repository **is** the Hermes plugin package: `plugin.yaml`, `__init__.py`
 (registration entry point), `web_to_obsidian.py` (core logic), and the TOML
-config. The Node.js extraction engine lives in its sibling `../extractor/`.
+config all live at the repo root. The Node.js extraction engine is the
+bundled `extractor/` subdirectory.
 
-See `../CHANGELOG.md` for version history.
+See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 
 ## Requirements
 
 - Hermes Agent with standalone plugin support.
 - Python 3.11+ and PyYAML.
-- Node.js 18+ (`extractor/` must have its locked deps installed).
+- Node.js 18+ (the bundled `extractor/` has its dependencies installed via
+  `npm install`).
 - Git for default synchronization.
-- Playwright Chromium (via the extractor) for dynamic fallback.
+- Playwright Chromium (installed by the extractor `prepare` hook) for dynamic
+  fallback.
 
 ## Install
 
-Install from a local Git checkout using Hermes' plugin manager, then install
-the locked Node dependency tree of the sibling extractor:
+The recommended way is the one-shot installer bundled in this repository
+(it wires up the extractor npm dependencies + Playwright Chromium, the skill
+symlink, and `config.toml`; the plugin itself is assumed to be already
+installed via `hermes plugins install` — pass `--install-plugin` to have the
+script run that step too). It auto-detects `HERMES_HOME` and the profile by
+walking up from its own location to the nearest `.hermes` directory:
 
 ```bash
-REPO=/path/to/url-to-obsidian
-hermes plugins install "file://$REPO/plugin" --enable
-cd "$REPO/extractor"
-npm ci --ignore-scripts
-npx playwright install chromium
-cp "$REPO/plugin/config.example.toml" "$HERMES_HOME/plugins/web-to-obsidian/config.toml"
-hermes gateway restart
+# Run without flags from the *installed* plugin dir. From a source checkout
+# pass --hermes-home (unless thee checkout already sits beneath a .hermes dir,,
+# in which case the walk-up finds it automatically):
+cd /path/to/hermes-webclip-obsidian-plugin
+./post-install.sh                     # auto-detects HERMES_HOME / profile
+./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
+```
+
+Manual steps (what `./post-install.sh` automates), for a git checkout using Hermes'
+plugin manager:
+
+```bash
+REPO=/path/to/hermes-webclip-obsidian-plugin
+hermes plugins install "file://$REPO" --enable
+cd "$HERMES_HOME/plugins/webclip-obsidian/extractor"
+npm install                     # installs Node deps; the prepare hook installs Playwright Chromium
+cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/webclip-obsidian/config.toml"
+# symlink the skill so the agent auto-discovers the workflow:
+ln -s "$REPO/skill" "$HERMES_HOME/skills/productivity/web-clip-to-obsidian"
 ```
 
 For a named profile, set `HERMES_HOME` to that profile before the commands.
-Review `config.toml` before restarting the Gateway.
+Review `config.toml` before restarting the Gateway. `after-install.md` in the
+repository root is printed by `hermes plugins install` and contains these
+follow-up steps.
 
-> The installed plugin is a symlink to `$REPO/plugin`; the extractor stays at
-> `$REPO/extractor` and is located as `plugin_root.parent / "extractor"` at
-> runtime (legacy layouts where the plugin sat at the repo root with an
-> `extractor/` subdirectory are also tolerated).
+> The installed plugin is a clone of the repository. `hermes plugins install`
+> clones the repo root (the plugin package), so the bundled `extractor/`
+> directory and `skill/` are preserved in the installed copy. At runtime the
+> plugin uses the bundled `<plugin_root>/extractor` (dependencies installed by
+> `npm install` inside it, which also pulls Playwright Chromium via the
+> `prepare` hook); if a published `@tiny-codes/web-clip-extractor` npm package
+> is present in `<plugin_root>/node_modules`, it is preferred instead.
 
 ## Configuration
 
@@ -50,8 +74,8 @@ vault = "~/obsidian/shijistar"
 destination = "Inbox"
 images = "images"
 sync_branch = "master"
-lock_file = "~/.hermes/workspace/cache/url-to-obsidian/vault.lock"
-pending_root = "~/.hermes/workspace/cache/url-to-obsidian/pending-state"
+lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
+pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 ```
 
 - `vault` — the Obsidian vault root.
@@ -94,7 +118,7 @@ untrusted extractor process.
 from web_to_obsidian import ClipService
 from pathlib import Path
 
-service = ClipService(Path("."))          # run from the plugin directory
+service = ClipService(Path("."))          # run from the repository root
 result = service.run("<url> [flags]")     # ClipResult | PendingClipResult
 # If PendingClipResult: service.resume_pending("yes" | "no")
 print(result.user_message())
@@ -129,7 +153,7 @@ The plugin drives the Node extractor via `run_extractor_with_fallback()`:
 
 - URLs reject credentials, fragments, unsafe ports, malformed hosts, and
   non-HTTP schemes.
-- Every redirect is revalidated; see `../extractor/README.md` for the
+- Every redirect is revalidated; see `extractor/README.md` for the
   extractor-side network policy.
 - The extractor child receives only an allowlisted environment and runs in a
   new POSIX process group. Timeout/output-limit cleanup terminates the
@@ -197,8 +221,8 @@ response.
 
 ## Tests
 
-Python tests are colocated with the plugin in `tests/` (same directory). Run
-pytest from the plugin directory:
+Python tests are colocated with the plugin in `tests/` (repo root). Run pytest
+from the repository root:
 
 ```bash
 python3 -m pytest tests/ -v
@@ -206,5 +230,5 @@ python3 -m pytest tests/ -v
 
 The tests use fixtures, temporary directories, and temporary Git
 repositories; they do not write the configured real Vault. A `tests/conftest.py`
-injects the plugin directory (`..`) into `sys.path` so `import web_to_obsidian`
+injects the repository root (`..`) into `sys.path` so `import web_to_obsidian`
 resolves here.

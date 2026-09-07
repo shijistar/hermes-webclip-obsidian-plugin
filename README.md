@@ -1,13 +1,14 @@
-# url-to-obsidian
+# hermes-webclip-obsidian-plugin
 
 A **web clipping pipeline for Obsidian**: extract any public web article as
 clean Markdown, save it as a dated note in your Obsidian vault, and — when the
 vault is a Git repository — synchronize the note with guarded automatic commit
 & push.
 
-The project is a small monorepo of three parts:
+The repository **is** the Hermes plugin package (the `plugin.yaml` sits at the
+repo root), with two more parts in the same tree:
 
-- [`plugin/`](plugin/README.md) — the Hermes plugin (`/webclip` command +
+- [`PLUGIN.md`](PLUGIN.md) — the Hermes plugin (`/webclip` command +
   `web_to_obsidian_resume_pending` tool) implementing config, safe vault
   writes, image handling, and Git synchronization.
 - [`extractor/`](extractor/README.md) — a hardened Node.js extraction engine
@@ -37,23 +38,33 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 Requirements: `Hermes Agent`, `Python` 3.11+, `Node.js` 18+, `Git`, `PyYAML`.
 
+The one-shot installer (at the repo root) wires up the plugin, the extractor
+dependencies (its `prepare` hook installs Playwright Chromium), and the skill
+symlink. It is normally
+run from the *installed* plugin directory; `HERMES_HOME` and the profile are
+auto-detected by walking up from the script's location to the nearest
+`.hermes` directory, so no flags are needed:
+
 ```bash
-REPO=/path/to/url-to-obsidian
-
-# 1. Install the plugin
-hermes plugins install "file://$REPO/plugin" --enable
-
-# 2. Install the extractor's locked Node deps + Chromium
-cd "$REPO/extractor"
-npm ci --ignore-scripts
-npx playwright install chromium
-
-# 3. Configure
-cd "$REPO"
-cp plugin/config.example.toml "$HERMES_HOME/plugins/web-to-obsidian/config.toml"
-# edit $HERMES_HOME/plugins/web-to-obsidian/config.toml => vault, destination, ...
-hermes gateway restart
+# Run without flags from the *installed* plugin dir. From a source checkout
+# pass --hermes-home (unless thee checkout already sits beneath a .hermes dir,,
+# in which case the walk-up finds it automatically):
+cd /path/to/hermes-webclip-obsidian-plugin
+./post-install.sh                     # auto-detects HERMES_HOME / profile
+./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
+# review <profile>/plugins/webclip-obsidian/config.toml (vault, destination, ...)
+# restart your Hermes gateway service from a separate shell
 ```
+
+`post-install.sh` assumes the plugin is **already installed** (via
+`hermes plugins install`) and by default only wires up the extractor
+dependencies (whose `prepare` hook installs Playwright Chromium), the skill
+symlink, and `config.toml` — it does not re-install the plugin. Re-running it
+upgrades the extractor dependencies and refreshes the skill symlink. To also run
+`hermes plugins install`, pass `--install-plugin`. `HERMES_HOME` is detected
+automatically (nearest `.hermes` directory above the script) or can be set
+explicitly with `--hermes-home DIR`. Step-by-step manual
+commands are documented in [`PLUGIN.md`](PLUGIN.md#install).
 
 Then clip articles:
 
@@ -64,14 +75,14 @@ Then clip articles:
 ```
 
 Full usage, flags, and safety documentation live in
-[`plugin/README.md`](plugin/README.md).
+[`PLUGIN.md`](PLUGIN.md).
 
 ## Configuration
 
-All configuration lives in `plugin/config.toml` (vault, destination, images
-directory, sync branch, lock file, pending root). See
-[`plugin/README.md`](plugin/README.md#configuration) for the full field list,
-and the legacy environment-variable fallback.
+All configuration lives in `config.toml` at the repo root (vault, destination,
+images directory, sync branch, lock file, pending root). See
+[`PLUGIN.md`](PLUGIN.md#configuration) for the full field list, and the legacy
+environment-variable fallback.
 
 ## Tests
 
@@ -83,7 +94,7 @@ npm run check
 
 # Python plugin (from repo root)
 cd ..
-python3 -m pytest plugin/tests/ -v
+python3 -m pytest tests/ -v
 ```
 
 The automated tests use fixtures, temporary directories, and temporary Git
@@ -93,8 +104,8 @@ repositories; they do not write the configured real Vault.
 
 | Topic                           | Where                                                       |
 | ------------------------------- | ----------------------------------------------------------- |
-| Install / config / usage        | [`plugin/README.md`](plugin/README.md)                      |
-| Plugin network/Vault/Git safety | [`plugin/README.md`](plugin/README.md)                      |
+| Install / config / usage        | [`PLUGIN.md`](PLUGIN.md)                                    |
+| Plugin network/Vault/Git safety | [`PLUGIN.md`](PLUGIN.md)                                    |
 | Extractor CLI & error codes     | [`extractor/README.md`](extractor/README.md)                |
 | Extractor network policy        | [`extractor/README.md`](extractor/README.md#network-safety) |
 | Agent skill deployment          | [`skill/README.md`](skill/README.md)                        |

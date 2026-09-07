@@ -7,7 +7,7 @@ from unittest import mock
 import web_to_obsidian as clip
 
 
-# Tests live next to the plugin package: plugin/tests/ → plugin/
+# Tests live next to the plugin package: tests/ → repo root
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -32,11 +32,13 @@ class PluginRegistrationTests(unittest.TestCase):
         )
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
-        try:
-            spec.loader.exec_module(module)
-            return module
-        finally:
-            sys.modules.pop(spec.name, None)
+        # Keep the package registered until the test finishes: __init__.py
+        # resolves `from .web_to_obsidian import ...` lazily inside
+        # register(), so the package name must still be importable when the
+        # test calls plugin.register(...).
+        self.addCleanup(sys.modules.pop, spec.name, None)
+        spec.loader.exec_module(module)
+        return module
 
     def test_registers_webclip_with_documented_hint_and_closed_over_handler(self):
         plugin = self._load_plugin()
@@ -69,7 +71,7 @@ class PluginRegistrationTests(unittest.TestCase):
         options = clip.ClipOptions("https://example.com", False, False, False)
         config.vault = Path("/tmp/vault")
         config.sync_branch = "master"
-        config.lock_file = Path("/tmp/test-web-to-obsidian.lock")
+        config.lock_file = Path("/tmp/test-webclip-obsidian.lock")
         order = []
         with (
             mock.patch.object(clip, "parse_clip_args", return_value=options),

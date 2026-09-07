@@ -586,7 +586,7 @@ class ExtractorTests(unittest.TestCase):
 
         with mock.patch.object(clip.subprocess, "Popen", return_value=process) as popen:
             result = clip.run_extractor(
-                Path("/plugins/web-to-obsidian/plugin"),
+                Path("/plugins/webclip-obsidian/plugin"),
                 "https://example.com/article",
                 no_browser=True,
             )
@@ -597,7 +597,7 @@ class ExtractorTests(unittest.TestCase):
             args[0],
             [
                 "node",
-                "/plugins/web-to-obsidian/extractor/src/cli.mjs",
+                "/plugins/webclip-obsidian/extractor/src/cli.mjs",
                 "https://example.com/article",
                 "--no-browser",
             ],
@@ -627,6 +627,50 @@ class ExtractorTests(unittest.TestCase):
         with mock.patch.object(clip, "_run_bounded", return_value=result):
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+
+    def test_extractor_dir_prefers_plugin_local_npm_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plugin_root = root / "plugin_root"
+            plugin_root.mkdir(parents=True)
+            npm_pkg = (
+                plugin_root / "node_modules" / "@tiny-codes" / "web-clip-extractor"
+            )
+            (npm_pkg / "src").mkdir(parents=True)
+            (npm_pkg / "src" / "cli.mjs").write_text(
+                "#!/usr/bin/env node\n", encoding="utf-8"
+            )
+            # A bundled extractor also exists; npm install must win.
+            direct = plugin_root / "extractor"
+            (direct / "src").mkdir(parents=True)
+            (direct / "src" / "cli.mjs").write_text(
+                "#!/usr/bin/env node\n", encoding="utf-8"
+            )
+            self.assertEqual(clip._extractor_dir(plugin_root), npm_pkg)
+
+    def test_extractor_dir_falls_back_to_bundled_subdirectory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plugin_root = root / "plugin_root"
+            plugin_root.mkdir(parents=True)
+            direct = plugin_root / "extractor"
+            (direct / "src").mkdir(parents=True)
+            (direct / "src" / "cli.mjs").write_text(
+                "#!/usr/bin/env node\n", encoding="utf-8"
+            )
+            self.assertEqual(clip._extractor_dir(plugin_root), direct)
+
+    def test_extractor_dir_falls_back_to_legacy_source_repo_sibling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plugin_root = root / "plugin_root"
+            plugin_root.mkdir(parents=True)
+            sibling = root / "extractor"
+            (sibling / "src").mkdir(parents=True)
+            (sibling / "src" / "cli.mjs").write_text(
+                "#!/usr/bin/env node\n", encoding="utf-8"
+            )
+            self.assertEqual(clip._extractor_dir(plugin_root), sibling)
 
 
 class GitSafetyTests(unittest.TestCase):

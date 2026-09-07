@@ -1,6 +1,6 @@
 # GitHub private blob URLs, skill/source-repo drift, and `image_mode` semantics
 
-Use this note when a clipped article was saved successfully but the returned GitHub preview URL behaves inconsistently across clients, when a documentation patch must land in the `url-to-obsidian` repo itself, or when frontmatter/image behavior looks inconsistent with the article body.
+Use this note when a clipped article was saved successfully but the returned GitHub preview URL behaves inconsistently across clients, when a documentation patch must land in the `hermes-webclip-obsidian-plugin` repo itself, or when frontmatter/image behavior looks inconsistent with the article body.
 
 ## 1) Private GitHub blob URL can be client-sensitive
 
@@ -29,9 +29,9 @@ For user-facing preview links, prioritize the format that actually opens in the 
 Do not assume the loaded profile skill file is always the same file as the source-repo skill under:
 
 - Profile skill: `~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/SKILL.md`
-- Source repo skill: `~/.hermes/workspace/repository/url-to-obsidian/skill/SKILL.md`
+- Source repo skill: `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md`
 
-Before creating a repository commit or PR for documentation updates, verify whether they are the same file or symlink target. If they are different files, patching the loaded profile skill alone will not create a diff in the `url-to-obsidian` repository. Sync the source-repo file explicitly first.
+Before creating a repository commit or PR for documentation updates, verify whether they are the same file or symlink target. If they are different files, patching the loaded profile skill alone will not create a diff in the `hermes-webclip-obsidian-plugin` repository. Sync the source-repo file explicitly first.
 
 ## 3) `image_mode` semantics
 

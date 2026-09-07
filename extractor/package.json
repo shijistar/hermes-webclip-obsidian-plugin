@@ -1,6 +1,7 @@
 {
   "name": "@tiny-codes/web-clip-extractor",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "description": "Node.js content-extraction engine for the hermes-webclip-obsidian-plugin (published to npm; the Hermes plugin consumes it as a dependency).",
   "type": "module",
   "engines": {
     "node": ">=18"
@@ -11,13 +12,13 @@
     "extractor",
     "obsidian"
   ],
-  "homepage": "https://github.com/shijistar/url-to-obsidian",
+  "homepage": "https://github.com/shijistar/hermes-webclip-obsidian-plugin",
   "bugs": {
-    "url": "https://github.com/shijistar/url-to-obsidian/issues"
+    "url": "https://github.com/shijistar/hermes-webclip-obsidian-plugin/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shijistar/url-to-obsidian.git"
+    "url": "git+https://github.com/shijistar/hermes-webclip-obsidian-plugin.git"
   },
   "license": "MIT",
   "author": "Fengbao Li <shijistar@gmail.com>",
@@ -28,7 +29,8 @@
   ],
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/cli.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs"
+    "check": "node --check src/cli.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs",
+    "prepare": "npx playwright install chromium"
   },
   "dependencies": {
     "defuddle": "^0.19.2",

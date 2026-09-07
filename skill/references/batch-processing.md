@@ -13,7 +13,7 @@ The `execute_code` tool has a hard 300-second timeout. Processing 10+ articles s
 cat > /tmp/batch_clip.sh << 'SCRIPT'
 #!/bin/bash
 set -euo pipefail
-cd ~/.hermes/workspace/repository/url-to-obsidian
+cd ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin
 VAULT=~/obsidian/shijistar
 
 clip_one() {

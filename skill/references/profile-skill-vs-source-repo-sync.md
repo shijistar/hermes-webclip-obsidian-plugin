@@ -1,6 +1,6 @@
 # Profile skill vs source repo sync
 
-Use this note when a web-clip-related skill/plugin change needs to be committed back to the `url-to-obsidian` source repository.
+Use this note when a web-clip-related skill/plugin change needs to be committed back to the `hermes-webclip-obsidian-plugin` source repository.
 
 ## Why this matters
 
@@ -12,7 +12,7 @@ A profile-local edit such as:
 
 may **not** modify:
 
-- `~/.hermes/workspace/repository/url-to-obsidian/skill/SKILL.md`
+- `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md`
 
 If you skip this check, you can incorrectly assume the repo already contains the change and open a PR with no real source-repo diff.
 
@@ -31,7 +31,7 @@ Typical checks:
 python3 - <<'PY'
 from pathlib import Path
 profile = Path('~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/SKILL.md').expanduser()
-source = Path('~/.hermes/workspace/repository/url-to-obsidian/skill/SKILL.md').expanduser()
+source = Path('~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md').expanduser()
 print('profile_exists=', profile.exists())
 print('profile_is_symlink=', profile.is_symlink())
 print('profile_real=', profile.resolve())
@@ -39,7 +39,7 @@ print('source_real=', source.resolve())
 print('same_file=', profile.resolve() == source.resolve())
 PY
 
-diff -u ~/.hermes/workspace/repository/url-to-obsidian/skill/SKILL.md \
+diff -u ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md \
         ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/SKILL.md || true
 ```
 
@@ -58,4 +58,4 @@ When the profile copy has extra drift unrelated to the current task, do **not** 
 
 ## Session lesson captured here
 
-In this session, a docs fix was first applied to the profile-local skill file, but the actual GitHub PR needed to come from `url-to-obsidian/skill/SKILL.md` in the source repo. Verifying real paths before branch/commit/PR creation avoided opening a misleading no-op PR.
+In this session, a docs fix was first applied to the profile-local skill file, but the actual GitHub PR needed to come from `hermes-webclip-obsidian-plugin/skill/SKILL.md` in the source repo. Verifying real paths before branch/commit/PR creation avoided opening a misleading no-op PR.

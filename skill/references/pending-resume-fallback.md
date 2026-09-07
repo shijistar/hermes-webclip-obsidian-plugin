@@ -1,4 +1,4 @@
-# Pending resume fallback for web-to-obsidian
+# Pending resume fallback for webclip-obsidian
 
 Use this when the first clip call returns a pending image-confirmation state and the dedicated Hermes resume tool cannot proceed.
 
@@ -11,7 +11,7 @@ The article extracts successfully and reports remote images, but the Hermes `web
 Run the plugin's native Python API from the plugin directory and call `ClipService.resume_pending('yes')` or `ClipService.resume_pending('no')` directly.
 
 ```bash
-cd ~/.hermes/profiles/<profile>/plugins/web-to-obsidian && \
+cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
 python3 - <<'PY'
 import sys
 from pathlib import Path
