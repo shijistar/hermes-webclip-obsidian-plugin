@@ -1,29 +1,16 @@
 #!/usr/bin/env bash
 #
-# post-install.sh — one-shot post-install setup for the webclip-obsidian
-# plugin stack.
-#
-# This script lives inside the installed plugin directory. `hermes plugins
-# install` clones the whole repository into:
-#   <HERMES_HOME>/plugins/webclip-obsidian/                    (default profile)
-#   <HERMES_HOME>/profiles/<name>/plugins/webclip-obsidian/    (named profile)
-# so HERMES_HOME is found by walking up from this script's own path until a
-# `.hermes` directory is hit (or by the explicit `--hermes-home DIR` flag),
-# and the profile is derived from the `profiles/<name>/` path segment when
-# present, falling back to HERMES_HOME itself (default profile).
+# One-shot installer for the webclip-obsidian plugin dependencies stack.
+# This script installs the necessary dependencies for the webclip-obsidian plugin.
 #
 # Steps performed:
-#   0. Resolve HERMES_HOME (--hermes-home or .hermes walk-up) and derive
-#      PROFILE_DIR, PLUGIN_DIR, SKILLS_DIR.
-#   1. Optionally `hermes plugins install <this-repo> --enable` — only when
-#      `--install-plugin` is passed. By default the plugin is assumed to have
-#      been installed already (`hermes plugins install` is the bootstrap), so
-#      this step is skipped.
-#   2. `npm install` in the bundled `extractor/` directory — the package's
-#      `prepare` hook (`npx playwright install chromium`) installs the
+#   1. `npm install` in the bundled `extractor/` directory — the package's
+#      `prepare` hook (`npx playwright install chromium`) installs the 
 #      Playwright browser automatically.
-#   3. Symlink `skill/` into the target profile's skills dir (auto-discovery)
-#   4. Copy `config.example.toml` → `config.toml` if absent
+#   2. Symlink `skill/` into the target profile's skills dir (auto-discovery)
+#   3. Copy `config.example.toml` → `config.toml` if absent
+#   4. Optionally `hermes plugins install <this-repo> --enable` — only when 
+#      `--install-plugin` is passed.
 #   5. Print restart instructions
 #
 # Usage:
@@ -55,7 +42,7 @@ while [[ $# -gt 0 ]]; do
     --install-plugin)
       INSTALL_PLUGIN=1; shift ;;
     -h|--help)
-      sed -n '2,32p' "$0"; exit 0 ;;
+      sed -n '2,18p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -191,17 +178,12 @@ else
 fi
 
 # ------------------------------------------------------------ 5. summary
-cat <<EOF
-
-\033[1;32mInstall summary\033[0m
-  Plugin:     $INSTALLED_PLUGIN_DIR
-  Extractor:  $INSTALLED_PLUGIN_DIR/extractor
-  Skill:      $SKILLS_DIR/web-clip-to-obsidian
-  Config:     $INSTALLED_PLUGIN_DIR/config.toml
-
-Next steps:
-  1. Review config.toml (vault, destination, sync_branch).
-  2. Restart your Hermes gateway service from a separate shell so the
-     installed plugin is picked up by the running gateway process.
-  3. Clip:  /webclip https://example.com/article
-EOF
+printf '\033[1;32m\nInstall summary\033[0m\n'
+printf '  Plugin:     %s\n' "$INSTALLED_PLUGIN_DIR"
+printf '  Extractor:  %s\n' "$INSTALLED_PLUGIN_DIR/extractor"
+printf '  Skill:      %s\n' "$SKILLS_DIR/web-clip-to-obsidian"
+printf '  Config:     %s\n' "$INSTALLED_PLUGIN_DIR/config.toml"
+printf '\033[1;32m\nNext steps:\033[0m\n'
+printf '  1. Review config.toml (vault, destination, sync_branch).\n'
+printf '  2. Restart your Hermes gateway service from a separate shell ...\n'
+printf '  3. Clip:  /webclip https://example.com/article\n'
