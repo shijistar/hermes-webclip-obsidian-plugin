@@ -1,0 +1,4 @@
+# Python dependencies for the hermes-webclip-obsidian plugin.
+# Install via: pip install -r requirements.txt
+# PyYAML is used by web_to_obsidian.py for YAML frontmatter generation/parsing.
+PyYAML>=6.0

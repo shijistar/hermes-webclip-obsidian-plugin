@@ -38,9 +38,9 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 Requirements: `Hermes Agent`, `Python` 3.11+, `Node.js` 18+, `Git`, `PyYAML`.
 
-The one-shot installer (at the repo root) wires up the plugin, the extractor
-dependencies (its `prepare` hook installs Playwright Chromium), and the skill
-symlink. It is normally
+The one-shot installer (at the repo root) wires up the plugin, installs Python
+dependencies (PyYAML), the extractor dependencies (its `prepare` hook installs
+Playwright Chromium), and the skill symlink. It is normally
 run from the *installed* plugin directory; `HERMES_HOME` and the profile are
 auto-detected by walking up from the script's location to the nearest
 `.hermes` directory, so no flags are needed:
