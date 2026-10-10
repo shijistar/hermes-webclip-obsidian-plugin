@@ -4,14 +4,16 @@
 # This script installs the necessary dependencies for the webclip-obsidian plugin.
 #
 # Steps performed:
-#   1. `npm install` in the bundled `extractor/` directory — the package's
+#   1. Optionally `hermes plugins install <this-repo> --enable` — only when 
+#      `--install-plugin` is passed.
+#   2. `pip install` Python dependencies (PyYAML) — required by the plugin's
+#      frontmatter generation/parsing.
+#   3. `npm install` in the bundled `extractor/` directory — the package's
 #      `prepare` hook (`npx playwright install chromium`) installs the 
 #      Playwright browser automatically.
-#   2. Symlink `skill/` into the target profile's skills dir (auto-discovery)
-#   3. Copy `config.example.toml` → `config.toml` if absent
-#   4. Optionally `hermes plugins install <this-repo> --enable` — only when 
-#      `--install-plugin` is passed.
-#   5. Print restart instructions
+#   4. Symlink `skill/` into the target profile's skills dir (auto-discovery)
+#   5. Copy `config.example.toml` → `config.toml` if absent
+#   6. Print restart instructions
 #
 # Usage:
 #   ./post-install.sh [--hermes-home DIR] [--install-plugin]
@@ -174,7 +176,25 @@ if [[ "$(cd "$SCRIPT_DIR" && pwd)" != "$(cd "$INSTALLED_PLUGIN_DIR" && pwd)" ]];
   info "Script runs from $SCRIPT_DIR; installing dependencies into $INSTALLED_PLUGIN_DIR"
 fi
 
-# ----------------------------------------- 2. extractor npm install
+# ----------------------------------------- 2. python dependencies
+# The plugin's frontmatter generation/parsing uses PyYAML. Hermes upgrades may
+# switch the Python interpreter (e.g. 3.14.x) without site-packages carried
+# over, so we install Python deps here to make the installer self-contained.
+PYTHON_BIN="$(command -v python3 || command -v python || true)"
+if [[ -n "$PYTHON_BIN" ]]; then
+  if "$PYTHON_BIN" -c "import yaml" 2>/dev/null; then
+    ok "PyYAML already available in $PYTHON_BIN"
+  else
+    info "Installing PyYAML for $PYTHON_BIN ..."
+    "$PYTHON_BIN" -m pip install --quiet pyyaml || \
+      die "Failed to install PyYAML for $PYTHON_BIN"
+    ok "PyYAML installed"
+  fi
+else
+  warn "python3 not found — skipping PyYAML install"
+fi
+
+# ----------------------------------------- 3. extractor npm install
 # The extractor is the bundled `extractor/` subdirectory (the repo root IS the
 # plugin package). `npm install` inside it installs the Node dependencies and
 # runs the package's `prepare` hook (`npx playwright install chromium`), which

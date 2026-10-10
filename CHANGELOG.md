@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **`post-install.sh` auto-installs PyYAML** — Hermes upgrades may switch the
+  Python interpreter (e.g. 3.14.x) without carrying over site-packages, causing
+  `ModuleNotFoundError: No module named 'yaml'` on the next clip. The installer
+  now installs PyYAML (idempotently) before npm install, and a `requirements.txt`
+  is added for version pinning. Plugin version bumped 0.14.0 → 0.14.1.
+
 - **Netease image "打开网易新闻 查看更多图片" tip is stripped from clipped articles** —
   every Netease (`163.com`) figure is wrapped with an app deep-link tip
   (`<div class="js-open-newsapp">打开网易新闻 查看更多图片</div>`) that Defuddle
