@@ -129,8 +129,8 @@ bump, but a CHANGELOG entry is encouraged when user-visible.
 ### 2.1 Git tags for module versions
 
 Every module version bump MUST also create a git tag of the form
-`<type>@<version>` on the bump commit, so each published module version is
-addressable by tag:
+`<type>@<version>` on the merge commit in `master`, so each published module
+version is addressable by tag:
 
 | Module    | Tag prefix            | Example                    |
 | --------- | --------------------- | -------------------------- |
@@ -142,6 +142,10 @@ addressable by tag:
   (`plugin.yaml`, `extractor/package.json`, `skill/SKILL.md` frontmatter).
 - Create the tag only for modules whose version actually changed in the
   commit.
+- **Tags MUST be created on `master` after the PR is merged**, not on the
+  feature branch. Workflow: push feature branch → create PR → wait for merge
+  → checkout `master` → pull latest → create tag on the merge commit → push
+  tag to remote.
 - If a tag with the same name already exists (e.g. after a rebase or a
   same-version re-publish), replace it: delete the old tag and re-create it
   on the new commit (local rewrite; see also Git workflow below on force
@@ -150,12 +154,14 @@ addressable by tag:
 ### 2.2 Date tags for changelog releases
 
 When a new `## YYYY-MM-DD` entry is added to `CHANGELOG.md`, also create a
-date tag of the form `vYYYY-MM-DD` on that commit (matching the changelog
-heading), e.g. `v2026-09-06`.
+date tag of the form `vYYYY-MM-DD` on the merge commit in `master` (matching
+the changelog heading), e.g. `v2026-09-06`.
 
+- **Date tags MUST also be created on `master` after the PR is merged**, not
+  on the feature branch.
 - If a tag for that date already exists, **delete the old tag and create the
-  new one** pointing at the latest commit (a date may have multiple version
-  changes; only the newest tag survives).
+  new one** pointing at the latest merge commit (a date may have multiple
+  version changes; only the newest tag survives).
 - This tag marks the repository state at the end of that date's release
   history.
 
