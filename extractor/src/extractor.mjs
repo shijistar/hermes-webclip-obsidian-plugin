@@ -209,6 +209,32 @@ function extractLazyImageSrc(element, sourceUrl) {
   return null;
 }
 
+/**
+ * Netease article pages wrap every figure with a "打开网易新闻 查看更多图片" tip
+ * (inside `<div class="js-open-newsapp">`) whose only purpose is to deep-link
+ * into the Netease app — worthless once the article is clipped offline.
+ * Remove the innermost element carrying that exact tip so the surrounding
+ * `<figure>` / `<img>` survives; keep the trailing "特别声明" disclaimer intact.
+ */
+const NETEASE_IMAGE_PROMPT = /^打开网易新闻\s*查看更多图片/;
+
+function removeNeteaseImagePrompts(document) {
+  const candidates = [];
+  for (const element of document.querySelectorAll('p, span, div, a, section')) {
+    const text = (element.textContent || '').trim();
+    if (text.length > 60 || !NETEASE_IMAGE_PROMPT.test(text)) continue;
+    candidates.push(element);
+  }
+  for (const element of candidates) {
+    // Only drop the innermost matching node: an ancestor container may hold the
+    // figure/image and must be preserved.
+    const wrapsAnotherMatch = candidates.some(
+      other => other !== element && element.contains(other),
+    );
+    if (!wrapsAnotherMatch) element.remove();
+  }
+}
+
 /** Parse already-fetched HTML without evaluating page scripts or allowing Defuddle network fallbacks. */
 export async function extractHtml(html, inputUrl) {
   if (typeof html !== 'string') throw new ExtractorError('INVALID_HTML', 'The HTML input is invalid.');
@@ -216,6 +242,10 @@ export async function extractHtml(html, inputUrl) {
   const { document } = parseHTML(html);
   const canonicalUrl = safeCanonical(document, sourceUrl);
   absolutizeLinks(document, sourceUrl);
+
+  // Netease app deep-link tips are noise; strip them before Defuddle reads the DOM.
+  const isNetease = sourceUrl.hostname === '163.com' || sourceUrl.hostname.endsWith('.163.com');
+  if (isNetease) removeNeteaseImagePrompts(document);
 
   let parsed;
   const originalConsoleError = console.error;
