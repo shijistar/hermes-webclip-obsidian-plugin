@@ -4,6 +4,21 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-10
+
+### Fixed
+
+- **Netease image "打开网易新闻 查看更多图片" tip is stripped from clipped articles** —
+  every Netease (`163.com`) figure is wrapped with an app deep-link tip
+  (`<div class="js-open-newsapp">打开网易新闻 查看更多图片</div>`) that Defuddle
+  previously carried into the Markdown. `extractHtml()` now removes the
+  innermost element matching that exact tip (on `163.com` hostnames only),
+  preserving the surrounding `<figure>`/`<img>` and the trailing
+  "特别声明" disclaimer. Covered by two new extractor tests
+  (`extractHtml strips the Netease … app tip but keeps the figure and
+  disclaimer`, `extractHtml leaves the Netease tip untouched on non-Netease
+  hostnames`). Extractor version bumped 0.3.0 → 0.4.0.
+
 ## 2026-09-07
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "@tiny-codes/web-clip-extractor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Node.js content-extraction engine for the hermes-webclip-obsidian-plugin (published to npm; the Hermes plugin consumes it as a dependency).",
   "type": "module",
   "engines": {

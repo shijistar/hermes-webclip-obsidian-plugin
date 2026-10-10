@@ -103,6 +103,29 @@ test('extractHtml resolves lazy-loaded image src from data-echo instead of place
   assert.doesNotMatch(result.markdown, /empty\.png/);
 });
 
+test('extractHtml strips the Netease "打开网易新闻 查看更多图片" app tip but keeps the figure and disclaimer', async () => {
+  const result = await extractHtml(lazyImageFixtureHtml, 'https://c.m.163.com/news/a/L1PQHL6605314EKW.html');
+
+  assert.doesNotMatch(result.markdown, /打开网易新闻/);
+  // The image itself must survive the tip removal.
+  assert.match(result.markdown, /!\[[^\]]*\]\((https?:\/\/)?dingyue\.ws\.126\.net\/2026\/0714\/acbd2f0cj00ti57b900jld200u000c003c005x\.png\)/);
+  // The trailing disclaimer is intentionally retained.
+  assert.match(result.markdown, /特别声明：本文为网易自媒体平台/);
+});
+
+test('extractHtml leaves the Netease tip untouched on non-Netease hostnames', async () => {
+  const html = `<!doctype html>
+<html>
+<head><title>测试标题</title></head>
+<body>
+  <article>${'测试正文'.repeat(120)}<div class="js-open-newsapp">打开网易新闻 查看更多图片</div></article>
+</body>
+</html>`;
+
+  const result = await extractHtml(html, 'https://example.com/news/a/TESTID.html');
+  assert.match(result.markdown, /打开网易新闻 查看更多图片/);
+});
+
 test('extractHtml only applies embedded-state fallback on 163.com hostnames', async () => {
   const html = `<!doctype html>
 <html>
