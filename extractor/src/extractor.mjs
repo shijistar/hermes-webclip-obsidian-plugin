@@ -82,7 +82,19 @@ function collectKeywords(document) {
 }
 
 export function meetsQualityGate(result) {
-  return meaningfulTitle(result?.title) && typeof result?.markdown === 'string' && result.markdown.trim().length >= MIN_MARKDOWN_CHARS;
+  if (!meaningfulTitle(result?.title) || typeof result?.markdown !== 'string' || result.markdown.trim().length < MIN_MARKDOWN_CHARS) {
+    return false;
+  }
+  // A <video> tag with no src means the page is a video stub (e.g. Netease
+  // /news/v/ pages where Defuddle renders an empty <video> element). Treat it
+  // as low-quality so the caller falls back to browser rendering or curl.
+  const markdown = result.markdown;
+  if (markdown.includes('<video')) {
+    const videoTags = markdown.match(/<video\b[^>]*>/gi) || [];
+    const hasValidSrc = videoTags.some((tag) => /\bsrc\s*=\s*["'][^"']+["']/i.test(tag));
+    if (!hasValidSrc) return false;
+  }
+  return true;
 }
 
 /** Extract the balanced JSON object starting at the given index ("" if unbalanced). */
