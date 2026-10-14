@@ -14,6 +14,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   an embedded `<video>` tag. Falls back gracefully when the stream URL cannot
   be extracted. Plugin version bumped 0.14.1 → 0.15.0.
 
+### Fixed
+
+- **Netease `/news/v/` video short links are now recognized** — the video
+  URL detection regex was extended from `/news/sv/` to `/news/(?:sv|v)/` so
+  the newer video short link format also falls through to the curl-based
+  video extractor. Plugin version bumped 0.15.0 → 0.15.1.
+
+- **Empty `<video>` tags no longer pass the quality gate** — when a page
+  contains a `<video>` element but all `src` attributes are empty (e.g.
+  Netease `/news/v/` pages where Defuddle renders an empty `<video>` stub),
+  `meetsQualityGate()` now returns `false` so the caller falls back to
+  browser rendering or curl extraction instead of saving a broken embed.
+  Extractor version bumped 0.4.0 → 0.4.1.
+
 ## 2026-10-10
 
 ### Fixed
