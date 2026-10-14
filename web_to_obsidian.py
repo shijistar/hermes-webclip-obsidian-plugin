@@ -632,9 +632,54 @@ def _content_hash(markdown: str) -> str:
 
 _DANGEROUS_SCHEMES = r"(?:javascript|vbscript|file|obsidian|data)"
 _INLINE_CODE_SPAN = re.compile(r"(`+)([^`\n]*?)\1")
+# A single-line `<video>...</video>` tag (the shape emitted for video clips).
+_VIDEO_TAG_RE = re.compile(r"(?is)<video\b[^>]*>\s*</video>")
+_VIDEO_SRC_ATTR_RE = re.compile(r"""(?i)\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')""")
+# Only http(s) URLs without characters that could break out of the attribute.
+_SAFE_VIDEO_SRC_RE = re.compile(r"^https?://[^\s\"'<>]+$", re.IGNORECASE)
+_VIDEO_PLACEHOLDER = "\x00webclip-video-{index}\x00"
+
+
+def _canonical_video_tag(tag: str) -> str | None:
+    """Return a rebuilt, safe ``<video>`` tag when *tag* has a safe http(s) src.
+
+    The tag is rebuilt from scratch so no attacker-controlled attributes (event
+    handlers, ``srcset``, etc.) survive sanitization; only a validated URL is
+    carried over. Returns ``None`` when the src is missing or unsafe, letting
+    the normal HTML-escaping path neutralize the tag.
+    """
+    match = _VIDEO_SRC_ATTR_RE.search(tag)
+    if not match:
+        return None
+    src = match.group(1) if match.group(1) is not None else match.group(2)
+    if not _SAFE_VIDEO_SRC_RE.match(src):
+        return None
+    return f'<video src="{src}" controls preload="metadata" playsinline></video>'
+
+
+def _protect_video_tags(text: str) -> tuple[str, list[str]]:
+    """Swap validated ``<video>`` tags for placeholders so sanitization keeps them."""
+    tags: list[str] = []
+
+    def _replace(match: re.Match[str]) -> str:
+        canonical = _canonical_video_tag(match.group(0))
+        if canonical is None:
+            return match.group(0)
+        index = len(tags)
+        tags.append(canonical)
+        return _VIDEO_PLACEHOLDER.format(index=index)
+
+    return _VIDEO_TAG_RE.sub(_replace, text), tags
+
+
+def _restore_video_tags(text: str, tags: list[str]) -> str:
+    for index, tag in enumerate(tags):
+        text = text.replace(_VIDEO_PLACEHOLDER.format(index=index), tag)
+    return text
 
 
 def _sanitize_active_markdown_segment(text: str) -> str:
+    text, video_tags = _protect_video_tags(text)
     text = re.sub(r"(?s)<!--.*?-->", "", text)
     dangerous_tags = r"script|iframe|object|embed|form|input|button|textarea|select|option|style|link|meta|base|svg|math"
     text = re.sub(
@@ -654,7 +699,8 @@ def _sanitize_active_markdown_segment(text: str) -> str:
         r"\1blocked:",
         text,
     )
-    return text.replace("[[", r"\[\[")
+    text = text.replace("[[", r"\[\[")
+    return _restore_video_tags(text, video_tags)
 
 
 def _sanitize_text_preserving_inline_code(text: str) -> str:
@@ -1711,7 +1757,7 @@ def _fetch_netease_video_html(url: str, *, timeout: int = 30) -> str:
     """Fetch the raw HTML of a Netease video page via curl."""
     result = _run_bounded(
         [
-            "curl", "-sL",
+            "curl", "-sL", "-f",
             "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
             "-H", "Accept-Language: zh-CN,zh;q=0.9",

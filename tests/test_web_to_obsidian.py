@@ -1093,5 +1093,94 @@ class WeChatExtractionTests(unittest.TestCase):
         self.assertEqual(result["method"], "static")
 
 
+class NeteaseVideoExtractionTests(unittest.TestCase):
+    def test_is_netease_video_url(self):
+        self.assertTrue(
+            clip._is_netease_video_url("https://c.m.163.com/news/sv/VX86P5HB7.html")
+        )
+        self.assertTrue(
+            clip._is_netease_video_url("http://c.m.163.com/news/sv/ABC.html")
+        )
+        # Regular Netease articles are not video links
+        self.assertFalse(
+            clip._is_netease_video_url("https://c.m.163.com/news/a/L8OB21Q2.html")
+        )
+        # Non-Netease hosts are rejected even with the /news/sv/ path
+        self.assertFalse(
+            clip._is_netease_video_url("https://example.com/news/sv/x.html")
+        )
+
+    def test_parse_netease_video_html_extracts_metadata_and_stream(self):
+        html = (
+            "<html><head><title>古法海盐</title></head><body>"
+            '"nickname":"七怪看世界"'
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/sv/X.html")
+        self.assertEqual(result["title"], "古法海盐")
+        self.assertEqual(result["author"], "七怪看世界")
+        self.assertEqual(result["method"], "netease-video-curl")
+        self.assertIn("<video", result["markdown"])
+        self.assertIn("abc.m3u8", result["markdown"])
+
+    def test_parse_netease_video_html_rejects_missing_title(self):
+        html = '<body><video src="http://x.com/a.m3u8"></video></body>'
+        with self.assertRaises(clip.ClipError):
+            clip._parse_netease_video_html(html, "https://c.m.163.com/news/sv/X.html")
+
+    def test_parse_netease_video_html_without_stream_warns(self):
+        html = "<html><head><title>No Stream</title></head><body></body></html>"
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/sv/X.html")
+        self.assertNotIn("<video", result["markdown"])
+        self.assertIn("未能提取视频流链接", result["markdown"])
+
+    def test_run_extractor_with_fallback_falls_back_for_netease_video(self):
+        """When Node.js fails on a Netease video URL, the video fallback is used."""
+        mock_html = (
+            "<html><head><title>Video Title</title></head><body>"
+            '"nickname":"Author"'
+            '<video src="http://flv0.bn.netease.com/v.m3u8"></video>'
+            "</body></html>"
+        )
+        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("QUALITY_GATE")):
+            with mock.patch.object(clip, "_fetch_netease_video_html", return_value=mock_html):
+                result = clip.run_extractor_with_fallback(
+                    Path("/plugin"), "https://c.m.163.com/news/sv/X.html"
+                )
+        self.assertEqual(result["title"], "Video Title")
+        self.assertEqual(result["method"], "netease-video-curl")
+        self.assertIn("v.m3u8", result["markdown"])
+
+
+class VideoTagSanitizationTests(unittest.TestCase):
+    def test_sanitize_markdown_preserves_safe_video_tag(self):
+        md = (
+            'before\n\n<video src="http://flv0.bn.netease.com/a.m3u8" '
+            'controls preload="metadata" playsinline></video>\n\nafter'
+        )
+        out = clip.sanitize_markdown(md)
+        self.assertIn("<video", out)
+        self.assertIn("a.m3u8", out)
+        self.assertIn("before", out)
+        self.assertIn("after", out)
+
+    def test_sanitize_markdown_rejects_javascript_video_src(self):
+        out = clip.sanitize_markdown('<video src="javascript:alert(1)"></video>')
+        self.assertNotIn("<video", out)
+        self.assertIn("&lt;video", out)
+
+    def test_sanitize_markdown_strips_video_event_handlers(self):
+        md = '<video src="http://x.com/a.mp4" onerror="alert(1)"></video>'
+        out = clip.sanitize_markdown(md)
+        self.assertNotIn("onerror", out)
+        self.assertIn("a.mp4", out)
+
+    def test_sanitize_markdown_still_removes_dangerous_tags(self):
+        out = clip.sanitize_markdown("<script>alert(1)</script>ok")
+        self.assertNotIn("script", out)
+        self.assertIn("ok", out)
+
+
 if __name__ == "__main__":
     unittest.main()
