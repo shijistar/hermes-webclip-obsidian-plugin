@@ -4,6 +4,16 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-12
+
+### Added
+
+- **Netease video short links (`news/sv/`) are now supported** — the plugin
+  detects `c.m.163.com/news/sv/` URLs, fetches the page via curl, extracts
+  the video title and m3u8/mp4 stream URL, and generates a markdown note with
+  an embedded `<video>` tag. Falls back gracefully when the stream URL cannot
+  be extracted. Plugin version bumped 0.14.1 → 0.15.0.
+
 ## 2026-10-10
 
 ### Fixed

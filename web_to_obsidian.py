@@ -632,9 +632,54 @@ def _content_hash(markdown: str) -> str:
 
 _DANGEROUS_SCHEMES = r"(?:javascript|vbscript|file|obsidian|data)"
 _INLINE_CODE_SPAN = re.compile(r"(`+)([^`\n]*?)\1")
+# A single-line `<video>...</video>` tag (the shape emitted for video clips).
+_VIDEO_TAG_RE = re.compile(r"(?is)<video\b[^>]*>\s*</video>")
+_VIDEO_SRC_ATTR_RE = re.compile(r"""(?i)\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')""")
+# Only http(s) URLs without characters that could break out of the attribute.
+_SAFE_VIDEO_SRC_RE = re.compile(r"^https?://[^\s\"'<>]+$", re.IGNORECASE)
+_VIDEO_PLACEHOLDER = "\x00webclip-video-{index}\x00"
+
+
+def _canonical_video_tag(tag: str) -> str | None:
+    """Return a rebuilt, safe ``<video>`` tag when *tag* has a safe http(s) src.
+
+    The tag is rebuilt from scratch so no attacker-controlled attributes (event
+    handlers, ``srcset``, etc.) survive sanitization; only a validated URL is
+    carried over. Returns ``None`` when the src is missing or unsafe, letting
+    the normal HTML-escaping path neutralize the tag.
+    """
+    match = _VIDEO_SRC_ATTR_RE.search(tag)
+    if not match:
+        return None
+    src = match.group(1) if match.group(1) is not None else match.group(2)
+    if not _SAFE_VIDEO_SRC_RE.match(src):
+        return None
+    return f'<video src="{src}" controls preload="metadata" playsinline></video>'
+
+
+def _protect_video_tags(text: str) -> tuple[str, list[str]]:
+    """Swap validated ``<video>`` tags for placeholders so sanitization keeps them."""
+    tags: list[str] = []
+
+    def _replace(match: re.Match[str]) -> str:
+        canonical = _canonical_video_tag(match.group(0))
+        if canonical is None:
+            return match.group(0)
+        index = len(tags)
+        tags.append(canonical)
+        return _VIDEO_PLACEHOLDER.format(index=index)
+
+    return _VIDEO_TAG_RE.sub(_replace, text), tags
+
+
+def _restore_video_tags(text: str, tags: list[str]) -> str:
+    for index, tag in enumerate(tags):
+        text = text.replace(_VIDEO_PLACEHOLDER.format(index=index), tag)
+    return text
 
 
 def _sanitize_active_markdown_segment(text: str) -> str:
+    text, video_tags = _protect_video_tags(text)
     text = re.sub(r"(?s)<!--.*?-->", "", text)
     dangerous_tags = r"script|iframe|object|embed|form|input|button|textarea|select|option|style|link|meta|base|svg|math"
     text = re.sub(
@@ -654,7 +699,8 @@ def _sanitize_active_markdown_segment(text: str) -> str:
         r"\1blocked:",
         text,
     )
-    return text.replace("[[", r"\[\[")
+    text = text.replace("[[", r"\[\[")
+    return _restore_video_tags(text, video_tags)
 
 
 def _sanitize_text_preserving_inline_code(text: str) -> str:
@@ -1668,6 +1714,17 @@ def run_extractor(
 
 
 _WECHAT_HOST_RE = re.compile(r"(?:^|\.)weixin\.qq\.com$", re.IGNORECASE)
+_NETEASE_HOST_RE = re.compile(r"(?:^|\.)163\.com$", re.IGNORECASE)
+_NETEASE_VIDEO_PATH_RE = re.compile(r"/news/sv/", re.IGNORECASE)
+_NETEASE_VIDEO_STREAM_RE = re.compile(
+    r"(https?://[^\s\"'<>]+\.(?:m3u8|mp4)[^\s\"'<>]*)", re.IGNORECASE
+)
+_NETEASE_VIDEO_TITLE_RE = re.compile(
+    r'<title>([^<]+)</title>', re.IGNORECASE
+)
+_NETEASE_VIDEO_AUTHOR_RE = re.compile(
+    r'"nickname"\s*:\s*"([^"]+)"', re.IGNORECASE
+)
 _WECHAT_TITLE_RE = re.compile(r"var\s+msg_title\s*=\s*[\"'](.+?)[\"']")
 _WECHAT_AUTHOR_RE = re.compile(r"var\s+nickname\s*=\s*[\"'](.+?)[\"']")
 _WECHAT_TIME_RE = re.compile(r"var\s+ct\s*=\s*[\"']?(\d+)[\"']?")
@@ -1683,6 +1740,92 @@ def _is_wechat_url(url: str) -> bool:
         return bool(_WECHAT_HOST_RE.search(urlsplit(url).hostname or ""))
     except Exception:
         return False
+
+
+def _is_netease_video_url(url: str) -> bool:
+    """Return True when *url* points to a Netease video short link."""
+    try:
+        parts = urlsplit(url)
+        if not _NETEASE_HOST_RE.search(parts.hostname or ""):
+            return False
+        return bool(_NETEASE_VIDEO_PATH_RE.search(parts.path))
+    except Exception:
+        return False
+
+
+def _fetch_netease_video_html(url: str, *, timeout: int = 30) -> str:
+    """Fetch the raw HTML of a Netease video page via curl."""
+    result = _run_bounded(
+        [
+            "curl", "-sL", "-f",
+            "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+            "-H", "Accept-Language: zh-CN,zh;q=0.9",
+            "--max-time", str(timeout),
+            url,
+        ],
+        timeout=timeout + 5,
+        stdout_limit=MAX_STDOUT_BYTES,
+        stderr_limit=MAX_STDERR_BYTES,
+    )
+    if result.returncode != 0:
+        raise ClipError("Netease video page fetch failed.")
+    html = result.stdout.decode("utf-8", errors="replace")
+    if len(html) < 500:
+        raise ClipError("Netease video page response is too short.")
+    return html
+
+
+def _parse_netease_video_html(html: str, url: str) -> dict[str, object]:
+    """Parse metadata and video stream from a Netease video HTML page."""
+    title_m = _NETEASE_VIDEO_TITLE_RE.search(html)
+    author_m = _NETEASE_VIDEO_AUTHOR_RE.search(html)
+
+    title = title_m.group(1).strip() if title_m else ""
+    author = author_m.group(1).strip() if author_m else ""
+
+    if not title:
+        raise ClipError("Netease video content could not be parsed.")
+
+    # Extract video stream URL (m3u8 or mp4)
+    stream_m = _NETEASE_VIDEO_STREAM_RE.search(html)
+    stream_url = stream_m.group(1) if stream_m else ""
+
+    # Build markdown with video embed
+    markdown_parts = ["## 视频信息\n"]
+    markdown_parts.append(f"| 项目 | 详情 |")
+    markdown_parts.append(f"|------|------|")
+    markdown_parts.append(f"| **标题** | {title} |")
+    if author:
+        markdown_parts.append(f"| **作者** | {author} |")
+    markdown_parts.append(f"| **来源** | 网易视频 |")
+    markdown_parts.append("")
+
+    if stream_url:
+        markdown_parts.append("## 观看视频\n")
+        markdown_parts.append(
+            f'<video src="{stream_url}" controls preload="metadata" playsinline></video>'
+        )
+        markdown_parts.append("")
+    else:
+        markdown_parts.append("> ⚠️ 未能提取视频流链接，请通过原链接观看。\n")
+
+    markdown_parts.append(f"[原链接]({url})")
+
+    return {
+        "ok": True,
+        "title": title,
+        "author": author,
+        "published": "",
+        "description": "",
+        "site": "c.m.163.com",
+        "canonicalUrl": url,
+        "url": url,
+        "keywords": [],
+        "markdown": "\n".join(markdown_parts),
+        "wordCount": _count_words("\n".join(markdown_parts)),
+        "method": "netease-video-curl",
+    }
 
 
 def _fetch_wechat_html(url: str, *, timeout: int = 30) -> str:
@@ -1820,14 +1963,17 @@ def _parse_wechat_html(html: str, url: str) -> dict[str, object]:
 def run_extractor_with_fallback(
     plugin_root: Path, url: str, no_browser: bool = False
 ) -> dict[str, object]:
-    """Run the Node.js extractor; fall back to curl for WeChat URLs on failure."""
+    """Run the Node.js extractor; fall back to curl for WeChat/video URLs on failure."""
     try:
         return run_extractor(plugin_root, url, no_browser=no_browser)
     except ClipError:
-        if not _is_wechat_url(url):
-            raise
-        html = _fetch_wechat_html(url)
-        return _parse_wechat_html(html, url)
+        if _is_wechat_url(url):
+            html = _fetch_wechat_html(url)
+            return _parse_wechat_html(html, url)
+        if _is_netease_video_url(url):
+            html = _fetch_netease_video_html(url)
+            return _parse_netease_video_html(html, url)
+        raise
 
 
 def _decode_output(result: ProcessResult) -> str:
