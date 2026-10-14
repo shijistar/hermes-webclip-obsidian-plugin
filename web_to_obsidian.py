@@ -1715,7 +1715,7 @@ def run_extractor(
 
 _WECHAT_HOST_RE = re.compile(r"(?:^|\.)weixin\.qq\.com$", re.IGNORECASE)
 _NETEASE_HOST_RE = re.compile(r"(?:^|\.)163\.com$", re.IGNORECASE)
-_NETEASE_VIDEO_PATH_RE = re.compile(r"/news/sv/", re.IGNORECASE)
+_NETEASE_VIDEO_PATH_RE = re.compile(r"/news/(?:sv|v)/", re.IGNORECASE)
 _NETEASE_VIDEO_STREAM_RE = re.compile(
     r"(https?://[^\s\"'<>]+\.(?:m3u8|mp4)[^\s\"'<>]*)", re.IGNORECASE
 )
