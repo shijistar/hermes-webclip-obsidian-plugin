@@ -4,7 +4,7 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## 2026-10-12
+## 2026-10-14
 
 ### Added
 
