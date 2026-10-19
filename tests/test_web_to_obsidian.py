@@ -1135,6 +1135,63 @@ class NeteaseVideoExtractionTests(unittest.TestCase):
         self.assertNotIn("<video", result["markdown"])
         self.assertIn("未能提取视频流链接", result["markdown"])
 
+    def test_parse_netease_video_html_extracts_author_from_html_class(self):
+        """Video pages use <div class="s-name"> for author, not JSON nickname."""
+        html = (
+            "<html><head><title>美食视频</title></head><body>"
+            '<div class="exhibit-author">'
+            '<div class="s-name">小鹅美食</div>'
+            '<div class="s-location">广东</div>'
+            "</div>"
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/v/X.html")
+        self.assertEqual(result["author"], "小鹅美食")
+        self.assertEqual(result["method"], "netease-video-curl")
+
+    def test_parse_netease_video_html_extracts_cover_image(self):
+        """Cover URL is extracted from .poster[data-bg]."""
+        html = (
+            "<html><head><title>封面测试</title></head><body>"
+            '<div class="poster js-poster js-lazy" '
+            'data-bg="http://videoimg.ws.126.net/cover/20261008/pPhI6QDFq_cover.jpg">'
+            "</div>"
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/v/X.html")
+        self.assertIn(
+            "http://videoimg.ws.126.net/cover/20261008/pPhI6QDFq_cover.jpg",
+            result["markdown"],
+        )
+
+    def test_parse_netease_video_html_extracts_published_date(self):
+        """Published date is parsed from the cover URL date segment."""
+        html = (
+            "<html><head><title>日期测试</title></head><body>"
+            '<div class="poster js-poster js-lazy" '
+            'data-bg="http://videoimg.ws.126.net/cover/20261008/pPhI6QDFq_cover.jpg">'
+            "</div>"
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/v/X.html")
+        self.assertEqual(result["published"], "2026-10-08")
+        self.assertIn("2026-10-08", result["markdown"])
+
+    def test_parse_netease_video_html_prefers_nickname_over_html_class(self):
+        """When both JSON nickname and HTML class exist, nickname wins."""
+        html = (
+            "<html><head><title>优先级测试</title></head><body>"
+            '"nickname":"JSON作者"'
+            '<div class="s-name">HTML作者</div>'
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/sv/X.html")
+        self.assertEqual(result["author"], "JSON作者")
+
     def test_run_extractor_with_fallback_falls_back_for_netease_video(self):
         """When Node.js fails on a Netease video URL, the video fallback is used."""
         mock_html = (

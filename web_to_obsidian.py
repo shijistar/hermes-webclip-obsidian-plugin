@@ -1725,6 +1725,15 @@ _NETEASE_VIDEO_TITLE_RE = re.compile(
 _NETEASE_VIDEO_AUTHOR_RE = re.compile(
     r'"nickname"\s*:\s*"([^"]+)"', re.IGNORECASE
 )
+_NETEASE_VIDEO_AUTHOR_HTML_RE = re.compile(
+    r'class="s-name"[^>]*>([^<]+)</div>', re.IGNORECASE
+)
+_NETEASE_VIDEO_COVER_RE = re.compile(
+    r'class="poster[^"]*"[^>]*data-bg="(https?://[^"]+)"', re.IGNORECASE
+)
+_NETEASE_VIDEO_DATE_RE = re.compile(
+    r'(20\d{6})/', re.IGNORECASE
+)
 _WECHAT_TITLE_RE = re.compile(r"var\s+msg_title\s*=\s*[\"'](.+?)[\"']")
 _WECHAT_AUTHOR_RE = re.compile(r"var\s+nickname\s*=\s*[\"'](.+?)[\"']")
 _WECHAT_TIME_RE = re.compile(r"var\s+ct\s*=\s*[\"']?(\d+)[\"']?")
@@ -1780,9 +1789,20 @@ def _parse_netease_video_html(html: str, url: str) -> dict[str, object]:
     """Parse metadata and video stream from a Netease video HTML page."""
     title_m = _NETEASE_VIDEO_TITLE_RE.search(html)
     author_m = _NETEASE_VIDEO_AUTHOR_RE.search(html)
+    author_html_m = _NETEASE_VIDEO_AUTHOR_HTML_RE.search(html)
+    cover_m = _NETEASE_VIDEO_COVER_RE.search(html)
+    date_m = _NETEASE_VIDEO_DATE_RE.search(html)
 
     title = title_m.group(1).strip() if title_m else ""
-    author = author_m.group(1).strip() if author_m else ""
+    # Prefer JSON nickname; fall back to HTML class="s-name" for video pages.
+    author = (author_m.group(1).strip() if author_m else "") or (
+        author_html_m.group(1).strip() if author_html_m else ""
+    )
+    cover_url = cover_m.group(1) if cover_m else ""
+    published = ""
+    if date_m:
+        raw_date = date_m.group(1)  # e.g. "20261008"
+        published = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
 
     if not title:
         raise ClipError("Netease video content could not be parsed.")
@@ -1793,13 +1813,18 @@ def _parse_netease_video_html(html: str, url: str) -> dict[str, object]:
 
     # Build markdown with video embed
     markdown_parts = ["## 视频信息\n"]
-    markdown_parts.append(f"| 项目 | 详情 |")
-    markdown_parts.append(f"|------|------|")
+    markdown_parts.append("| 项目 | 详情 |")
+    markdown_parts.append("|------|------|")
     markdown_parts.append(f"| **标题** | {title} |")
     if author:
         markdown_parts.append(f"| **作者** | {author} |")
-    markdown_parts.append(f"| **来源** | 网易视频 |")
+    if published:
+        markdown_parts.append(f"| **发布日期** | {published} |")
+    markdown_parts.append("| **来源** | 网易视频 |")
     markdown_parts.append("")
+
+    if cover_url:
+        markdown_parts.append(f"![视频封面]({cover_url})\n")
 
     if stream_url:
         markdown_parts.append("## 观看视频\n")
@@ -1816,7 +1841,7 @@ def _parse_netease_video_html(html: str, url: str) -> dict[str, object]:
         "ok": True,
         "title": title,
         "author": author,
-        "published": "",
+        "published": published,
         "description": "",
         "site": "c.m.163.com",
         "canonicalUrl": url,
