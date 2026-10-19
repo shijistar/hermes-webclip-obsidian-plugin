@@ -1139,7 +1139,7 @@ class NeteaseVideoExtractionTests(unittest.TestCase):
         """Video pages use <div class="s-name"> for author, not JSON nickname."""
         html = (
             "<html><head><title>美食视频</title></head><body>"
-            '<div class="exhibit-author">'
+            '<div class="exhibit-authors-info">'
             '<div class="s-name">小鹅美食</div>'
             '<div class="s-location">广东</div>'
             "</div>"
@@ -1191,6 +1191,34 @@ class NeteaseVideoExtractionTests(unittest.TestCase):
         )
         result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/sv/X.html")
         self.assertEqual(result["author"], "JSON作者")
+
+    def test_parse_netease_video_html_author_only_matches_exhibit_author(self):
+        """s-name inside exhibit-authors-info is matched; other s-name elements are ignored."""
+        html = (
+            "<html><head><title>作者范围测试</title></head><body>"
+            '<div class="recommend"><div class="s-name">推荐视频作者</div></div>'
+            '<div class="exhibit-authors-info">'
+            '<div class="s-name">正确作者</div>'
+            "</div>"
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/v/X.html")
+        self.assertEqual(result["author"], "正确作者")
+
+    def test_parse_netease_video_html_date_only_from_cover_url(self):
+        """Date is parsed from cover URL, not from arbitrary HTML dates."""
+        html = (
+            "<html><head><title>日期范围测试</title></head><body>"
+            '<div class="poster js-poster js-lazy" '
+            'data-bg="http://videoimg.ws.126.net/cover/20261008/pPhI6QDFq_cover.jpg">'
+            "</div>"
+            '<a href="/news/v/20200101/xxxx.html">旧视频</a>'
+            '<video src="http://flv0.bn.netease.com/abc.m3u8"></video>'
+            "</body></html>"
+        )
+        result = clip._parse_netease_video_html(html, "https://c.m.163.com/news/v/X.html")
+        self.assertEqual(result["published"], "2026-10-08")
 
     def test_run_extractor_with_fallback_falls_back_for_netease_video(self):
         """When Node.js fails on a Netease video URL, the video fallback is used."""

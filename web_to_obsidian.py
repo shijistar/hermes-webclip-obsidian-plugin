@@ -1726,7 +1726,8 @@ _NETEASE_VIDEO_AUTHOR_RE = re.compile(
     r'"nickname"\s*:\s*"([^"]+)"', re.IGNORECASE
 )
 _NETEASE_VIDEO_AUTHOR_HTML_RE = re.compile(
-    r'class="s-name"[^>]*>([^<]+)</div>', re.IGNORECASE
+    r'class="exhibit-authors-info"[^>]*>.*?class="s-name"[^>]*>([^<]+)</div>',
+    re.IGNORECASE | re.DOTALL,
 )
 _NETEASE_VIDEO_COVER_RE = re.compile(
     r'class="poster[^"]*"[^>]*data-bg="(https?://[^"]+)"', re.IGNORECASE
@@ -1791,7 +1792,6 @@ def _parse_netease_video_html(html: str, url: str) -> dict[str, object]:
     author_m = _NETEASE_VIDEO_AUTHOR_RE.search(html)
     author_html_m = _NETEASE_VIDEO_AUTHOR_HTML_RE.search(html)
     cover_m = _NETEASE_VIDEO_COVER_RE.search(html)
-    date_m = _NETEASE_VIDEO_DATE_RE.search(html)
 
     title = title_m.group(1).strip() if title_m else ""
     # Prefer JSON nickname; fall back to HTML class="s-name" for video pages.
@@ -1800,9 +1800,11 @@ def _parse_netease_video_html(html: str, url: str) -> dict[str, object]:
     )
     cover_url = cover_m.group(1) if cover_m else ""
     published = ""
-    if date_m:
-        raw_date = date_m.group(1)  # e.g. "20261008"
-        published = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
+    if cover_url:
+        date_m = _NETEASE_VIDEO_DATE_RE.search(cover_url)
+        if date_m:
+            raw_date = date_m.group(1)  # e.g. "20261008"
+            published = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
 
     if not title:
         raise ClipError("Netease video content could not be parsed.")
