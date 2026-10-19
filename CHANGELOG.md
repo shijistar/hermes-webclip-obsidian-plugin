@@ -4,6 +4,21 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-19
+
+### Improved
+
+- **Netease `/news/v/` video extraction now captures author, cover image, and
+  publish date** — the curl-based video parser (`_parse_netease_video_html`)
+  previously only extracted the title and stream URL. It now also:
+  - Reads the author from `<div class="s-name">` (video pages don't have the
+    JSON `"nickname"` field the parser originally targeted)
+  - Extracts the cover image URL from `.poster[data-bg]`
+  - Parses the publish date from the date segment in the cover URL
+    (e.g. `20261008` → `2026-10-08`)
+  - Embeds the cover image as `![视频封面](...)` in the markdown
+  Plugin version bumped 0.15.1 → 0.15.2.
+
 ## 2026-10-14
 
 ### Added

@@ -1,13 +1,17 @@
 # Netease (163.com) Placeholder & Video-Link Quirks
 
-## `news/v/` video short links → anti-scrape placeholder
+## `news/v/` video short links → curl fallback with metadata extraction
 - URL form: `https://c.m.163.com/news/v/<ID>.html` (often with `?spss/spsnuid/spsvid/spstoken` trackers)
-- Extractor (`cli.mjs --no-browser`, static) returns:
-  - `ok:true` but `title` present, `author:''`, `published:''`
-  - `markdown` starts with `<video src="" controls=""></video>\n\n网络不给力\n\n重新加载` then title + `声明：个人原创` + a list of UNRELATED search-recommendation links (普京…, 开学诈骗…, etc.)
-  - `wordCount` ≈ 123, `method:static`
-- Root cause: content is a SHORT VIDEO; source returns placeholder + recommendations, no article body.
-- Action: abort clip; ask user. Contrast: `news/a/<ID>.html` article links clip cleanly (author/date/1500+ words).
+- Node.js extractor (`cli.mjs --no-browser`, static) returns `QUALITY_GATE` because the page has no article body (only a video stub + recommendation list).
+- **Python curl fallback** (`run_extractor_with_fallback` → `_fetch_netease_video_html` → `_parse_netease_video_html`) handles these URLs automatically:
+  - Fetches the raw HTML via curl with a browser User-Agent
+  - Extracts title from `<title>`
+  - Extracts author from `<div class="s-name">` (video pages don't have the JSON `"nickname"` field used by article pages)
+  - Extracts cover image URL from `.poster[data-bg]`
+  - Parses publish date from the date segment in the cover URL (e.g. `20261008` → `2026-10-08`)
+  - Extracts video stream URL (m3u8/mp4) from the HTML
+  - Generates a markdown note with: metadata table, cover image, `<video>` embed, original link
+- Contrast: `news/a/<ID>.html` article links are handled by the Node.js extractor directly (author/date/1500+ words).
 
 ## `empty.png` placeholder image — root cause & extractor fix
 - **Where the placeholder comes from (root cause)**: Netease lazy-loads images. The raw DOM is
