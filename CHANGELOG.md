@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## 2026-10-21
 
+### Changed
+
+- **Documentation language policy**: added a mandatory rule (AGENTS.md §3)
+  requiring all documentation, code comments, and commit messages to be
+  written in English. Chinese literals that are part of the code itself
+  (regex literals matching site UI strings, error-message strings) are the
+  only exception.
+- **Comments and docs translated to English**: the Chinese comments in
+  `extractor/src/extractor.mjs` and `web_to_obsidian.py`, plus Chinese prose
+  in the skill references and CHANGELOG, were rewritten in English. Chinese
+  UI-string literals (e.g. `打开网易新闻`, `特别声明`) and user-input trigger
+  phrases (e.g. `剪藏`) are preserved because the code depends on them.
+  Plugin version bumped 0.15.3 → 0.15.4, skill version 1.4.4 → 1.4.5.
+
 ### Fixed
 
 - **WeChat article author parsing**: Newer WeChat pages write author as
@@ -25,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Extracts the cover image URL from `.poster[data-bg]`
   - Parses the publish date from the date segment in the cover URL
     (e.g. `20261008` → `2026-10-08`)
-  - Embeds the cover image as `![视频封面](...)` in the markdown note
+  - Embeds the cover image as `![video cover](...)` in the markdown note
   Plugin version bumped 0.15.1 → 0.15.2.
 
 ## 2026-10-14
@@ -62,13 +76,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   now installs PyYAML (idempotently) before npm install, and a `requirements.txt`
   is added for version pinning. Plugin version bumped 0.14.0 → 0.14.1.
 
-- **Netease image "打开网易新闻 查看更多图片" tip is stripped from clipped articles** —
+- **Netease image "打开网易新闻 查看更多图片" (Netease UI string) tip is stripped from clipped articles** —
   every Netease (`163.com`) figure is wrapped with an app deep-link tip
   (`<div class="js-open-newsapp">打开网易新闻 查看更多图片</div>`) that Defuddle
   previously carried into the Markdown. `extractHtml()` now removes the
   innermost element matching that exact tip (on `163.com` hostnames only),
   preserving the surrounding `<figure>`/`<img>` and the trailing
-  "特别声明" disclaimer. Covered by two new extractor tests
+  "特别声明" (Netease disclaimer UI string). Covered by two new extractor tests
   (`extractHtml strips the Netease … app tip but keeps the figure and
   disclaimer`, `extractHtml leaves the Netease tip untouched on non-Netease
   hostnames`). Extractor version bumped 0.3.0 → 0.4.0.

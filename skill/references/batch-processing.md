@@ -165,13 +165,13 @@ Collect all `ClipResult.github_url` values and present as a table:
 ```markdown
 | # | Title | Images | Preview |
 |---|-------|--------|---------|
-| 1 | ... | 远程 | [预览](url) |
-| 2 | ... | **本地** | [预览](url) |
+| 1 | ... | remote | [Preview](url) |
+| 2 | ... | **local** | [Preview](url) |
 ```
 
 ## One-Step Non-Interactive Clip
 
-When the image decision is already known (user specified "本地图片" or "远程图片"), use flags to skip the PendingClipResult two-step:
+When the image decision is already known (user specified "本地图片"/"local images" or "远程图片"/"remote images"), use flags to skip the PendingClipResult two-step:
 ```python
 result = service.run(f'{url} --save-images yes|no --no-browser')
 # Returns ClipResult directly, no resume_pending() needed
@@ -210,7 +210,7 @@ git add -A && git commit -m "clip: New Title" && git push
 
 ## Per-Article Image Preferences in Batch
 
-When the user provides a list of URLs with mixed image preferences (some "本地图片", some not specified), process each article with the correct `--save-images` flag based on the user's per-article annotation.
+When the user provides a list of URLs with mixed image preferences (some annotated "本地图片", some not specified), process each article with the correct `--save-images` flag based on the user's per-article annotation.
 
 **Example user input:**
 ```

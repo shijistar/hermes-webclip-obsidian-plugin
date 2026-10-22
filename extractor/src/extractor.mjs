@@ -188,8 +188,10 @@ function absolutizeLinks(document, sourceUrl) {
   }
   for (const element of document.querySelectorAll('img[src], source[src]')) {
     if (element.tagName?.toLowerCase() === 'img') {
-      // 网易等站点用懒加载：src 是占位图，真实地址藏在 data-echo/data-src/data-original。
-      // 优先用真实地址覆盖占位 src，否则 Defuddle 只会抓到占位图。
+      // Netease and similar sites lazy-load: src is a placeholder, the real
+      // address lives in data-echo/data-src/data-original.
+      // Prefer the real address over the placeholder src, otherwise Defuddle
+      // would only capture the placeholder image.
       const lazySrc = extractLazyImageSrc(element, sourceUrl);
       if (lazySrc) element.setAttribute('src', lazySrc);
     }
@@ -205,8 +207,9 @@ function absolutizeLinks(document, sourceUrl) {
   }
 }
 
-// 懒加载真实图片地址：优先尝试 data-echo / data-src / data-original，
-// 解析为同源可访问的 http(s) URL；失败时回退到原 src（可能已是占位图）。
+// Lazy-loaded real image address: try data-echo / data-src / data-original
+// first, resolve to a same-origin reachable http(s) URL; on failure fall back
+// to the original src (which may already be a placeholder image).
 function extractLazyImageSrc(element, sourceUrl) {
   for (const attr of ['data-echo', 'data-src', 'data-original', 'data-lazy-src']) {
     const candidate = element.getAttribute(attr)?.trim();
@@ -215,7 +218,7 @@ function extractLazyImageSrc(element, sourceUrl) {
       const absolute = new URL(candidate, sourceUrl);
       if (absolute.protocol === 'http:' || absolute.protocol === 'https:') return absolute.href;
     } catch {
-      // 忽略无法解析的候选，继续尝试下一个属性
+      // Ignore candidates that fail to parse and keep trying the next attribute
     }
   }
   return null;
@@ -227,6 +230,9 @@ function extractLazyImageSrc(element, sourceUrl) {
  * into the Netease app — worthless once the article is clipped offline.
  * Remove the innermost element carrying that exact tip so the surrounding
  * `<figure>` / `<img>` survives; keep the trailing "特别声明" disclaimer intact.
+ *
+ * The Chinese strings above are the literal keywords used by the
+ * NETEASE_IMAGE_PROMPT regex below and must stay unchanged.
  */
 const NETEASE_IMAGE_PROMPT = /^打开网易新闻\s*查看更多图片/;
 

@@ -79,10 +79,10 @@ print(result.user_message())
 ```python
 article = {
     "ok": True,
-    "title": "古德哈特定律介绍",
+    "title": "古德哈特定律介绍 (Goodhart's Law, introduction)",
     "author": "",
     "published": "2026-05-26",
-    "description": "当一项指标被当作考核目标时，它就不再是有效的衡量指标",
+    "description": "When a metric becomes a target, it stops being a useful measure",
     "site": "doubao.com",
     "canonicalUrl": "https://www.doubao.com/thread/aa1278a169ca5",
     "keywords": [],

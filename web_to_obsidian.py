@@ -1737,7 +1737,7 @@ _NETEASE_VIDEO_DATE_RE = re.compile(
 )
 _WECHAT_TITLE_RE = re.compile(r"var\s+msg_title\s*=\s*[\"'](.+?)[\"']")
 _WECHAT_AUTHOR_RE = re.compile(r"var\s+nickname\s*=\s*[\"'](.+?)[\"']")
-# 新版微信页面写作 var nickname = htmlDecode("...")。
+# Newer WeChat pages write var nickname = htmlDecode("...").
 _WECHAT_AUTHOR_HTML_DECODE_RE = re.compile(
     r"var\s+nickname\s*=\s*htmlDecode\(\s*[\"'](.+?)[\"']", re.IGNORECASE
 )
@@ -1959,7 +1959,7 @@ def _parse_wechat_html(html: str, url: str) -> dict[str, object]:
     time_m = _WECHAT_TIME_RE.search(html)
 
     title = title_m.group(1) if title_m else ""
-    # 旧版写作 var nickname = "..."；新版写作 var nickname = htmlDecode("...")。
+    # Older pages write var nickname = "..."; newer ones wrap it in htmlDecode.
     author = (author_m.group(1) if author_m else "") or (
         author_decode_m.group(1) if author_decode_m else ""
     )

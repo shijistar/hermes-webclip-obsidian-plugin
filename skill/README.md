@@ -48,5 +48,6 @@ The skill is designed to be used together with the plugin symlink
 ## Trigger phrases
 
 The skill activates on intent like "clip to obsidian" /
-"save to vault" / "web clip" / "抓取到obsidian" / "剪藏" / "抓取<url>", or when a URL is shared with the
+"save to vault" / "web clip" / "抓取到obsidian" / "剪藏" / "抓取<url>" (Chinese phrases are user-input
+triggers), or when a URL is shared with the
 intent to archive it.
