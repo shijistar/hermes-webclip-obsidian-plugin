@@ -4,6 +4,15 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-21
+
+### Fixed
+
+- **WeChat article author parsing**: Newer WeChat pages write author as
+  ``var nickname = htmlDecode("...")`` instead of the old format
+  ``var nickname = "..."``. The parser now tries both formats, so the
+  author field is correctly extracted regardless of the page version.
+
 ## 2026-10-19
 
 ### Improved
@@ -12,11 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   publish date** — the curl-based video parser (`_parse_netease_video_html`)
   previously only extracted the title and stream URL. It now also:
   - Reads the author from `<div class="s-name">` (video pages don't have the
-    JSON `"nickname"` field the parser originally targeted)
+    JSON `"nickname"` field used by article pages)
   - Extracts the cover image URL from `.poster[data-bg]`
   - Parses the publish date from the date segment in the cover URL
     (e.g. `20261008` → `2026-10-08`)
-  - Embeds the cover image as `![视频封面](...)` in the markdown
+  - Embeds the cover image as `![视频封面](...)` in the markdown note
   Plugin version bumped 0.15.1 → 0.15.2.
 
 ## 2026-10-14
