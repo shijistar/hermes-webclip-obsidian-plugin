@@ -25,10 +25,10 @@
 
 ## "打开网易新闻 查看更多图片" app tip — DOM-layer cleanup (extractor 0.4.0)
 - **Symptom**: clipped netease `news/a/` articles carry a stray line
-  `打开网易新闻 查看更多图片` between the figure image and the body text.
+  `打开网易新闻 查看更多图片` (a Netease UI string, see `NETEASE_IMAGE_PROMPT`) between the figure image and the body text.
 - **Source DOM**: each `<figure>` wraps the image and an app deep-link tip:
   `<figure><img …><div class="u-tip js-media-invoke"><div class="js-open-newsapp">打开网易新闻 查看更多图片 <i class="icon-arrow"></i></div></div></figure>`.
-  The trailing `特别声明：本文为网易自媒体平台…` disclaimer lives in a separate
+  The trailing `特别声明：本文为网易自媒体平台…` disclaimer (a Netease UI string) lives in a separate
   `<div class="s-statement">` and is INTENTIONALLY KEPT (user requirement).
 - **Fix (shipped, `fix/netease-image-prompt-cleanup`)**: `removeNeteaseImagePrompts()`
   in `extractor/src/extractor.mjs`, called from `extractHtml()` before Defuddle,
@@ -41,7 +41,7 @@
   candidate. Also cap matched text length (≤60) so a long body paragraph that
   merely quotes the phrase is never removed.
 - **Verification**: real URL `c.m.163.com/news/a/L5BC6R9V0553K5ZV.html` — after fix
-  markdown has no `打开网易新闻`, keeps `特别声明` and the real
+  markdown has no `打开网易新闻`, keeps `特别声明` (both Netease UI strings) and the real
   `dingyue.ws.126.net/…` image. Node tests 25 pass (2 new), Python 94 pass.
 
 ## Note on tracking params

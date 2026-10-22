@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
-description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares a URL wanting to save/read-later in Obsidian, or says "clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>".
-version: 1.4.4
+description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares a URL wanting to save/read-later in Obsidian, or says "clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>" (Chinese trigger phrases are user input only, kept for matching).
+version: 1.4.5
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -15,7 +15,7 @@ Clip web articles to the user's Obsidian vault using the `hermes-webclip-obsidia
 ## When to Use
 
 - User shares a URL with intent to save it to Obsidian
-- Keywords: "clip to obsidian", "save to vault", "web clip", "抓取到obsidian", "抓取<url>", "剪藏"
+- Keywords: "clip to obsidian", "save to vault", "web clip", "抓取到obsidian", "抓取<url>", "剪藏" (Chinese phrases are user-input triggers, not documentation prose)
 - User pastes a link from Juejin, WeChat, Zhihu, or any web source wanting to archive it
 
 ## Plugin Location & Config

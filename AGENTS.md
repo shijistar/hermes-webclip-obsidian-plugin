@@ -165,6 +165,21 @@ the changelog heading), e.g. `v2026-09-06`.
 - This tag marks the repository state at the end of that date's release
   history.
 
+### 3. Language: English for docs, code comments, and commits
+
+All of the following MUST be written in English:
+
+- **Documentation**: every `.md` file (AGENTS.md, CHANGELOG.md, README.md,
+  PLUGIN.md, skill docs, references).
+- **Code comments**: inline comments, `#` / `//` line comments, `/* */` block
+  comments, and docstrings.
+- **Commit messages**: subject and body, including PR titles and bodies.
+
+The only exception is **Chinese text that is part of the code itself** — for
+example a regex literal matching a site's Chinese UI string (e.g.
+`打开网易新闻`), or a Chinese error message literal. Such literals must stay
+as-is; reference them from an English comment when the meaning is not obvious.
+
 ## Git workflow
 
 - Branch convention: `feat/<slug>` or `fix/<slug>` from the latest `master`.

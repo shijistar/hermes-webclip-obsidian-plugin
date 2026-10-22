@@ -8,11 +8,11 @@ in frontmatter while Juejin/WeChat clips were fine. Fixed in extractor v0.4.0 (P
 Netease mobile article pages expose author/published **only** inside the embedded
 `window.__INITIAL_STATE__` JSON — no `<meta name="author">`, no JSON-LD, no byline
 element, and the visible DOM only shows a generic disclaimer
-("本文为网易自媒体平台'网易号'作者上传并发布").
+("This content was uploaded and published by a Netease author account on the Netease self-media platform").
 
-Relevant embedded fields (网易号 = the "author"):
-- `"source": "<网易号名>"` (e.g. `流苏晚晴`, `智东西`)
-- `"sourceinfo": {"tname": "<网易号名>", ...}`
+Relevant embedded fields (网易号, "Netease author account", = the "author"):
+- `"source": "<Netease author account name>"` (e.g. `流苏晚晴`, `智东西`)
+- `"sourceinfo": {"tname": "<Netease author account name>", ...}`
 - `"ptime": "2026-08-27 12:32:05"` (publish time)
 - `"articleType": "wemedia"`
 
@@ -57,6 +57,7 @@ with empty author, dry-run via extractor CLI, `--apply` replacing only the exact
 
 ## Unrecoverable case
 
-If the source page already returns 404「内容不存在或已被删除」(and Netease API,
+If the source page already returns 404 「内容不存在或已被删除」 (content missing or
+deleted) (and Netease API,
 3g/m.163.com, Wayback snapshot, and web search all fail), the author cannot be
 recovered — report it as not backfillable rather than inventing a value.
