@@ -1019,6 +1019,20 @@ class WeChatExtractionTests(unittest.TestCase):
         with self.assertRaises(clip.ClipError):
             clip._parse_wechat_html(html, "https://mp.weixin.qq.com/s/x")
 
+    def test_parse_wechat_html_extracts_author_from_htmldecode(self):
+        """Newer WeChat pages write var nickname = htmlDecode("...")."""
+        html = (
+            '<html><script>'
+            'var msg_title = "Cloudflare tsrs";'
+            'var nickname = htmlDecode("前端圈");'
+            'var ct = "1700000000";'
+            '</script>'
+            '<div id="js_content"><p>Hello world</p></div></html>'
+        )
+        result = clip._parse_wechat_html(html, "https://mp.weixin.qq.com/s/test")
+        self.assertEqual(result["author"], "前端圈")
+        self.assertEqual(result["title"], "Cloudflare tsrs")
+
     def test_parse_wechat_html_rejects_missing_body(self):
         html = '<script>var msg_title = "Title";</script>'
         with self.assertRaises(clip.ClipError):
