@@ -159,6 +159,24 @@ Behavior rules:
   the yes/no image decision, the chosen favorite state is applied on resume
   (the pending state itself expires after one hour).
 
+#### Using the marker in Obsidian
+
+`favorite` is a boolean property, not a tag. Query it directly.
+
+With the Dataview community plugin:
+
+```dataview
+LIST FROM "Inbox" WHERE favorite = true
+```
+
+Without Dataview:
+
+- Search `favorite: true` in Obsidian search or filter the Properties view.
+- Do not use `#favorite`: no tag is written, so a tag search will not match
+  these notes and would create a second source of truth.
+- A Bases table/view can filter on the `favorite` property the same way as any
+  other frontmatter field.
+
 ### Programmatic entry points
 
 ```python

@@ -139,6 +139,9 @@ Rules:
   command is idempotent.
 - Pending image confirmations store the chosen marker state and apply it on
   `resume_pending()`; the pending state itself expires after one hour.
+- In Obsidian the marker is a boolean property, not a tag: query it with
+  `LIST FROM "Inbox" WHERE favorite = true` (Dataview) or search
+  `favorite: true`; `#favorite` will not match.
 - Programmatic equivalent: `service.run("<url> --favorite-only")` returns a
   `ClipResult` whose `action` is `favorite` or `unfavorite`.
 

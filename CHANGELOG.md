@@ -29,6 +29,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Marker-only commits use `favorite: <title>` / `unfavorite: <title>`.
   Plugin version bumped 0.15.4 → 0.16.0, skill version 1.4.5 → 1.5.0.
 
+### Tests
+
+- Added a requested-state × persisted-state matrix regression test (true,
+  false, absent) through the real service path, asserting the final marker and
+  a byte-identical body for every combination.
+
+### Documentation
+
+- Documented how to use the marker in Obsidian: Dataview
+  (`LIST FROM "Inbox" WHERE favorite = true`), property search, and Bases
+  filters, with an explicit note that it is a boolean property and not a tag.
+
 ## 2026-10-21
 
 ### Changed
