@@ -507,6 +507,63 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(fourth.commit_state, "committed")
             self.assertNotIn("favorite", self._metadata(note))
 
+    def test_favorite_state_matrix_never_loses_or_invents_a_marker(self):
+        """Explicit true/false crossed with persisted true/false/absent."""
+        article = dict(ARTICLE_NO_IMAGES)
+        cases = (
+            ("absent", None, "<absent>"),
+            ("absent", True, True),
+            ("absent", False, "<absent>"),
+            ("true", None, True),
+            ("true", True, True),
+            ("true", False, "<absent>"),
+            ("false", None, "<absent>"),
+            ("false", True, True),
+            ("false", False, "<absent>"),
+        )
+        for persisted, requested, expected in cases:
+            with self.subTest(persisted=persisted, requested=requested):
+                with tempfile.TemporaryDirectory() as tmp:
+                    vault, env = self._setup(tmp)
+                    service = self._service(env)
+
+                    seed = "https://example.com/article --no-git --save-images no"
+                    if persisted == "true":
+                        seed += " --favorite"
+                    with mock.patch.object(
+                        clip, "run_extractor", return_value=dict(article)
+                    ):
+                        first = cast(clip.ClipResult, service.run(seed))
+                    note = vault / first.path
+                    if persisted == "false":
+                        text = note.read_text(encoding="utf-8")
+                        note.write_text(
+                            text.replace(
+                                "\n---\n", "\nfavorite: false\n---\n", 1
+                            ),
+                            encoding="utf-8",
+                        )
+                    body_before = note.read_text(encoding="utf-8").split(
+                        "\n---\n", 1
+                    )[1]
+
+                    act = "https://example.com/article --no-git --save-images no"
+                    if requested is True:
+                        act += " --favorite"
+                    elif requested is False:
+                        act += " --unfavorite"
+                    with mock.patch.object(
+                        clip, "run_extractor", return_value=dict(article)
+                    ):
+                        service.run(act)
+
+                    metadata = self._metadata(note)
+                    updated = note.read_text(encoding="utf-8")
+                    self.assertEqual(metadata.get("favorite", "<absent>"), expected)
+                    self.assertEqual(
+                        updated.split("\n---\n", 1)[1], body_before
+                    )
+
     def test_marker_only_updates_without_extracting_or_touching_the_body(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)
