@@ -45,15 +45,19 @@ class PluginRegistrationTests(unittest.TestCase):
         context = FakeContext()
         plugin.register(context)
 
-        self.assertEqual(len(context.command_calls), 1)
+        self.assertEqual(len(context.command_calls), 2)
         args, kwargs = context.command_calls[0]
         self.assertEqual(args, ("webclip",))
         self.assertEqual(
             kwargs["args_hint"],
-            "<url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]",
+            "<url> [--favorite] [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]",
         )
         self.assertIn("Obsidian", kwargs["description"])
         self.assertTrue(callable(kwargs["handler"]))
+        favorite_args, favorite_kwargs = context.command_calls[1]
+        self.assertEqual(favorite_args, ("webclip-favorite",))
+        self.assertEqual(favorite_kwargs["args_hint"], "<url> [--unfavorite]")
+        self.assertTrue(callable(favorite_kwargs["handler"]))
         self.assertEqual(len(context.tool_calls), 1)
         self.assertEqual(
             context.tool_calls[0]["name"], "web_to_obsidian_resume_pending"

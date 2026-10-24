@@ -97,10 +97,12 @@ untrusted extractor process.
 ## Usage
 
 ```text
-/webclip <url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]
+/webclip <url> [--favorite] [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]
+/webclip-favorite <url> [--unfavorite]
 ```
 
 - Exactly one public `http://` or `https://` URL is accepted.
+- `--favorite` writes `favorite: true` into the note frontmatter.
 - `--refresh` explicitly updates changed managed content while preserving the
   manual section.
 - `--no-browser` disables the Playwright fallback in the extractor.
@@ -113,6 +115,26 @@ untrusted extractor process.
   confirmation and waits for a plain `yes` or `no` reply via the registered
   `web_to_obsidian_resume_pending` tool. If no remote images remain, the note
   is saved immediately.
+
+### Favorite flag
+
+A clipped note can be marked as a favorite, either while clipping or afterwards.
+
+```text
+/webclip <url> --favorite          clip and write favorite: true
+/webclip-favorite <url>            mark an existing note as favorite
+/webclip-favorite <url> --unfavorite   clear the flag
+```
+
+- The flag is plugin-managed. Frontmatter is fully managed output, so the flag
+  is written by the plugin rather than hand-edited.
+- `/webclip-favorite` locates the note by its normalized source URL and refuses
+  to touch notes without a `webclip_id`. An unknown URL fails with
+  `No clipped note exists for this URL in the vault.`
+- The flag is excluded from the note semantic-state comparison, so setting or
+  clearing it never forces `--refresh` on unchanged article content.
+- The flag survives a pending image-confirmation round trip.
+- Re-clipping without `--favorite` does not remove an existing flag.
 
 ### Programmatic entry points
 

@@ -4,6 +4,26 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-23
+
+### Added
+
+- **Favorite flag**: a `favorite: true` frontmatter field marks a clipped note as
+  a favorite. It can be set while clipping with `/webclip <url> --favorite`, or
+  added later to an existing note with the new `/webclip-favorite <url>` command.
+  `--unfavorite` clears it again.
+- The favorite flag is plugin-managed, not user-authored: frontmatter is fully
+  managed output, so the flag is written by the plugin rather than by hand.
+- Only notes that carry a `webclip_id` can be marked, so the command cannot
+  mutate arbitrary vault notes. Marking an unknown URL fails with
+  `No clipped note exists for this URL in the vault.`
+- The flag is excluded from the note semantic-state comparison, so setting or
+  clearing it never triggers a spurious `--refresh` requirement on unchanged
+  article content.
+- Pending image-confirmation states carry the flag, so a clip that waits for the
+  yes/no image decision keeps its favorite setting.
+  Plugin version bumped 0.15.4 → 0.16.0, skill version 1.4.5 → 1.5.0.
+
 ## 2026-10-21
 
 ### Changed

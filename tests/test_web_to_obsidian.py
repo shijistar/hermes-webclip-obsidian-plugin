@@ -1281,5 +1281,126 @@ class VideoTagSanitizationTests(unittest.TestCase):
         self.assertIn("ok", out)
 
 
+class FavoriteFlagTests(unittest.TestCase):
+    """Coverage for the favorite flag: rendering, editing, and idempotence."""
+
+    def _note(self, source, title="An Article", **kwargs):
+        data = dict(SUCCESS, title=title, canonicalUrl=source, url=source)
+        return clip.render_note(
+            data, created="2026-07-23T12:00:00+00:00", **kwargs
+        )
+
+    def test_render_note_omits_favorite_by_default(self):
+        note = clip.render_note(SUCCESS, created="2026-07-23T12:00:00+00:00")
+        metadata = clip._frontmatter_from_text(note)
+        self.assertIsNotNone(metadata)
+        self.assertNotIn("favorite", metadata)
+
+    def test_render_note_writes_favorite_true_when_requested(self):
+        note = clip.render_note(
+            SUCCESS, created="2026-07-23T12:00:00+00:00", favorite=True
+        )
+        metadata = clip._frontmatter_from_text(note)
+        self.assertEqual(metadata.get("favorite"), True)
+
+    def test_favorite_flag_does_not_change_semantic_state(self):
+        plain = self._note("https://example.com/article")
+        flagged = self._note("https://example.com/article", favorite=True)
+        self.assertEqual(
+            clip._note_semantic_state(plain), clip._note_semantic_state(flagged)
+        )
+
+    def test_set_frontmatter_flag_adds_and_removes_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            target.write_text(self._note("https://example.com/article"), encoding="utf-8")
+
+            self.assertEqual(clip.set_frontmatter_flag(target, favorite=True), "written")
+            self.assertEqual(clip._has_favorite_flag(target), True)
+            metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
+            self.assertEqual(metadata.get("favorite"), True)
+
+            self.assertEqual(clip.set_frontmatter_flag(target, favorite=False), "written")
+            self.assertEqual(clip._has_favorite_flag(target), False)
+            metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
+            self.assertNotIn("favorite", metadata)
+
+    def test_set_frontmatter_flag_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            target.write_text(self._note("https://example.com/article"), encoding="utf-8")
+
+            clip.set_frontmatter_flag(target, favorite=True)
+            self.assertEqual(clip.set_frontmatter_flag(target, favorite=True), "unchanged")
+            self.assertEqual(clip.set_frontmatter_flag(target, favorite=False), "written")
+            self.assertEqual(clip.set_frontmatter_flag(target, favorite=False), "unchanged")
+
+    def test_set_frontmatter_flag_preserves_manual_section_and_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            note = self._note("https://example.com/article")
+            marked_up = note.replace(
+                "<!-- webclip:manual:start -->\n",
+                "<!-- webclip:manual:start -->\nMY NOTES HERE\n",
+            )
+            target.write_text(marked_up, encoding="utf-8")
+
+            clip.set_frontmatter_flag(target, favorite=True)
+            updated = target.read_text(encoding="utf-8")
+            self.assertIn("MY NOTES HERE", updated)
+            self.assertIn("Body", updated)
+            self.assertIn("webclip:managed:start", updated)
+
+    def test_set_frontmatter_flag_refuses_unmanaged_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "plain.md"
+            target.write_text("---\ntitle: Mine\n---\n\nBody\n", encoding="utf-8")
+            with self.assertRaises(clip.ClipError):
+                clip.set_frontmatter_flag(target, favorite=True)
+
+    def test_set_frontmatter_flag_refuses_missing_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "absent.md"
+            with self.assertRaises(clip.ClipError):
+                clip.set_frontmatter_flag(target, favorite=True)
+
+    def test_parse_favorite_args_defaults_to_marking(self):
+        url, favorite = clip.parse_favorite_args("https://example.com/article")
+        self.assertEqual(url, "https://example.com/article")
+        self.assertTrue(favorite)
+
+    def test_parse_favorite_args_accepts_unfavorite(self):
+        _, favorite = clip.parse_favorite_args(
+            "https://example.com/article --unfavorite"
+        )
+        self.assertFalse(favorite)
+
+    def test_parse_favorite_args_rejects_unknown_option(self):
+        with self.assertRaises(clip.ClipError):
+            clip.parse_favorite_args("https://example.com/article --wat")
+
+    def test_find_target_returns_matching_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp)
+            target = destination / "2026-07-23-An Article.md"
+            target.write_text(self._note("https://example.com/article"), encoding="utf-8")
+            self.assertEqual(
+                clip._find_target(destination, "https://example.com/article"), target
+            )
+
+    def test_find_target_refuses_missing_and_ambiguous(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp)
+            with self.assertRaises(clip.ClipError):
+                clip._find_target(destination, "https://example.com/absent")
+
+            for name in ("a.md", "b.md"):
+                (destination / name).write_text(
+                    self._note("https://example.com/article"), encoding="utf-8"
+                )
+            with self.assertRaises(clip.ClipError):
+                clip._find_target(destination, "https://example.com/article")
+
+
 if __name__ == "__main__":
     unittest.main()

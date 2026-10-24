@@ -108,6 +108,7 @@ class ClipOptions:
     no_git: bool
     refresh: bool
     save_images: str = "ask"
+    favorite: bool = False
 
 
 @dataclass(frozen=True)
@@ -259,6 +260,7 @@ class PendingClipState:
     article: Mapping[str, object]
     refresh: bool
     no_git: bool
+    favorite: bool
     vault: str
     destination: str
     images: str
@@ -272,6 +274,7 @@ class PendingClipState:
             "article": dict(self.article),
             "refresh": self.refresh,
             "no_git": self.no_git,
+            "favorite": self.favorite,
             "vault": self.vault,
             "destination": self.destination,
             "images": self.images,
@@ -349,6 +352,7 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
     no_browser = False
     no_git = False
     refresh = False
+    favorite = False
     save_images = "ask"
     urls: list[str] = []
     index = 0
@@ -360,6 +364,8 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
             no_git = True
         elif token == "--refresh":
             refresh = True
+        elif token == "--favorite":
+            favorite = True
         elif token == "--save-images":
             index += 1
             if index >= len(tokens):
@@ -374,7 +380,8 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
         index += 1
     if len(urls) != 1:
         raise ClipError(
-            "Usage: /webclip <url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]"
+            "Usage: /webclip <url> [--favorite] [--refresh] [--no-browser] "
+            "[--no-git] [--save-images yes|no|ask]"
         )
     _validate_http_url(urls[0])
     return ClipOptions(
@@ -383,7 +390,30 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
         no_git=no_git,
         refresh=refresh,
         save_images=save_images,
+        favorite=favorite,
     )
+
+
+def parse_favorite_args(raw_args: str) -> tuple[str, bool]:
+    """Parse one URL plus ``--unfavorite`` for the favorite-marking command."""
+    try:
+        tokens = shlex.split(raw_args, posix=True)
+    except ValueError as exc:
+        raise ClipError("Invalid quoting in /webclip-favorite arguments.") from exc
+
+    favorite = True
+    urls: list[str] = []
+    for token in tokens:
+        if token == "--unfavorite":
+            favorite = False
+        elif token.startswith("-"):
+            raise ClipError("Unknown /webclip-favorite option.")
+        else:
+            urls.append(token)
+    if len(urls) != 1:
+        raise ClipError("Usage: /webclip-favorite <url> [--unfavorite]")
+    _validate_http_url(urls[0])
+    return urls[0], favorite
 
 
 def normalize_url(value: str) -> str:
@@ -859,6 +889,7 @@ def render_note(
     *,
     content_markdown: str | None = None,
     image_mode: str | None = None,
+    favorite: bool = False,
 ) -> str:
     """Render extractor data as normalized Markdown with YAML frontmatter."""
     if image_mode not in {None, "remote", "local"}:
@@ -895,6 +926,7 @@ def render_note(
         **({"image_mode": image_mode} if image_mode is not None else {}),
         "published": checked["published"],
         "created": timestamp,
+        **({"favorite": True} if favorite else {}),
     }
     frontmatter = yaml.safe_dump(
         metadata,
@@ -1057,6 +1089,9 @@ def _load_pending_state(root: Path) -> PendingClipState:
         article=dict(payload["article"]),
         refresh=bool(payload["refresh"]),
         no_git=bool(payload["no_git"]),
+        # Optional for backward compatibility: pending states written before
+        # the favorite flag existed carry no such key and default to False.
+        favorite=bool(payload.get("favorite", False)),
         vault=str(payload["vault"]),
         destination=str(payload["destination"]),
         images=str(payload["images"]),
@@ -1270,6 +1305,32 @@ def _checked_candidate(destination: Path, filename: str) -> Path:
     return candidate
 
 
+def _find_target(destination: Path, source: str) -> Path:
+    """Return the existing clip note for *source*, refusing ambiguity."""
+    destination = destination.resolve()
+    if not destination.is_dir():
+        raise ClipError("The configured clip destination is unavailable.")
+    normalized_source = normalize_url(source)
+    entries: list[Path] = []
+    for index, existing in enumerate(destination.iterdir(), start=1):
+        if index > MAX_DESTINATION_SCAN_ENTRIES:
+            raise ClipError("The clip destination contains too many entries to scan safely.")
+        entries.append(existing)
+    matches: list[Path] = []
+    for existing in sorted(entries, key=lambda path: path.name):
+        if existing.suffix.lower() != ".md":
+            continue
+        if existing.is_symlink():
+            raise ClipError("Refusing to scan a symbolic-link note.")
+        if existing.is_file() and _source_from_note(existing) == normalized_source:
+            matches.append(existing)
+    if not matches:
+        raise ClipError("No clipped note exists for this URL in the vault.")
+    if len(matches) > 1:
+        raise ClipError("The clip destination contains multiple notes for this source.")
+    return matches[0]
+
+
 def choose_target(
     destination: Path,
     title: str,
@@ -1444,6 +1505,10 @@ def _note_semantic_state(text: str) -> tuple[dict[str, object], str] | None:
         return None
     comparable_metadata = dict(metadata)
     comparable_metadata.pop("created", None)
+    # The favorite flag is user intent, not article content: a note that only
+    # differs by its favorite flag is semantically unchanged, so refreshing it
+    # must not require --refresh.
+    comparable_metadata.pop("favorite", None)
     return comparable_metadata, managed
 
 
@@ -1455,6 +1520,73 @@ def _with_manual_section(note: str, manual: str) -> str:
     if start < 0 or end < 0:
         raise ClipError("The generated note is missing managed boundaries.")
     return note[: start + len(marker)] + manual + note[end:]
+
+
+def _split_note(text: str) -> tuple[dict[str, object], str] | None:
+    """Return (frontmatter, body) for a note with a valid managed boundary."""
+    normalized = _normalize_text(text)
+    if not normalized.startswith("---\n"):
+        return None
+    end = normalized.find("\n---\n", 4)
+    if end < 0:
+        return None
+    try:
+        metadata = yaml.safe_load(normalized[4:end])
+    except yaml.YAMLError:
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    return metadata, normalized[end + 5:]
+
+
+def set_frontmatter_flag(target: Path, *, favorite: bool) -> str:
+    """Set or clear the favorite flag on a managed clip note, preserving body.
+
+    Only webclip-managed notes (those carrying a ``webclip_id``) are eligible;
+    arbitrary vault notes are refused so the command cannot mutate user content.
+    Returns ``"written"`` when the file changed, otherwise ``"unchanged"``.
+    """
+    if target.is_symlink():
+        raise ClipError("Refusing to modify a symbolic-link note.")
+    if not target.exists():
+        raise ClipError("The clipped note does not exist.")
+    try:
+        existing = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ClipError("Could not read the existing clipped note.") from exc
+    split = _split_note(existing)
+    if split is None:
+        raise ClipError("The existing note is not a valid webclip note.")
+    metadata, body = split
+    if not metadata.get("webclip_id"):
+        raise ClipError("Refusing to modify a note that is not webclip-managed.")
+    current = metadata.get("favorite")
+    if favorite and current is True:
+        return "unchanged"
+    if not favorite and not current:
+        return "unchanged"
+    if favorite:
+        metadata["favorite"] = True
+    else:
+        metadata.pop("favorite", None)
+    frontmatter = yaml.safe_dump(
+        metadata,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    ).rstrip("\n")
+    atomic_write(target, f"---\n{frontmatter}\n---\n{body}")
+    return "written"
+
+
+def _has_favorite_flag(target: Path) -> bool:
+    """Return whether the note already carries ``favorite: true``."""
+    try:
+        text = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return False
+    metadata = _frontmatter_from_text(text)
+    return bool(metadata and metadata.get("favorite") is True)
 
 
 def write_managed_note(target: Path, content: str, *, refresh: bool) -> str:
@@ -2285,6 +2417,24 @@ class ClipService:
         with VaultLock(config.lock_file):
             return self._run_locked(options, config)
 
+    def mark_favorite(self, raw_args: str) -> ClipResult:
+        """Set or clear the favorite flag on an already-clipped note."""
+        url, favorite = parse_favorite_args(raw_args)
+        config = self._load_config()
+        with VaultLock(config.lock_file):
+            return self._mark_favorite_locked(url, favorite, config)
+
+    def _mark_favorite_locked(
+        self, url: str, favorite: bool, config: ClipConfig
+    ) -> ClipResult:
+        destination = self._ensure_destination(config)
+        target = _find_target(destination, url)
+        git_sync = GitSync.preflight(config.vault, config.sync_branch)
+        set_frontmatter_flag(target, favorite=favorite)
+        commit_msg = "favorite: web article" if favorite else "unfavorite: web article"
+        git_outcome = git_sync.finalize([target], commit_message=commit_msg)
+        return self._result_with_github_url(config, target, git_outcome, git_sync)
+
     def resume_pending(self, decision: str) -> ClipResult:
         normalized = decision.strip().lower()
         if normalized not in {"yes", "no"}:
@@ -2360,6 +2510,7 @@ class ClipService:
         git_sync: GitSync | None,
         content_markdown: str,
         image_mode: str | None,
+        favorite: bool = False,
         generated_paths: Sequence[Path] = (),
     ) -> ClipResult:
         source = str(article["canonicalUrl"] or article["url"])
@@ -2369,9 +2520,14 @@ class ClipService:
             created=captured_at.isoformat(timespec="seconds"),
             content_markdown=content_markdown,
             image_mode=image_mode,
+            favorite=favorite,
         )
         _ensure_no_secret_markers(note)
         write_managed_note(target, note, refresh=refresh)
+        # A note whose article content is unchanged is not rewritten, so the
+        # favorite flag would otherwise never reach an existing note.
+        if favorite != _has_favorite_flag(target):
+            set_frontmatter_flag(target, favorite=favorite)
         short_title = str(article.get("title", "web article"))[:60]
         commit_msg = f"clip: {short_title}"
         outcome = (
@@ -2411,6 +2567,7 @@ class ClipService:
                 article=article,
                 refresh=options.refresh,
                 no_git=options.no_git,
+                favorite=options.favorite,
                 vault=str(config.vault),
                 destination=str(config.destination),
                 images=str(config.images),
@@ -2442,6 +2599,7 @@ class ClipService:
                 git_sync=git_sync,
                 content_markdown=content_markdown,
                 image_mode=image_mode,
+                favorite=options.favorite,
                 generated_paths=generated_paths,
             )
         except ClipError:
@@ -2482,6 +2640,7 @@ class ClipService:
                 git_sync=git_sync,
                 content_markdown=content_markdown,
                 image_mode=image_mode,
+                favorite=state.favorite,
                 generated_paths=generated_paths,
             )
         except ClipError:
@@ -2526,6 +2685,21 @@ def build_resume_tool(plugin_root: Path):
         except ClipError as exc:
             return f"Clip failed: {exc}"
         except BaseException:
+            return "Clip failed due to an unexpected local error."
+
+    return handle
+
+
+def build_favorite_handler(plugin_root: Path):
+    service = ClipService(plugin_root)
+
+    def handle(raw_args: str) -> str:
+        try:
+            return service.mark_favorite(raw_args).user_message()
+        except ClipError as exc:
+            return f"Clip failed: {exc}"
+        except BaseException:
+            # The slash-command boundary must never leak stacks, stderr, or secrets.
             return "Clip failed due to an unexpected local error."
 
     return handle

@@ -22,7 +22,11 @@ _RESUME_PENDING_SCHEMA = {
 
 
 def register(ctx) -> None:
-    from .web_to_obsidian import build_handler, build_resume_tool
+    from .web_to_obsidian import (
+        build_favorite_handler,
+        build_handler,
+        build_resume_tool,
+    )
 
     plugin_root = Path(__file__).resolve().parent
     handler = build_handler(plugin_root)
@@ -30,7 +34,13 @@ def register(ctx) -> None:
         "webclip",
         handler=handler,
         description="Clip a public web article into an Obsidian vault with guarded Git sync.",
-        args_hint="<url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]",
+        args_hint="<url> [--favorite] [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]",
+    )
+    ctx.register_command(
+        "webclip-favorite",
+        handler=build_favorite_handler(plugin_root),
+        description="Mark an already-clipped note as favorite (or clear the flag with --unfavorite).",
+        args_hint="<url> [--unfavorite]",
     )
     ctx.register_tool(
         name="web_to_obsidian_resume_pending",

@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares a URL wanting to save/read-later in Obsidian, or says "clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>" (Chinese trigger phrases are user input only, kept for matching).
-version: 1.4.5
+version: 1.5.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -98,14 +98,57 @@ CLI shortcut (string handler):
 
 ```bash
 cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
-python3 -c "
-import sys; sys.path.insert(0, '.')
-from web_to_obsidian import build_handler; from pathlib import Path
-print(build_handler(Path('.'))('<URL>'))
+python3 -c "\
+import sys; sys.path.insert(0, '.')\
+from web_to_obsidian import build_handler; from pathlib import Path\
+print(build_handler(Path('.'))('<URL>'))\
 "
 ```
 
-Flags: `--no-browser`, `--no-git`, `--refresh`, `--save-images yes|no|ask`
+Flags: `--no-browser`, `--no-git`, `--refresh`, `--save-images yes|no|ask`, `--favorite`
+
+## Favorite Flag
+
+The plugin supports a `favorite` marker on clipped notes, so a note can be
+flagged as a keeper without changing its article content.
+
+| Command | Effect |
+|---------|--------|
+| `/webclip <url> --favorite` | Clip and write `favorite: true` into frontmatter |
+| `/webclip <url>` | Clip normally; no `favorite` field is written |
+| `/webclip-favorite <url>` | Mark an already-clipped note as favorite |
+| `/webclip-favorite <url> --unfavorite` | Remove the favorite flag |
+
+Rules:
+
+- The flag is **plugin-managed**: frontmatter is fully managed output, so the
+  flag is written by the plugin, never hand-edited.
+- Only notes carrying a `webclip_id` can be marked; the command refuses
+  arbitrary vault notes. An unknown URL fails with
+  `No clipped note exists for this URL in the vault.`
+- The flag is **excluded from the semantic-change comparison**, so setting or
+  clearing it never forces `--refresh` on unchanged article content.
+- The flag survives a pending image-confirmation round trip: a clip waiting for
+  the yes/no image decision keeps its favorite setting.
+- Re-clipping without `--favorite` does **not** remove an existing flag.
+
+### Programmatic use
+
+`set_frontmatter_flag(target, favorite=True/False)` is the supported way to
+mutate the flag; it only accepts notes with a `webclip_id` and preserves the
+managed/manual note structure. After calling it, commit through
+`GitSync.finalize()` so the change is actually persisted.
+
+```python
+import sys
+sys.path.insert(0, '.')
+from pathlib import Path
+from web_to_obsidian import ClipService
+
+service = ClipService(Path('.'))
+result = service.mark_favorite('https://example.com/article')
+print(result.user_message())
+```
 
 ## Workflow
 
