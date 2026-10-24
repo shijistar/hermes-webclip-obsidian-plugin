@@ -633,6 +633,47 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
                 service.run("https://example.com/article --favorite-only --no-git")
             self.assertFalse((vault / "Inbox").exists())
 
+    def test_favorite_only_supports_no_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            head_before = self._git(vault, "rev-parse", "HEAD").stdout
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite-only --no-git"),
+                )
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.commit_state, "disabled")
+            self.assertEqual(marked.push_state, "disabled")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+            self.assertEqual(
+                self._git(vault, "rev-parse", "HEAD").stdout, head_before
+            )
+            relative = note.relative_to(vault).as_posix()
+            status = self._git(
+                vault, "status", "--porcelain=v1", "-z"
+            ).stdout.decode("utf-8")
+            self.assertEqual(
+                [entry for entry in status.split("\0") if entry],
+                [f" M {relative}"],
+            )
+
     def test_pending_image_confirmation_keeps_the_favorite_intent(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)

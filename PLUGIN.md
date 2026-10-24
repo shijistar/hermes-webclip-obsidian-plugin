@@ -145,7 +145,9 @@ Behavior rules:
 - **Marker-only operations never fetch the page.** The note is located by its
   normalized source URL, only the `favorite` frontmatter line is added or
   removed, and the managed body plus the manual section stay byte-for-byte
-  unchanged. A missing note or an ambiguous match fails closed.
+  unchanged. A missing note or an ambiguous match fails closed. Both
+  marker-only flags accept `--no-git`: the marker is written locally without
+  Git preflight, commit, or push.
 - **Only webclip-managed notes are eligible.** The note must carry a
   `webclip_id`, the managed boundaries, and the manual boundaries; arbitrary
   vault notes are refused.

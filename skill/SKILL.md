@@ -128,6 +128,7 @@ Rules:
 - `--favorite-only` / `--unfavorite-only` never call the extractor. They locate
   the note by normalized source URL, patch only the `favorite` frontmatter
   line, and leave the managed body and manual section byte-for-byte unchanged.
+  Add `--no-git` to skip Git preflight/commit/push and keep the change local.
 - Marker-only flags cannot be combined with `--refresh` or `--save-images`.
   They fail when no clipped note exists for the URL.
 - Only notes with `webclip_id` plus the managed/manual boundaries can be

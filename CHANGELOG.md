@@ -17,7 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Marker-only operations patch only the `favorite` frontmatter line, preserve
   the managed body and manual section byte-for-byte, and fail closed for
   unknown or ambiguous URLs. Only notes with a `webclip_id` plus the
-  managed/manual boundaries are eligible.
+  managed/manual boundaries are eligible. Both marker-only flags accept
+  `--no-git` to skip Git preflight/commit/push.
 - Refreshing or re-clipping without a favorite option preserves the marker
   already stored on the note; clearing it requires an explicit
   `--unfavorite` / `--unfavorite-only`.
