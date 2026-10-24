@@ -4,6 +4,28 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-25
+
+### Changed
+
+- **Favorite marker placement**: `favorite: true` now sits immediately after the
+  top-level `original_host` field instead of at the end of the frontmatter.
+  A marker already present in the wrong position is moved into place by
+  `--favorite-only`, so existing notes converge on the new layout. Only a key
+  starting at column zero is treated as `original_host`, so indented
+  continuation lines inside multi-line values cannot pull the marker into a
+  nested block.
+- **Batch clipping produces one commit**: `ClipService.run_batch()` clips
+  several URLs under a single vault lock and commits/pushes every written note
+  once. Per-URL flags stay independent, one failing URL does not abort the
+  rest, and `--save-images ask` is rejected because a single pending
+  confirmation cannot represent multiple articles. The `/webclip` slash
+  command still accepts exactly one URL per invocation.
+
+### Added
+
+- `web_to_obsidian_resume_pending` tool declaration in `plugin.yaml`.
+
 ## 2026-10-24
 
 ### Added

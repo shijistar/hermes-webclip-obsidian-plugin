@@ -266,6 +266,45 @@ class PendingClipResult:
 
 
 @dataclass(frozen=True)
+class BatchClipItem:
+    url: str
+    ok: bool
+    path: str | None = None
+    action: str = "clip"
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class BatchClipResult:
+    items: tuple[BatchClipItem, ...]
+    commit_state: str
+    push_state: str
+    github_urls: tuple[str, ...] = ()
+
+    def user_message(self) -> str:
+        saved = [item for item in self.items if item.ok]
+        failed = [item for item in self.items if not item.ok]
+        lines = [f"Batch clip: {len(saved)} saved, {len(failed)} failed."]
+        if self.commit_state == "disabled":
+            lines.append("Git synchronization disabled for this batch.")
+        elif self.commit_state == "committed" and self.push_state == "pushed":
+            lines.append("Saved notes were committed and pushed together in one commit.")
+        elif self.commit_state == "unchanged":
+            lines.append("No content changes; no Git commit was needed.")
+        elif self.commit_state == "committed":
+            lines.append("Saved notes were committed together; push failed.")
+        else:
+            lines.append(
+                f"Git state: {self.commit_state}/{self.push_state}; "
+                "saved notes remain on disk."
+            )
+        lines.extend(f"- saved: {item.path}" for item in saved)
+        lines.extend(f"- failed: {item.url} ({item.error})" for item in failed)
+        lines.extend(f"GitHub: {url}" for url in self.github_urls)
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
 class PendingClipState:
     pending_id: str
     created_at: str
@@ -936,8 +975,8 @@ def render_note(
         "tags": ["web-clip"],
         "original_url": source,
         "original_host": urlsplit(source).hostname or "",
-        **({"fetched_url": fetched_url} if fetched_url != source else {}),
         **({"favorite": True} if favorite else {}),
+        **({"fetched_url": fetched_url} if fetched_url != source else {}),
         "extraction_method": checked["method"],
         "status": "needs-review",
         "category": "Inbox",
@@ -1524,27 +1563,47 @@ def _with_manual_section(note: str, manual: str) -> str:
 _FAVORITE_LINE = re.compile(r"^favorite[ \t]*:")
 
 
-def _find_original_host_index(lines: list[str]) -> int | None:
-    """Return the index of the line starting with 'original_host:', or None."""
+def _find_original_host_index(lines: Sequence[str]) -> int | None:
+    """Return the index of the top-level ``original_host`` key, if present.
+
+    YAML top-level keys start at column zero. Matching without stripping
+    leading whitespace keeps indented continuation lines inside multi-line
+    values from being mistaken for the real key.
+    """
     for i, line in enumerate(lines):
-        if line.strip().startswith("original_host:"):
+        if line.startswith("original_host:"):
             return i
     return None
 
 
-def _insert_favorite_after_original_host(lines: list[str]) -> list[str]:
-    """Insert 'favorite: true' after the original_host line, or at the end if not found."""
-    ho_idx = _find_original_host_index(lines)
-    if ho_idx is not None:
-        lines.insert(ho_idx + 1, "favorite: true")
-    else:
-        lines.append("favorite: true")
-    return lines
+def _favorite_insert_index(lines: Sequence[str]) -> int:
+    """Return the index where ``favorite: true`` belongs.
+
+    Immediately after the top-level ``original_host`` key, or at the end of
+    the frontmatter when that key is absent.
+    """
+    host_index = _find_original_host_index(lines)
+    return len(lines) if host_index is None else host_index + 1
+
+
+def _favorite_position_ok(lines: Sequence[str], index: int) -> bool:
+    """Return whether the favorite line at *index* sits in its canonical spot."""
+    host_index = _find_original_host_index(lines)
+    if host_index is not None:
+        return index == host_index + 1
+    return index == len(lines) - 1
 
 
 def _remove_existing_favorite(lines: list[str]) -> list[str]:
     """Remove any existing favorite lines from the list, return the filtered list."""
     return [line for line in lines if not _FAVORITE_LINE.match(line)]
+
+
+def _insert_favorite(lines: list[str]) -> list[str]:
+    """Insert exactly one canonical favorite line at its canonical position."""
+    remaining = _remove_existing_favorite(lines)
+    remaining.insert(_favorite_insert_index(remaining), "favorite: true")
+    return remaining
 
 
 def _set_favorite_marker(text: str, favorite: bool) -> tuple[str, bool]:
@@ -1583,11 +1642,11 @@ def _set_favorite_marker(text: str, favorite: bool) -> tuple[str, bool]:
     if favorite:
         if metadata.get("favorite") is True and len(indexes) == 1:
             if lines[indexes[0]].strip() in {"favorite: true", "favorite: True"}:
-                return text, False
-        # Remove any existing favorite lines first
-        lines = _remove_existing_favorite(lines)
-        # Insert favorite after original_host
-        lines = _insert_favorite_after_original_host(lines)
+                if _favorite_position_ok(lines, indexes[0]):
+                    return text, False
+        # Drop any existing marker and re-insert one at its canonical position,
+        # so an out-of-place marker is repositioned instead of left behind.
+        lines = _insert_favorite(lines)
     else:
         if not indexes:
             if "favorite" in metadata:
@@ -2486,6 +2545,109 @@ class ClipService:
         with VaultLock(config.lock_file):
             return self._resume_locked(config, normalized)
 
+    def run_batch(
+        self, specs: Sequence[str], *, commit_message: str | None = None
+    ) -> BatchClipResult:
+        """Clip or mark several URLs under one vault lock and one Git commit.
+
+        Each *spec* is ``<url> [flags]`` and keeps its own options. Articles are
+        written one by one, but every written path is committed and pushed
+        together exactly once, so a batch never produces one commit per note.
+
+        A failure on one article is recorded and does not abort the others.
+        ``--save-images ask`` is rejected because a single pending confirmation
+        cannot represent more than one article.
+        """
+        if not specs:
+            raise ClipError("Batch mode requires at least one URL.")
+        options_list = [parse_clip_args(spec) for spec in specs]
+        if any(options.save_images == "ask" for options in options_list):
+            raise ClipError(
+                "Batch mode requires an explicit --save-images yes or no for "
+                "every URL, so no per-article image prompt is silently dropped."
+            )
+        no_git_flags = {options.no_git for options in options_list}
+        if len(no_git_flags) > 1:
+            raise ClipError("Batch mode requires a consistent --no-git setting.")
+        no_git = no_git_flags.pop()
+
+        config = self._load_config()
+        with VaultLock(config.lock_file):
+            git_sync = (
+                None
+                if no_git
+                else GitSync.preflight(config.vault, config.sync_branch)
+            )
+            collected: list[Path] = []
+            items: list[BatchClipItem] = []
+            saved: list[str] = []
+
+            for options in options_list:
+                try:
+                    if options.metadata_only:
+                        if options.favorite is None:
+                            raise ClipError("A favorite option is required.")
+                        target = self._find_target_for_source(config, options.url)
+                        state = set_frontmatter_flag(target, favorite=options.favorite)
+                        action = "favorite" if options.favorite else "unfavorite"
+                        relative = target.resolve().relative_to(config.vault).as_posix()
+                        if state != "unchanged":
+                            collected.append(target)
+                        items.append(
+                            BatchClipItem(options.url, True, relative, action)
+                        )
+                        saved.append(relative)
+                        continue
+
+                    result = self._run_locked(
+                        options,
+                        config,
+                        git_sync=git_sync,
+                        defer_git=True,
+                        collected=collected,
+                    )
+                    if isinstance(result, PendingClipResult):
+                        raise ClipError(
+                            "remote images require an explicit --save-images decision"
+                        )
+                    items.append(
+                        BatchClipItem(options.url, True, result.path, result.action)
+                    )
+                    saved.append(result.path)
+                except ClipError as exc:
+                    items.append(BatchClipItem(options.url, False, error=str(exc)))
+
+            if git_sync is None:
+                outcome = GitOutcome("disabled", "disabled")
+            elif not collected:
+                outcome = GitOutcome("unchanged", "not_needed")
+            else:
+                outcome = git_sync.finalize(
+                    collected,
+                    commit_message=commit_message
+                    or f"clip: batch ({len(saved)} notes)",
+                )
+
+            github_urls: list[str] = []
+            if git_sync is not None and outcome.commit_state == "committed":
+                remote = GitSync._git(
+                    git_sync.repo_root, "remote", "get-url", "origin"
+                )
+                if remote.returncode == 0:
+                    remote_url = _decode_output(remote).strip()
+                    for relative in saved:
+                        url = github_blob_url(
+                            remote_url, git_sync.branch, relative
+                        )
+                        if url:
+                            github_urls.append(url)
+            return BatchClipResult(
+                tuple(items),
+                outcome.commit_state,
+                outcome.push_state,
+                tuple(github_urls),
+            )
+
     def _ensure_destination(self, config: ClipConfig) -> Path:
         try:
             config.destination.mkdir(parents=True, exist_ok=True)
@@ -2599,6 +2761,8 @@ class ClipService:
         image_mode: str | None,
         favorite: bool | None = None,
         generated_paths: Sequence[Path] = (),
+        defer_git: bool = False,
+        collected: list[Path] | None = None,
     ) -> ClipResult:
         source = str(article["canonicalUrl"] or article["url"])
         target = self._target_for(config, article, captured_at.date().isoformat())
@@ -2617,23 +2781,36 @@ class ClipService:
         write_managed_note(target, note, refresh=refresh)
         short_title = str(article.get("title", "web article"))[:60]
         commit_msg = f"clip: {short_title}"
-        outcome = (
-            GitOutcome("disabled", "disabled")
-            if git_sync is None
-            else git_sync.finalize(
-                [target, *generated_paths], commit_message=commit_msg
+        if defer_git:
+            # Batch mode: collect every written path so the caller can issue a
+            # single commit for the whole run instead of one commit per article.
+            if collected is not None:
+                collected.append(target)
+                collected.extend(generated_paths)
+            outcome = GitOutcome("deferred", "deferred")
+        else:
+            outcome = (
+                GitOutcome("disabled", "disabled")
+                if git_sync is None
+                else git_sync.finalize(
+                    [target, *generated_paths], commit_message=commit_msg
+                )
             )
-        )
         return self._result_with_github_url(config, target, outcome, git_sync)
 
     def _run_locked(
-        self, options: ClipOptions, config: ClipConfig
+        self,
+        options: ClipOptions,
+        config: ClipConfig,
+        *,
+        git_sync: GitSync | None = None,
+        defer_git: bool = False,
+        collected: list[Path] | None = None,
     ) -> ClipResult | PendingClipResult:
-        git_sync = (
-            None
-            if options.no_git
-            else GitSync.preflight(config.vault, config.sync_branch)
-        )
+        # Batch mode resolves Git once and passes the object in; standalone
+        # calls resolve it here so preflight still runs before extraction.
+        if git_sync is None and not options.no_git:
+            git_sync = GitSync.preflight(config.vault, config.sync_branch)
         article = _validate_success_payload(
             run_extractor_with_fallback(
                 self.plugin_root, options.url, no_browser=options.no_browser
@@ -2688,6 +2865,8 @@ class ClipService:
                 image_mode=image_mode,
                 favorite=options.favorite,
                 generated_paths=generated_paths,
+                defer_git=defer_git,
+                collected=collected,
             )
         except ClipError:
             if generated_paths:

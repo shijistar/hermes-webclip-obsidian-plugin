@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
-description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares one or more URLs wanting to save/read-later in Obsidian, or says "web clip"/"clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>" (Chinese/English trigger phrases are matched). If multiple URLs are provided, batch mode is entered, processing each article with its own optional flags (e.g., `--favorite`, `--unfavorite`, `--no-git`, `--save-images yes|no`). Per‑article flags are space‑separated after the URL, e.g. `/webclip url1 url2 --favorite --no-git`. Single‑URL behavior remains unchanged.
-version: 1.5.0
+description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares one or more URLs wanting to save/read-later in Obsidian, or says "web clip"/"clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>" (Chinese/English trigger phrases are matched). The slash command accepts exactly one URL per invocation; to clip several URLs, invoke it once per URL, or call `ClipService.run_batch()` so all notes land in a single commit. Each URL keeps its own flags. Single-URL behavior remains unchanged.
+version: 1.5.1
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -155,6 +155,43 @@ Rules:
 4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`
 5. **Return**: Show the GitHub vault URL to user for preview
 
+## Multiple URLs (sequential writes, one commit)
+
+The `/webclip` slash command accepts **exactly one URL** per invocation —
+`parse_clip_args()` rejects anything else. Never pass two URLs to one command.
+To clip several articles there are two supported paths:
+
+1. **Programmatic (preferred for batches):** call `ClipService.run_batch()`
+   once. Articles are extracted and written one at a time, then every written
+   path is committed and pushed **together in a single commit**.
+2. **Slash command:** invoke `/webclip` once per URL. Each call commits on its
+   own, so a 5-URL batch produces 5 commits.
+
+```python
+from pathlib import Path
+from web_to_obsidian import ClipService
+
+service = ClipService(Path('.'))
+result = service.run_batch([
+    'https://example.com/a --save-images yes --favorite',
+    'https://example.com/b --save-images no',
+])
+print(result.user_message())
+```
+
+`run_batch()` contract:
+
+- Every spec is `<url> [flags]`; flags bind to the URL they follow.
+- `--save-images ask` is **rejected**. Decide the image policy once before the
+  batch (localize or keep remote) and pass `yes` or `no` on every spec; a single
+  pending confirmation cannot represent more than one article.
+- `--no-git` must be consistent across the whole batch.
+- One article failing does **not** abort the rest. The result carries one
+  `BatchClipItem` per URL with `ok` / `path` / `error`, and the Git state
+  reflects only the successfully written subset.
+- Same-site rate limits still apply: keep the 2-second delay guidance from the
+  batch pitfall below.
+
 ## Pending State
 
 When images need confirmation, pending state is stored at:
@@ -198,7 +235,7 @@ print(result.user_message())
 - **Marker-only flags never fetch**: `--favorite-only` / `--unfavorite-only` require an existing note in the configured destination and fail closed when it is missing or ambiguous. GitSync.preflight runs after a note is found and before its marker is changed; an unknown URL fails without requiring Git preflight or vault cleanup. A dirty worktree still blocks the operation unless `--no-git` is passed.
 - **`favorite: false` is normalized away**: only `favorite: true` is meaningful. A refresh rewrites frontmatter and omits an explicit `false`; treat absence and `false` as "not favorited".
 
-- **Favorite position**: `favorite: true` is always inserted after the `original_host` field in the frontmatter. This applies whether marking via `--favorite` during initial clip, or `--favorite-only` on an existing note. The positioning keeps frontmatter well-organized and enables consistent Dataview queries `LIST FROM "Inbox" WHERE favorite = true`.
+- **Favorite position**: `favorite: true` is always the line immediately after the top-level `original_host` field. When a note has no `original_host` field, the marker becomes the last frontmatter line instead. This applies whether marking via `--favorite` during initial clip or `--favorite-only` on an existing note. A marker found in the wrong position is moved into place; a marker already in the canonical position is left untouched. Only a key starting at column zero counts as `original_host`, so indented continuation lines inside multi-line values are never mistaken for it.
 
 - **Rule**: Use `--favorite-only --no-git` to mark existing clipped articles as favorite without re-extraction or Git operations. This is efficient for quickly flagging articles you've already saved and avoids the extractor and preflight steps.
 
