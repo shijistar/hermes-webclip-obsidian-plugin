@@ -40,6 +40,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Documented how to use the marker in Obsidian: Dataview
   (`LIST FROM "Inbox" WHERE favorite = true`), property search, and Bases
   filters, with an explicit note that it is a boolean property and not a tag.
+- Restructured `README.md` into a scannable landing page: consolidated features
+  and requirements, condensed install steps, added a complete flag table, a
+  favorite behavior table with Obsidian queries, configuration and safety
+  summaries, a contributor/test section, and the MIT license.
 
 ## 2026-10-21
 
