@@ -63,6 +63,31 @@ class ArgsTests(unittest.TestCase):
         with self.assertRaises(clip.ClipError):
             clip.parse_clip_args("'https://example.com")
 
+    def test_parses_favorite_flags(self):
+        cases = (
+            ("--favorite", True, False),
+            ("--unfavorite", False, False),
+            ("--favorite-only", True, True),
+            ("--unfavorite-only", False, True),
+        )
+        for flag, value, metadata_only in cases:
+            with self.subTest(flag=flag):
+                parsed = clip.parse_clip_args(f"https://example.com/article {flag}")
+                self.assertIs(parsed.favorite, value)
+                self.assertIs(parsed.metadata_only, metadata_only)
+
+    def test_rejects_conflicting_favorite_flags(self):
+        invalid = (
+            "https://example.com/article --favorite --unfavorite",
+            "https://example.com/article --favorite --favorite-only",
+            "https://example.com/article --favorite-only --refresh",
+            "https://example.com/article --unfavorite-only --save-images no",
+            "https://example.com/article --favorite-only --save-images ask",
+        )
+        for raw in invalid:
+            with self.subTest(raw=raw), self.assertRaises(clip.ClipError):
+                clip.parse_clip_args(raw)
+
 
 class ConfigAndFilenameTests(unittest.TestCase):
     def test_destination_must_resolve_inside_vault(self):
@@ -1279,6 +1304,148 @@ class VideoTagSanitizationTests(unittest.TestCase):
         out = clip.sanitize_markdown("<script>alert(1)</script>ok")
         self.assertNotIn("script", out)
         self.assertIn("ok", out)
+
+
+class FavoriteMarkerTests(unittest.TestCase):
+    """Frontmatter marker rendering, editing, and refresh semantics."""
+
+    def _note(
+        self,
+        *,
+        favorite: bool | None = None,
+        markdown: str | None = None,
+    ) -> str:
+        created = "2026-07-23T12:00:00+00:00"
+        if markdown is None:
+            return clip.render_note(SUCCESS, created=created, favorite=favorite)
+        return clip.render_note(
+            SUCCESS, created=created, content_markdown=markdown, favorite=favorite
+        )
+
+    @staticmethod
+    def _meta(note: str) -> dict[str, object]:
+        metadata = clip._frontmatter_from_text(note)
+        if metadata is None:
+            raise AssertionError("note has no valid frontmatter")
+        return metadata
+
+    def test_render_note_omits_favorite_by_default(self):
+        self.assertNotIn("favorite", self._meta(self._note()))
+
+    def test_render_note_writes_favorite_last_in_frontmatter(self):
+        note = self._note(favorite=True)
+        frontmatter = note.split("\n---\n", 1)[0]
+        self.assertTrue(frontmatter.endswith("favorite: true"))
+        self.assertIs(self._meta(note)["favorite"], True)
+
+    def test_render_note_rejects_non_boolean_favorite(self):
+        with self.assertRaises(clip.ClipError):
+            clip.render_note(SUCCESS, favorite="yes")  # type: ignore[arg-type]
+
+    def test_set_favorite_marker_adds_and_removes_the_key(self):
+        note = self._note()
+        marked, changed = clip._set_favorite_marker(note, True)
+        self.assertTrue(changed)
+        self.assertIs(self._meta(marked)["favorite"], True)
+        self.assertIn("\nfavorite: true\n---\n", marked)
+
+        cleared, changed = clip._set_favorite_marker(marked, False)
+        self.assertTrue(changed)
+        self.assertNotIn("favorite", self._meta(cleared))
+
+    def test_set_favorite_marker_is_idempotent(self):
+        marked, _ = clip._set_favorite_marker(self._note(), True)
+        self.assertEqual(clip._set_favorite_marker(marked, True), (marked, False))
+        cleared, _ = clip._set_favorite_marker(marked, False)
+        self.assertEqual(clip._set_favorite_marker(cleared, False), (cleared, False))
+
+    def test_set_favorite_marker_only_touches_one_frontmatter_line(self):
+        note = self._note().replace(
+            "\n---\n", "\ncustom_field: 'keep  spacing'\n---\n", 1
+        )
+        body = note.split("\n---\n", 1)[1]
+        marked, changed = clip._set_favorite_marker(note, True)
+        self.assertTrue(changed)
+        self.assertIn("custom_field: 'keep  spacing'", marked)
+        self.assertEqual(marked.split("\n---\n", 1)[1], body)
+        self.assertEqual(len(marked.split("\n")), len(note.split("\n")) + 1)
+
+    def test_set_favorite_marker_normalizes_noncanonical_true(self):
+        note = self._note().replace(
+            "\n---\n", "\nfavorite: yes\n---\n", 1
+        )
+        marked, changed = clip._set_favorite_marker(note, True)
+        self.assertTrue(changed)
+        self.assertIn("\nfavorite: true\n---\n", marked)
+        self.assertEqual(marked.count("favorite:"), 1)
+
+    def test_set_favorite_marker_refuses_unmanaged_note(self):
+        with self.assertRaises(clip.ClipError):
+            clip._set_favorite_marker("---\ntitle: Mine\n---\n\nBody\n", True)
+
+    def test_set_favorite_marker_refuses_webclip_id_without_boundaries(self):
+        text = "---\ntitle: Mine\nwebclip_id: sha256:abc\n---\n\nBody\n"
+        with self.assertRaises(clip.ClipError):
+            clip._set_favorite_marker(text, True)
+
+    def test_set_frontmatter_flag_refuses_missing_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(clip.ClipError):
+                clip.set_frontmatter_flag(Path(tmp) / "absent.md", favorite=True)
+
+    def test_favorite_only_change_does_not_require_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            target.write_text(self._note(), encoding="utf-8")
+            self.assertEqual(
+                clip.write_managed_note(target, self._note(favorite=True), refresh=False),
+                "written",
+            )
+            self.assertIs(
+                self._meta(target.read_text(encoding="utf-8"))["favorite"],
+                True,
+            )
+
+    def test_favorite_change_preserves_the_manual_section(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            note = self._note().replace(
+                "<!-- webclip:manual:start -->\n",
+                "<!-- webclip:manual:start -->\nMY NOTES\n",
+            )
+            target.write_text(note, encoding="utf-8")
+            clip.write_managed_note(target, self._note(favorite=True), refresh=False)
+            updated = target.read_text(encoding="utf-8")
+            self.assertIn("MY NOTES", updated)
+            self.assertIs(self._meta(updated)["favorite"], True)
+
+    def test_body_change_still_requires_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            target.write_text(self._note(), encoding="utf-8")
+            changed = self._note(markdown="# An Article\n\nDifferent body\n")
+            with self.assertRaisesRegex(clip.ClipError, "rerun with --refresh"):
+                clip.write_managed_note(target, changed, refresh=False)
+
+    def test_note_title_prefers_frontmatter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "fallback.md"
+            target.write_text(self._note(), encoding="utf-8")
+            self.assertEqual(clip._note_title(target), "An Article")
+
+    def test_user_message_describes_marker_actions(self):
+        marked = clip.ClipResult(
+            "Inbox/note.md", "committed", "pushed", None, "favorite"
+        )
+        cleared = clip.ClipResult(
+            "Inbox/note.md", "committed", "pushed", None, "unfavorite"
+        )
+        self.assertTrue(marked.user_message().startswith("Marked clip as favorite:"))
+        self.assertTrue(
+            cleared.user_message().startswith(
+                "Removed favorite marker from clip:"
+            )
+        )
 
 
 if __name__ == "__main__":

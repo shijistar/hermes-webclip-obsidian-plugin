@@ -50,7 +50,8 @@ class PluginRegistrationTests(unittest.TestCase):
         self.assertEqual(args, ("webclip",))
         self.assertEqual(
             kwargs["args_hint"],
-            "<url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]",
+            "<url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask] "
+            "[--favorite|--unfavorite] [--favorite-only|--unfavorite-only]",
         )
         self.assertIn("Obsidian", kwargs["description"])
         self.assertTrue(callable(kwargs["handler"]))

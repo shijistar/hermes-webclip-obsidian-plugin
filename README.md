@@ -25,6 +25,8 @@ repo root), with two more parts in the same tree:
   into the Vault.
 - The default `/webclip <url>` flow asks for a follow-up yes/no decision only
   when the final sanitized Markdown still contains remote images.
+- Clipped notes can be marked as favorites (`favorite: true`) while clipping or
+  later, without re-fetching the article.
 - WeChat article URLs automatically fall back to curl-based extraction when
   the Node extractor is blocked.
 - Login-gated pages, cookies, credentials, and password-manager integration
@@ -74,6 +76,9 @@ Then clip articles:
 /webclip https://example.com/article
 /webclip https://example.com/article --save-images yes
 /webclip https://example.com/article --refresh
+/webclip https://example.com/article --favorite
+/webclip https://example.com/article --favorite-only
+/webclip https://example.com/article --unfavorite-only
 ```
 
 Full usage, flags, and safety documentation live in

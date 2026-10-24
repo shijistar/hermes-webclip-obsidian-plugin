@@ -4,6 +4,30 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-24
+
+### Added
+
+- **Favorite marker**: clipped notes can be marked with a plugin-managed
+  `favorite: true` frontmatter field, at clip time or later:
+  - `/webclip <url> --favorite` / `--unfavorite` set or clear the marker while
+    clipping or refreshing;
+  - `/webclip <url> --favorite-only` / `--unfavorite-only` update an existing
+    note without calling the extractor or touching the article body.
+- Marker-only operations patch only the `favorite` frontmatter line, preserve
+  the managed body and manual section byte-for-byte, and fail closed for
+  unknown or ambiguous URLs. Only notes with a `webclip_id` plus the
+  managed/manual boundaries are eligible.
+- Refreshing or re-clipping without a favorite option preserves the marker
+  already stored on the note; clearing it requires an explicit
+  `--unfavorite` / `--unfavorite-only`.
+- A change limited to `favorite` is applied without `--refresh`; article-body
+  changes still require `--refresh`.
+- Pending image confirmations carry the chosen marker state into
+  `resume_pending()`.
+- Marker-only commits use `favorite: <title>` / `unfavorite: <title>`.
+  Plugin version bumped 0.15.4 → 0.16.0, skill version 1.4.5 → 1.5.0.
+
 ## 2026-10-21
 
 ### Changed
