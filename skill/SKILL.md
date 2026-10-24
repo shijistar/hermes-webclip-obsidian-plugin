@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares a URL wanting to save/read-later in Obsidian, or says "clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>" (Chinese trigger phrases are user input only, kept for matching).
-version: 1.4.5
+version: 1.5.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -105,7 +105,45 @@ print(build_handler(Path('.'))('<URL>'))
 "
 ```
 
-Flags: `--no-browser`, `--no-git`, `--refresh`, `--save-images yes|no|ask`
+Flags: `--no-browser`, `--no-git`, `--refresh`, `--save-images yes|no|ask`,
+`--favorite`, `--unfavorite`, `--favorite-only`, `--unfavorite-only`
+
+## Favorite Marker
+
+Clipped notes can carry a `favorite: true` frontmatter marker. It is
+plugin-managed and independent of the article body.
+
+| Command | Effect |
+| --- | --- |
+| `/webclip <url> --favorite` | Clip or refresh, then write `favorite: true` |
+| `/webclip <url> --unfavorite` | Clip or refresh, then remove the marker |
+| `/webclip <url> --favorite-only` | Mark an existing note without re-fetching |
+| `/webclip <url> --unfavorite-only` | Clear an existing note without re-fetching |
+
+Rules:
+
+- A refresh or plain re-clip **without** a favorite option preserves the
+  marker already stored on the note. Clear it explicitly with `--unfavorite`
+  or `--unfavorite-only`.
+- `--favorite-only` / `--unfavorite-only` never call the extractor. They locate
+  the note by normalized source URL, patch only the `favorite` frontmatter
+  line, and leave the managed body and manual section byte-for-byte unchanged.
+  Add `--no-git` to skip Git preflight/commit/push and keep the change local.
+- Marker-only flags cannot be combined with `--refresh` or `--save-images`.
+  They fail when no clipped note exists for the URL.
+- Only notes with `webclip_id` plus the managed/manual boundaries can be
+  modified; arbitrary vault notes are refused.
+- A change limited to `favorite` does not require `--refresh`; body changes
+  still do.
+- Repeating the current state writes nothing and creates no Git commit. The
+  command is idempotent.
+- Pending image confirmations store the chosen marker state and apply it on
+  `resume_pending()`; the pending state itself expires after one hour.
+- In Obsidian the marker is a boolean property, not a tag: query it with
+  `LIST FROM "Inbox" WHERE favorite = true` (Dataview) or search
+  `favorite: true`; `#favorite` will not match.
+- Programmatic equivalent: `service.run("<url> --favorite-only")` returns a
+  `ClipResult` whose `action` is `favorite` or `unfavorite`.
 
 ## Workflow
 
@@ -156,6 +194,9 @@ print(result.user_message())
 - **163 `empty.png` is a placeholder, not a figure — BUT the extractor now resolves the real image**: Netease lazy-loads images via `src=empty.png` + `data-echo=<real url>`; the pre-fix extractor only read `src` and clipped `empty.png`. Since the `fix/extractor-lazy-image` fix (`extractLazyImageSrc()` in `extractor/src/extractor.mjs`), clipped `news/a/` articles now emit the REAL `dingyue.ws.126.net/...` URL instead. So a freshly-clipped netease article shows a real remote image, not `empty.png`. `empty.png` only remains if the source has no lazy-load URL (rare) — it is a 1×1 transparent pixel; localizing it only stores identical pixels — confirm before localizing, default keep-remote. See `references/netease-placeholder-and-video-links.md`.
 - **Stale `pending-state` directory lock**: If a previous clip left a `PendingClipResult` un-resumed, the NEXT `service.run()` fails with `ClipError: The pending image confirmation expired; please run /webclip again.` The `pending-state` path is a DIRECTORY (not a file) — `cat` shows empty but `_load_pending_state` treats its presence as expired. Fix: `rm -rf ~/.hermes/workspace/cache/webclip-obsidian/pending-state` (cache dir — safe to remove), then re-run. To avoid the two-step entirely, pass flags (see below).
 - **Hash-protection on re-clip of an existing note**: If the same URL was already clipped, `write_managed_note` compares semantic state and raises `The saved page changed; rerun with --refresh to update it.` unless `refresh=True`. Common trigger: re-clipping with a different `image_mode` (remote vs local). Before re-clipping, check whether the note already exists in the vault; ask the user keep-vs-refresh rather than auto-overwriting. To refresh AND localize images, pass `--refresh --save-images yes`.
+- **Favorite marker is user intent, not article content**: `--favorite` / `--unfavorite` may be applied to an existing note without `--refresh`, while any body change still requires it. Do not hand-edit `favorite:` in the vault; use the flags so the Git commit and idempotency checks stay intact.
+- **Marker-only flags never fetch**: `--favorite-only` / `--unfavorite-only` require an existing note in the configured destination and fail closed when it is missing or ambiguous. GitSync.preflight runs after a note is found and before its marker is changed; an unknown URL fails without requiring Git preflight or vault cleanup. A dirty worktree still blocks the operation unless `--no-git` is passed.
+- **`favorite: false` is normalized away**: only `favorite: true` is meaningful. A refresh rewrites frontmatter and omits an explicit `false`; treat absence and `false` as "not favorited".
 - **One-step non-interactive clip via flags**: `service.run('<url> --refresh --save-images yes|no --no-browser')` performs the full clip (including the image decision) in a single call and returns `ClipResult` directly — no `PendingClipResult`, no second `resume_pending()` step. Use this when the image decision is already known (e.g. user confirmed, or dry-run shows only `empty.png` placeholders). This also sidesteps the expired-pending-state error.
 - **Single-URL: always ask about images, never skip confirmation**: When clipping a single URL (or a small handful), ALWAYS use the normal `service.run(url)` flow without `--save-images` flag. If the page has remote images, it returns `PendingClipResult` — prompt the user to choose localize vs remote. Do NOT preemptively pass `--save-images no` just because the user's general preference is remote; the user expects to be consulted on each clip unless they explicitly said 'all remote' or 'all local'. Skipping the confirmation step is a workflow violation that frustrates users. Exception: batch mode (10+ articles) with pre-declared per-article image preferences is acceptable to use flags directly.
 - **163 tracking params are harmless to dedup**: `?spss=...&spsnuid=...&spsvid=...&spstoken=...` are share-source trackers; `canonicalUrl` strips them and `webclip_id` keys off `canonicalUrl`, so tracking params do NOT cause duplicate notes. The `original_url`/`fetched_url` frontmatter retains the full tracked URL. Safe to clip either form.
@@ -176,7 +217,7 @@ print(result.user_message())
 
 ## Commit Message
 
-Commits use the article title: `clip: <title>` (truncated to 60 chars). The `finalize()` method accepts an optional `commit_message` parameter; when `None`, falls back to `clip: save web article`. The `_persist_article()` method auto-generates the message from the article title.
+Commits use the article title: `clip: <title>` (truncated to 60 chars). The `finalize()` method accepts an optional `commit_message` parameter; when `None`, falls back to `clip: save web article`. The `_persist_article()` method auto-generates the message from the article title. Marker-only operations commit as `favorite: <title>` or `unfavorite: <title>`, also truncated to 60 chars.
 
 ## Filename Date Prefix
 
