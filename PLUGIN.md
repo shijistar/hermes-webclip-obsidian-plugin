@@ -98,6 +98,7 @@ untrusted extractor process.
 
 ```text
 /webclip <url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]
+             [--favorite|--unfavorite] [--favorite-only|--unfavorite-only]
 ```
 
 - Exactly one public `http://` or `https://` URL is accepted.
@@ -105,6 +106,12 @@ untrusted extractor process.
   manual section.
 - `--no-browser` disables the Playwright fallback in the extractor.
 - `--no-git` disables Git preflight, commit, and push for that invocation.
+- `--favorite` writes `favorite: true` into the note frontmatter.
+- `--unfavorite` keeps the note without a favorite marker (explicit clear).
+- `--favorite-only` / `--unfavorite-only` update the marker on an existing note
+  without downloading or re-extracting the article. They cannot be combined
+  with `--refresh` or `--save-images`, and they fail when the URL has no
+  clipped note in the destination.
 - `--save-images yes` downloads remote Markdown/HTML image references into
   `images/<article-slug>/...` before saving the note.
 - `--save-images no` preserves remote image URLs and saves immediately.
@@ -113,6 +120,62 @@ untrusted extractor process.
   confirmation and waits for a plain `yes` or `no` reply via the registered
   `web_to_obsidian_resume_pending` tool. If no remote images remain, the note
   is saved immediately.
+
+### Favorite marker
+
+`favorite` is a plugin-managed boolean field that marks a clipped note as a
+keeper without changing its article content:
+
+```yaml
+favorite: true
+```
+
+| Command | Effect |
+| --- | --- |
+| `/webclip <url> --favorite` | Clip (or refresh) and write `favorite: true` |
+| `/webclip <url> --unfavorite` | Clip (or refresh) without a favorite marker |
+| `/webclip <url> --favorite-only` | Mark an existing note; no extraction, no body change |
+| `/webclip <url> --unfavorite-only` | Clear an existing note's marker; no extraction, no body change |
+
+Behavior rules:
+
+- **Refresh preserves the marker.** When `--refresh` (or a plain re-clip) does
+  not specify `--favorite` or `--unfavorite`, the existing note's marker is
+  carried over. Use `--unfavorite` / `--unfavorite-only` to clear it explicitly.
+- **Marker-only operations never fetch the page.** The note is located by its
+  normalized source URL, only the `favorite` frontmatter line is added or
+  removed, and the managed body plus the manual section stay byte-for-byte
+  unchanged. A missing note or an ambiguous match fails closed. Both
+  marker-only flags accept `--no-git`: the marker is written locally without
+  Git preflight, commit, or push.
+- **Only webclip-managed notes are eligible.** The note must carry a
+  `webclip_id`, the managed boundaries, and the manual boundaries; arbitrary
+  vault notes are refused.
+- **No spurious refresh requirement.** A change that only touches `favorite`
+  is applied without `--refresh`; any article-body change still requires it.
+- **Idempotent.** Re-applying the current state writes nothing and creates no
+  Git commit.
+- **Pending image confirmations keep the marker intent.** If the clip waits for
+  the yes/no image decision, the chosen favorite state is applied on resume
+  (the pending state itself expires after one hour).
+
+#### Using the marker in Obsidian
+
+`favorite` is a boolean property, not a tag. Query it directly.
+
+With the Dataview community plugin:
+
+```dataview
+LIST FROM "Inbox" WHERE favorite = true
+```
+
+Without Dataview:
+
+- Search `favorite: true` in Obsidian search or filter the Properties view.
+- Do not use `#favorite`: no tag is written, so a tag search will not match
+  these notes and would create a second source of truth.
+- A Bases table/view can filter on the `favorite` property the same way as any
+  other frontmatter field.
 
 ### Programmatic entry points
 
@@ -186,7 +249,7 @@ The plugin drives the Node extractor via `run_extractor_with_fallback()`:
   optional `fetched_url` (when the request URL differs from the canonical
   article URL), `extraction_method`, `status`, `category`, `word_count`,
   `webclip_id`, `source_content_hash`, `content_hash`, `image_mode`,
-  `published`, and `created`.
+  `published`, `created`, and optional `favorite` (only when `true`).
 - Managed note content preserves an extracted Markdown H1 when present and
   injects `# <title>` only when the extracted article has no Markdown H1.
 - Existing notes are matched by normalized `url`, `original_url`, or legacy
@@ -198,7 +261,8 @@ The plugin drives the Node extractor via `run_extractor_with_fallback()`:
   manual boundary.
 - Frontmatter is fully managed output. User-added frontmatter keys are not part
   of the preserved manual region and may trigger a refresh requirement or be
-  overwritten on refresh.
+  overwritten on refresh. The `favorite` key is the exception: when no favorite
+  option is given, the stored marker is read back and preserved.
 - Title collisions from different sources receive a deterministic URL hash.
 
 ## Git safety

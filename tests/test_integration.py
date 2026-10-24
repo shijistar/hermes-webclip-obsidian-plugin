@@ -410,5 +410,344 @@ class ClipServiceIntegrationTests(unittest.TestCase):
             self.assertFalse((vault / "images" / image_dir / "01-image.png").exists())
 
 
+class FavoriteMarkerIntegrationTests(unittest.TestCase):
+    """End-to-end coverage for the favorite marker through ClipService."""
+
+    def _git(self, root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            ["git", "-C", str(root), *args],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    def _setup(self, tmp: str) -> tuple[Path, dict[str, str]]:
+        root = Path(tmp)
+        remote = root / "remote.git"
+        vault = root / "vault"
+        lock_file = root / "vault.lock"
+        pending_root = root / "pending"
+
+        self._git(root, "init", "--bare", str(remote))
+        self._git(root, "init", "-b", "master", str(vault))
+        self._git(vault, "config", "user.name", "Clip Test")
+        self._git(vault, "config", "user.email", "clip@example.invalid")
+        self._git(vault, "remote", "add", "origin", str(remote))
+        (vault / "Inbox").mkdir(parents=True)
+        (vault / "Inbox" / ".gitkeep").write_text("", encoding="utf-8")
+        self._git(vault, "add", "Inbox/.gitkeep")
+        self._git(vault, "commit", "-m", "initial")
+        self._git(vault, "push", "-u", "origin", "master")
+
+        env = {
+            "WEB_TO_OBSIDIAN_VAULT": str(vault),
+            "WEB_TO_OBSIDIAN_DEST": "Inbox",
+            "WEB_TO_OBSIDIAN_IMAGES": "images",
+            "WEB_TO_OBSIDIAN_SYNC_BRANCH": "master",
+            "WEB_TO_OBSIDIAN_LOCK_FILE": str(lock_file),
+            "WEB_TO_OBSIDIAN_PENDING_ROOT": str(pending_root),
+        }
+        return vault, env
+
+    @staticmethod
+    def _metadata(note: Path) -> dict[str, object]:
+        content = note.read_text(encoding="utf-8")
+        frontmatter, _ = content[4:].split("\n---\n", 1)
+        metadata = yaml.safe_load(frontmatter)
+        if not isinstance(metadata, dict):
+            raise AssertionError("note has no valid frontmatter")
+        return metadata
+
+    def _service(self, env: dict[str, str]) -> clip.ClipService:
+        return clip.ClipService(Path(__file__).parents[1], env=env)
+
+    def test_favorite_survives_reclip_and_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite"),
+                )
+            note = vault / first.path
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                second = cast(
+                    clip.ClipResult, service.run("https://example.com/article")
+                )
+            self.assertEqual(second.commit_state, "unchanged")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+            refreshed = dict(
+                ARTICLE_NO_IMAGES,
+                markdown="# An Article\n\nRefreshed body.\n",
+                wordCount=5,
+            )
+            with mock.patch.object(clip, "run_extractor", return_value=refreshed):
+                third = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --refresh"),
+                )
+            self.assertEqual(third.commit_state, "committed")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+            self.assertIn("Refreshed body.", note.read_text(encoding="utf-8"))
+
+            with mock.patch.object(clip, "run_extractor", return_value=refreshed):
+                fourth = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --refresh --unfavorite"),
+                )
+            self.assertEqual(fourth.commit_state, "committed")
+            self.assertNotIn("favorite", self._metadata(note))
+
+    def test_favorite_state_matrix_never_loses_or_invents_a_marker(self):
+        """Explicit true/false crossed with persisted true/false/absent."""
+        article = dict(ARTICLE_NO_IMAGES)
+        cases = (
+            ("absent", None, "<absent>"),
+            ("absent", True, True),
+            ("absent", False, "<absent>"),
+            ("true", None, True),
+            ("true", True, True),
+            ("true", False, "<absent>"),
+            ("false", None, "<absent>"),
+            ("false", True, True),
+            ("false", False, "<absent>"),
+        )
+        for persisted, requested, expected in cases:
+            with self.subTest(persisted=persisted, requested=requested):
+                with tempfile.TemporaryDirectory() as tmp:
+                    vault, env = self._setup(tmp)
+                    service = self._service(env)
+
+                    seed = "https://example.com/article --no-git --save-images no"
+                    if persisted == "true":
+                        seed += " --favorite"
+                    with mock.patch.object(
+                        clip, "run_extractor", return_value=dict(article)
+                    ):
+                        first = cast(clip.ClipResult, service.run(seed))
+                    note = vault / first.path
+                    if persisted == "false":
+                        text = note.read_text(encoding="utf-8")
+                        note.write_text(
+                            text.replace(
+                                "\n---\n", "\nfavorite: false\n---\n", 1
+                            ),
+                            encoding="utf-8",
+                        )
+                    body_before = note.read_text(encoding="utf-8").split(
+                        "\n---\n", 1
+                    )[1]
+
+                    act = "https://example.com/article --no-git --save-images no"
+                    if requested is True:
+                        act += " --favorite"
+                    elif requested is False:
+                        act += " --unfavorite"
+                    with mock.patch.object(
+                        clip, "run_extractor", return_value=dict(article)
+                    ):
+                        service.run(act)
+
+                    metadata = self._metadata(note)
+                    updated = note.read_text(encoding="utf-8")
+                    self.assertEqual(metadata.get("favorite", "<absent>"), expected)
+                    self.assertEqual(
+                        updated.split("\n---\n", 1)[1], body_before
+                    )
+
+    def test_marker_only_updates_without_extracting_or_touching_the_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            before = note.read_text(encoding="utf-8")
+            body_before = before.split("\n---\n", 1)[1]
+            head_before = self._git(vault, "rev-parse", "HEAD").stdout
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite-only"),
+                )
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.commit_state, "committed")
+            self.assertEqual(marked.push_state, "pushed")
+            after = note.read_text(encoding="utf-8")
+            self.assertEqual(after.split("\n---\n", 1)[1], body_before)
+            self.assertIs(self._metadata(note).get("favorite"), True)
+            self.assertNotEqual(
+                self._git(vault, "rev-parse", "HEAD").stdout, head_before
+            )
+            self.assertEqual(
+                self._git(vault, "log", "-1", "--format=%s").stdout.decode().strip(),
+                "favorite: An Article",
+            )
+
+            head_after = self._git(vault, "rev-parse", "HEAD").stdout
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                again = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite-only"),
+                )
+            self.assertEqual(again.commit_state, "unchanged")
+            self.assertEqual(
+                self._git(vault, "rev-parse", "HEAD").stdout, head_after
+            )
+
+            cleared = cast(
+                clip.ClipResult,
+                service.run("https://example.com/article --unfavorite-only --no-git"),
+            )
+            self.assertEqual(cleared.action, "unfavorite")
+            self.assertEqual(cleared.commit_state, "disabled")
+            self.assertNotIn("favorite", self._metadata(note))
+            self.assertEqual(
+                note.read_text(encoding="utf-8").split("\n---\n", 1)[1],
+                body_before,
+            )
+
+    def test_favorite_can_be_added_to_an_existing_note_without_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            self.assertNotIn("favorite", self._metadata(note))
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite"),
+                )
+            self.assertEqual(marked.commit_state, "committed")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_favorite_only_rejects_unknown_url_without_creating_a_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+            with self.assertRaisesRegex(clip.ClipError, "No clipped note exists"):
+                service.run("https://example.com/never-clipped --favorite-only")
+            self.assertEqual(list((vault / "Inbox").glob("*.md")), [])
+
+    def test_favorite_only_does_not_create_a_missing_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote.git"
+            vault = root / "vault"
+            self._git(root, "init", "--bare", str(remote))
+            self._git(root, "init", "-b", "master", str(vault))
+            self._git(vault, "config", "user.name", "Clip Test")
+            self._git(vault, "config", "user.email", "clip@example.invalid")
+            (vault / "README.md").write_text("vault\n", encoding="utf-8")
+            self._git(vault, "add", "README.md")
+            self._git(vault, "commit", "-m", "initial")
+            env = {
+                "WEB_TO_OBSIDIAN_VAULT": str(vault),
+                "WEB_TO_OBSIDIAN_DEST": "Inbox",
+                "WEB_TO_OBSIDIAN_IMAGES": "images",
+                "WEB_TO_OBSIDIAN_SYNC_BRANCH": "master",
+                "WEB_TO_OBSIDIAN_LOCK_FILE": str(root / "vault.lock"),
+                "WEB_TO_OBSIDIAN_PENDING_ROOT": str(root / "pending"),
+            }
+            service = self._service(env)
+            with self.assertRaisesRegex(clip.ClipError, "No clipped note exists"):
+                service.run("https://example.com/article --favorite-only --no-git")
+            self.assertFalse((vault / "Inbox").exists())
+
+    def test_favorite_only_supports_no_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            head_before = self._git(vault, "rev-parse", "HEAD").stdout
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite-only --no-git"),
+                )
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.commit_state, "disabled")
+            self.assertEqual(marked.push_state, "disabled")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+            self.assertEqual(
+                self._git(vault, "rev-parse", "HEAD").stdout, head_before
+            )
+            relative = note.relative_to(vault).as_posix()
+            status = self._git(
+                vault, "status", "--porcelain=v1", "-z"
+            ).stdout.decode("utf-8")
+            self.assertEqual(
+                [entry for entry in status.split("\0") if entry],
+                [f" M {relative}"],
+            )
+
+    def test_pending_image_confirmation_keeps_the_favorite_intent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE)
+            ):
+                pending = service.run(
+                    "https://example.com/article --no-git --favorite"
+                )
+            self.assertIsInstance(pending, clip.PendingClipResult)
+
+            result = cast(clip.ClipResult, service.resume_pending("no"))
+            note = vault / result.path
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+
 if __name__ == "__main__":
     unittest.main()
