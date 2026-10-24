@@ -937,6 +937,7 @@ def render_note(
         "original_url": source,
         "original_host": urlsplit(source).hostname or "",
         **({"fetched_url": fetched_url} if fetched_url != source else {}),
+        **({"favorite": True} if favorite else {}),
         "extraction_method": checked["method"],
         "status": "needs-review",
         "category": "Inbox",
@@ -947,7 +948,6 @@ def render_note(
         **({"image_mode": image_mode} if image_mode is not None else {}),
         "published": checked["published"],
         "created": timestamp,
-        **({"favorite": True} if favorite else {}),
     }
     frontmatter = yaml.safe_dump(
         metadata,
@@ -1524,11 +1524,37 @@ def _with_manual_section(note: str, manual: str) -> str:
 _FAVORITE_LINE = re.compile(r"^favorite[ \t]*:")
 
 
+def _find_original_host_index(lines: list[str]) -> int | None:
+    """Return the index of the line starting with 'original_host:', or None."""
+    for i, line in enumerate(lines):
+        if line.strip().startswith("original_host:"):
+            return i
+    return None
+
+
+def _insert_favorite_after_original_host(lines: list[str]) -> list[str]:
+    """Insert 'favorite: true' after the original_host line, or at the end if not found."""
+    ho_idx = _find_original_host_index(lines)
+    if ho_idx is not None:
+        lines.insert(ho_idx + 1, "favorite: true")
+    else:
+        lines.append("favorite: true")
+    return lines
+
+
+def _remove_existing_favorite(lines: list[str]) -> list[str]:
+    """Remove any existing favorite lines from the list, return the filtered list."""
+    return [line for line in lines if not _FAVORITE_LINE.match(line)]
+
+
 def _set_favorite_marker(text: str, favorite: bool) -> tuple[str, bool]:
     """Add or remove the favorite key in a managed note's frontmatter.
 
     Only the favorite line is touched, so the remaining frontmatter and the
     body (including the manual section) stay byte-for-byte unchanged.
+
+    The favorite marker is inserted after the ``original_host`` field
+    when adding, to keep the frontmatter well-organized.
     """
     normalized = _normalize_text(text)
     if not normalized.startswith("---\n"):
@@ -1553,20 +1579,15 @@ def _set_favorite_marker(text: str, favorite: bool) -> tuple[str, bool]:
 
     lines = normalized[4:end].split("\n")
     indexes = [index for index, line in enumerate(lines) if _FAVORITE_LINE.match(line)]
+
     if favorite:
         if metadata.get("favorite") is True and len(indexes) == 1:
             if lines[indexes[0]].strip() in {"favorite: true", "favorite: True"}:
                 return text, False
-        if indexes:
-            lines[indexes[-1]] = "favorite: true"
-            for index in reversed(indexes[:-1]):
-                del lines[index]
-        else:
-            if "favorite" in metadata:
-                raise ClipError(
-                    "The favorite marker is not stored as a simple frontmatter field."
-                )
-            lines.append("favorite: true")
+        # Remove any existing favorite lines first
+        lines = _remove_existing_favorite(lines)
+        # Insert favorite after original_host
+        lines = _insert_favorite_after_original_host(lines)
     else:
         if not indexes:
             if "favorite" in metadata:
