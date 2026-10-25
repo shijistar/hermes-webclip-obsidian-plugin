@@ -12,7 +12,7 @@ save a dated Markdown note, and commit & push it to the Obsidian vault Git.
 
 ## Version
 
-`SKILL.md` frontmatter `version` is the skill version (currently `1.4.2`).
+`SKILL.md` frontmatter `version` is the skill version (currently `1.5.2`).
 The plugin version is tracked separately in `../plugin.yaml` and
 `../CHANGELOG.md`.
 
@@ -27,7 +27,9 @@ ln -s /path/to/hermes-webclip-obsidian-plugin/skill \
 ```
 
 The skill is designed to be used together with the plugin symlink
-(`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`).
+(`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`). The directory
+name matches the plugin registration key (`webclip-obsidian`), which is what
+`plugins.enabled` in `config.yaml` must list.
 
 ## Reference index
 
@@ -39,7 +41,7 @@ The skill is designed to be used together with the plugin symlink
 | `references/github-private-blob-url-and-image-mode.md` | GitHub blob preview URLs and `image_mode` metadata semantics                                          |
 | `references/netease-embedded-state-author.md`          | Netease author/published extraction from embedded JSON state                                          |
 | `references/netease-placeholder-and-video-links.md`    | Netease `empty.png` placeholder images and anti-scrape video short links                              |
-| `references/pending-resume-fallback.md`                | Stale pending-state directory lock and fallbacks                                                      |
+| `references/pending-resume-fallback.md`                | Outstanding/stale pending-state entries and fallbacks                                                 |
 | `references/profile-skill-vs-source-repo-sync.md`      | Keeping the profile skill in sync with the source repo                                                |
 | `references/repo-linked-maintenance.md`                | Maintenance implications of symlinking the skill/plugin from a Git repo                               |
 | `references/wsl-chrome-cdp-extraction.md`              | WSL Chrome CDP extraction path                                                                        |

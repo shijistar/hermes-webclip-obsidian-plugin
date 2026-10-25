@@ -24,6 +24,12 @@ Observed in this workflow:
 ### Practical lesson
 For user-facing preview links, prioritize the format that actually opens in the user's environment. Distinguish canonical API output from the empirically reliable delivery format.
 
+**Current implementation does not emit the `%2F` form.** `github_blob_url()` builds the
+path with `quote(relative_path, safe='/')`, so slashes stay literal
+(`.../blob/master/Inbox/2026-...md`). Adopting the encoded form requires changing
+`safe='/'` to `safe=''` in `web_to_obsidian.py`; until then the `%2F` link must be
+produced by the caller, not by the plugin.
+
 ## 2) Profile skill file vs source-repo skill file
 
 Do not assume the loaded profile skill file is always the same file as the source-repo skill under:

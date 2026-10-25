@@ -4,6 +4,63 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-25
+
+### Changed
+
+- **Favorite marker placement**: `favorite: true` now sits immediately after the
+  top-level `original_host` field instead of at the end of the frontmatter.
+  A marker already present in the wrong position is moved into place by
+  `--favorite-only`, so existing notes converge on the new layout. Only a key
+  starting at column zero is treated as `original_host`, so indented
+  continuation lines inside multi-line values cannot pull the marker into a
+  nested block.
+- **Batch clipping produces one commit**: `ClipService.run_batch()` clips
+  several URLs under a single vault lock and commits/pushes every written note
+  once. Per-URL flags stay independent, one failing URL does not abort the
+  rest, and `--save-images ask` is rejected for any spec that extracts a page
+  (marker-only specs are exempt) because a single pending confirmation cannot
+  represent multiple articles. The `/webclip` slash command still accepts
+  exactly one URL per invocation.
+
+### Added
+
+- `web_to_obsidian_resume_pending` tool declaration in `plugin.yaml`.
+
+### Changed (install path)
+
+- The profile plugin symlink is now named `webclip-obsidian` instead of
+  `web-to-obsidian`, matching the manifest name. Hermes keys plugins by
+  `plugin.yaml`'s `name`, but the install directory is expected to carry the same
+  name, and a mismatched directory lets a later `hermes plugins install` create a
+  second directory for the same key. `plugins.enabled` is unchanged.
+
+### Fixed (docs)
+
+- Corrected `skill/SKILL.md` and its references against the current code:
+  - The skill now names the plugin by its registered key `webclip-obsidian`;
+    `hermes-webclip-obsidian-plugin` is used only for the source repo path.
+  - The installed plugin directory is `plugins/web-to-obsidian`, while the
+    registration key is `webclip-obsidian` (from `plugin.yaml`'s `name`). Hermes
+    keys plugins by that name, so `plugins.enabled` must list `webclip-obsidian`;
+    listing the directory name silently leaves the plugin disabled.
+  - The anti-bot fallback example now passes the extracted body into
+    `content_markdown` instead of the empty `article["markdown"]`, which produced
+    frontmatter-only notes; `markdown` is documented as required but allowed to be
+    empty.
+  - The pending-state pitfall now describes the `active.json` pointer plus
+    `<pending_id>.json` layout; an empty directory is normal, and stale or expired
+    entries are cleared automatically.
+  - 163 `spss`/`spsnuid`/`spsvid`/`spstoken` params are documented as **not**
+    stripped by the plugin; dedup depends on the page's canonical tag, and
+    `original_url`/`fetched_url` are normalized too.
+  - `config.toml` is documented as a shared, tracked file rather than a per-profile
+    copy; `run_batch()` is documented in the batch workflow; `ClipResult.action`
+    and the third Python entry point are listed.
+  - Minor fixes: the `%2F` blob-URL note now states what `github_blob_url()`
+    actually emits, the WSL stop-Chrome snippet is valid bash, the batch script
+    uses `cut -f4-`, and `preflight(vault, ...)` is described accurately.
+
 ## 2026-10-24
 
 ### Added

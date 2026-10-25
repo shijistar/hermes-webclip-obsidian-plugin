@@ -18,7 +18,8 @@
   `<img class="js-preview-img" src="https://static.ws.126.net/163/frontend/images/2022/empty.png" data-echo="http://dingyue.ws.126.net/2026/.../REAL.jpg">`.
   `src` is a 1×1 transparent pixel shown immediately; the real URL lives in `data-echo` (also `data-src`/`data-original` on other sites). Front-end JS swaps `data-echo`→`src` only when the image scrolls into view.
 - **Bug (pre-fix extractor)**: `extractor/src/extractor.mjs` `absolutizeLinks()` only read `img[src]`, so clipped markdown always contained `empty.png` and the REAL figure URL was lost.
-- **Fix (shipped in `fix/extractor-lazy-image`, commit `a327697`)**: added `extractLazyImageSrc()` that, for each `img`, prefers `data-echo`/`data-src`/`data-original`/`data-lazy-src`, resolves it to an absolute http(s) URL, and overwrites `src` before Defuddle runs. Now clipped `news/a/` articles emit the REAL `dingyue.ws.126.net/...` URL, not `empty.png`. Covered by `extractor/test/fixtures/netease-lazy-image.html` + unit test (23/23 pass).
+- **Fix (shipped in `fix/extractor-lazy-image`, commit `a327697`)**: added `extractLazyImageSrc()` that, for each `img`, prefers `data-echo`/`data-src`/`data-original`/`data-lazy-src`, resolves it to an absolute http(s) URL, and overwrites `src` before Defuddle runs. Now clipped `news/a/` articles emit the REAL `dingyue.ws.126.net/...` URL, not `empty.png`. Covered by
+ `extractor/test/fixtures/netease-lazy-image.html` plus an extractor unit test.
 - **Operational consequence**: After this fix, a netease `news/a/` clip that previously showed `empty.png` will now show a REAL remote image URL. That real URL is still a remote link unless `--save-images yes` localizes it.
 - **When `empty.png` STILL appears**: only if the source page genuinely has no lazy-load real URL (rare). It remains a 1×1 pixel, NOT a real figure — multiple copies per article.
 - **Localizing decision**: stores N identical transparent pixels under `Inbox/images/` and rewrites links. No informational value. When the user asks to "save images locally" but ALL detected remote images are `empty.png`, confirm before localizing; recommend keep-remote / abandon. If real `dingyue.ws.126.net` URLs are present, localizing them is meaningful.
@@ -42,7 +43,15 @@
   merely quotes the phrase is never removed.
 - **Verification**: real URL `c.m.163.com/news/a/L5BC6R9V0553K5ZV.html` — after fix
   markdown has no `打开网易新闻`, keeps `特别声明` (both Netease UI strings) and the real
-  `dingyue.ws.126.net/…` image. Node tests 25 pass (2 new), Python 94 pass.
+  `dingyue.ws.126.net/…` image. Both the extractor and Python suites passed at the time.
 
 ## Note on tracking params
-- `canonicalUrl` strips tracking params; `webclip_id` keys off it → no duplicate-note risk from `?spss=...`.
+- The plugin does **not** strip `spss`/`spsnuid`/`spsvid`/`spstoken`: Python
+  `normalize_url` drops only the fragment, and the extractor's `normalizeUrl`
+  filters only `utm_*`, `fbclid`, `gclid`, `share_token`.
+- Dedup therefore depends on the page exposing a clean `<link rel="canonical">`
+  (true for the `c.m.163.com` pages checked). Without a canonical tag,
+  `safeCanonical` falls back to the raw URL, and a `?spss=...` variant produces a
+  different `webclip_id` → duplicate note.
+- `original_url`/`fetched_url` are written after `normalize_url`, so they do not
+  preserve the tracked form either.

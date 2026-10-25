@@ -1332,10 +1332,12 @@ class FavoriteMarkerTests(unittest.TestCase):
     def test_render_note_omits_favorite_by_default(self):
         self.assertNotIn("favorite", self._meta(self._note()))
 
-    def test_render_note_writes_favorite_last_in_frontmatter(self):
+    def test_render_note_writes_favorite_after_original_host(self):
         note = self._note(favorite=True)
         frontmatter = note.split("\n---\n", 1)[0]
-        self.assertTrue(frontmatter.endswith("favorite: true"))
+        lines = frontmatter.split("\n")
+        host_index = lines.index("original_host: example.com")
+        self.assertEqual(lines[host_index + 1], "favorite: true")
         self.assertIs(self._meta(note)["favorite"], True)
 
     def test_render_note_rejects_non_boolean_favorite(self):
@@ -1347,7 +1349,7 @@ class FavoriteMarkerTests(unittest.TestCase):
         marked, changed = clip._set_favorite_marker(note, True)
         self.assertTrue(changed)
         self.assertIs(self._meta(marked)["favorite"], True)
-        self.assertIn("\nfavorite: true\n---\n", marked)
+        self.assertIn("original_host: example.com\nfavorite: true\n", marked)
 
         cleared, changed = clip._set_favorite_marker(marked, False)
         self.assertTrue(changed)
@@ -1358,6 +1360,28 @@ class FavoriteMarkerTests(unittest.TestCase):
         self.assertEqual(clip._set_favorite_marker(marked, True), (marked, False))
         cleared, _ = clip._set_favorite_marker(marked, False)
         self.assertEqual(clip._set_favorite_marker(cleared, False), (cleared, False))
+
+    def test_set_favorite_marker_repositions_out_of_place_marker(self):
+        note = self._note().replace("\n---\n", "\nfavorite: true\n---\n", 1)
+        marked, changed = clip._set_favorite_marker(note, True)
+        self.assertTrue(changed)
+        lines = marked.split("\n---\n", 1)[0].split("\n")
+        host_index = lines.index("original_host: example.com")
+        self.assertEqual(lines[host_index + 1], "favorite: true")
+        self.assertEqual(marked.count("favorite:"), 1)
+
+    def test_set_favorite_marker_ignores_indented_original_host_lines(self):
+        note = self._note().replace(
+            "description: A useful page",
+            "description: |-\n  first\n  original_host: not-a-key",
+            1,
+        )
+        marked, changed = clip._set_favorite_marker(note, True)
+        self.assertTrue(changed)
+        lines = marked.split("\n---\n", 1)[0].split("\n")
+        host_index = lines.index("original_host: example.com")
+        self.assertEqual(lines[host_index + 1], "favorite: true")
+        self.assertIn("  original_host: not-a-key", marked)
 
     def test_set_favorite_marker_only_touches_one_frontmatter_line(self):
         note = self._note().replace(
@@ -1376,7 +1400,7 @@ class FavoriteMarkerTests(unittest.TestCase):
         )
         marked, changed = clip._set_favorite_marker(note, True)
         self.assertTrue(changed)
-        self.assertIn("\nfavorite: true\n---\n", marked)
+        self.assertIn("original_host: example.com\nfavorite: true\n", marked)
         self.assertEqual(marked.count("favorite:"), 1)
 
     def test_set_favorite_marker_refuses_unmanaged_note(self):
@@ -1448,5 +1472,551 @@ class FavoriteMarkerTests(unittest.TestCase):
         )
 
 
+class BatchClipServiceTests(unittest.TestCase):
+    def _git(self, root, *args):
+        return subprocess.run(
+            ["git", "-C", str(root), *args],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    def _vault(self, tmp):
+        root = Path(tmp)
+        remote = root / "remote.git"
+        repo = root / "vault"
+        self._git(root, "init", "--bare", str(remote))
+        self._git(root, "init", "-b", "master", str(repo))
+        self._git(repo, "config", "user.name", "Clip Test")
+        self._git(repo, "config", "user.email", "clip@example.invalid")
+        self._git(repo, "remote", "add", "origin", str(remote))
+        (repo / ".gitkeep").write_text("", encoding="utf-8")
+        self._git(repo, "add", ".gitkeep")
+        self._git(repo, "commit", "-m", "initial")
+        self._git(repo, "push", "-u", "origin", "master")
+        return root, repo
+
+    def _service(self, root, repo):
+        env = {
+            "WEB_TO_OBSIDIAN_VAULT": str(repo),
+            "WEB_TO_OBSIDIAN_DEST": "Inbox",
+            "WEB_TO_OBSIDIAN_IMAGES": "images",
+            "WEB_TO_OBSIDIAN_SYNC_BRANCH": "master",
+            "WEB_TO_OBSIDIAN_LOCK_FILE": str(Path(root) / "vault.lock"),
+            "WEB_TO_OBSIDIAN_PENDING_ROOT": str(Path(root) / "pending"),
+        }
+        return clip.ClipService(Path("."), env=env)
+
+    @staticmethod
+    def _payload(url, title):
+        payload = dict(SUCCESS)
+        payload["title"] = title
+        payload["canonicalUrl"] = url
+        payload["url"] = url
+        return payload
+
+    def _commit_count(self, repo):
+        return int(
+            self._git(repo, "rev-list", "--count", "HEAD").stdout.decode().strip()
+        )
+
+    def _commit_paths(self, repo, rev="HEAD"):
+        raw = self._git(
+            repo, "diff-tree", "--no-commit-id", "--name-only", "-z", "-r", rev
+        ).stdout.decode()
+        return {part for part in raw.split("\0") if part}
+
+    @staticmethod
+    def _note(repo, relative):
+        return (repo / relative).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _meta(text):
+        start = text.index("---\n") + 4
+        end = text.index("\n---\n", start)
+        return yaml.safe_load(text[start:end])
+
+    @staticmethod
+    def _payload_with_image(url, title):
+        payload = dict(SUCCESS)
+        payload.update(
+            {
+                "title": title,
+                "canonicalUrl": url,
+                "url": url,
+                "markdown": (
+                    f"# {title}\r\n\r\n"
+                    f"![shot](https://cdn.example.com/{title.lower()}.png)\r\n"
+                ),
+            }
+        )
+        return payload
+
+    @staticmethod
+    def _fake_download(url, directory, index):
+        path = Path(directory) / f"image-{index}.png"
+        path.write_bytes(b"\x89PNG\r\n\x1a\n")
+        return path
+
+    def _prepopulate(self, service, url, title, *, extra=""):
+        """Clip one article up front so later specs can target an existing note."""
+        payload = self._payload(url, title)
+        spec = f"{url} --save-images no {extra}".strip()
+        with mock.patch.object(
+            clip,
+            "run_extractor_with_fallback",
+            side_effect=lambda plugin_root, u, no_browser=False: payload,
+        ):
+            result = service.run_batch([spec])
+        self.assertTrue(result.items[0].ok, result.items[0].error)
+        return result.items[0].path
+
+    def test_writes_all_notes_in_a_single_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            payloads = {
+                "https://example.com/a": self._payload(
+                    "https://example.com/a", "Alpha"
+                ),
+                "https://example.com/b": self._payload(
+                    "https://example.com/b", "Beta"
+                ),
+            }
+
+            def fake_extract(plugin_root, url, no_browser=False):
+                return payloads[url]
+
+            with mock.patch.object(
+                clip, "run_extractor_with_fallback", side_effect=fake_extract
+            ):
+                result = service.run_batch(
+                    [
+                        "https://example.com/a --save-images no",
+                        "https://example.com/b --save-images no",
+                    ]
+                )
+
+            self.assertEqual(result.commit_state, "committed")
+            self.assertEqual(result.push_state, "pushed")
+            self.assertEqual([item.ok for item in result.items], [True, True])
+            count = (
+                self._git(repo, "rev-list", "--count", "HEAD")
+                .stdout.decode()
+                .strip()
+            )
+            self.assertEqual(count, "2")
+            committed = (
+                self._git(
+                    repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"
+                )
+                .stdout.decode()
+                .split()
+            )
+            self.assertEqual(len(committed), 2)
+            self.assertTrue(all(path.endswith(".md") for path in committed))
+
+    def test_one_failure_does_not_block_the_other_urls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+
+            def fake_extract(plugin_root, url, no_browser=False):
+                if url.endswith("/bad"):
+                    raise clip.ClipError("blocked by test")
+                return self._payload(url, "Good")
+
+            with mock.patch.object(
+                clip, "run_extractor_with_fallback", side_effect=fake_extract
+            ):
+                result = service.run_batch(
+                    [
+                        "https://example.com/bad --save-images no",
+                        "https://example.com/good --save-images no",
+                    ]
+                )
+
+            self.assertEqual([item.ok for item in result.items], [False, True])
+            self.assertIn("blocked by test", result.items[0].error or "")
+            committed = (
+                self._git(
+                    repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"
+                )
+                .stdout.decode()
+                .split()
+            )
+            self.assertEqual(len(committed), 1)
+
+    def test_rejects_ambiguous_image_choice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            with self.assertRaisesRegex(clip.ClipError, "--save-images"):
+                service.run_batch(["https://example.com/a"])
+
+    def test_rejects_mixed_no_git_setting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            with self.assertRaisesRegex(clip.ClipError, "--no-git"):
+                service.run_batch(
+                    [
+                        "https://example.com/a --save-images no",
+                        "https://example.com/b --save-images no --no-git",
+                    ]
+                )
+
+
+    def test_batch_applies_distinct_favorite_intents_per_spec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            fav = "https://example.com/fav"
+            plain = "https://example.com/plain"
+            unfav = "https://example.com/unfav"
+            payloads = {
+                fav: self._payload(fav, "Fav"),
+                plain: self._payload(plain, "Plain"),
+                unfav: self._payload(unfav, "Unfav"),
+            }
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payloads[u],
+            ):
+                result = service.run_batch(
+                    [
+                        f"{fav} --save-images no --favorite",
+                        f"{plain} --save-images no",
+                        f"{unfav} --save-images no --unfavorite",
+                    ]
+                )
+
+            self.assertEqual([item.ok for item in result.items], [True, True, True])
+            self.assertEqual(self._commit_count(repo), 2)
+            self.assertEqual(len(self._commit_paths(repo)), 3)
+            self.assertIs(
+                self._meta(self._note(repo, result.items[0].path))["favorite"], True
+            )
+            self.assertNotIn(
+                "favorite", self._meta(self._note(repo, result.items[1].path))
+            )
+            self.assertNotIn(
+                "favorite", self._meta(self._note(repo, result.items[2].path))
+            )
+
+    def test_batch_mixes_marker_only_with_new_clip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            old = "https://example.com/old"
+            new = "https://example.com/new"
+            self._prepopulate(service, old, "Old")
+            payload = self._payload(new, "New")
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payload,
+            ):
+                result = service.run_batch(
+                    [f"{old} --favorite-only", f"{new} --save-images no"]
+                )
+
+            self.assertEqual([item.ok for item in result.items], [True, True])
+            self.assertEqual(
+                [item.action for item in result.items], ["favorite", "clip"]
+            )
+            self.assertEqual(
+                self._commit_paths(repo),
+                {result.items[0].path, result.items[1].path},
+            )
+            self.assertIs(
+                self._meta(self._note(repo, result.items[0].path))["favorite"], True
+            )
+
+    def test_batch_skips_an_unchanged_marker_from_the_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            old = "https://example.com/old"
+            new = "https://example.com/new"
+            self._prepopulate(service, old, "Old", extra="--favorite")
+            before = self._commit_count(repo)
+            payload = self._payload(new, "New")
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payload,
+            ):
+                result = service.run_batch(
+                    [f"{old} --favorite-only", f"{new} --save-images no"]
+                )
+
+            self.assertEqual([item.ok for item in result.items], [True, True])
+            self.assertEqual(self._commit_count(repo), before + 1)
+            self.assertEqual(self._commit_paths(repo), {result.items[1].path})
+
+    def test_batch_marker_only_missing_note_fails_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            missing = "https://example.com/missing"
+            new = "https://example.com/new"
+            payload = self._payload(new, "New")
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payload,
+            ):
+                result = service.run_batch(
+                    [f"{missing} --favorite-only", f"{new} --save-images no"]
+                )
+
+            self.assertEqual([item.ok for item in result.items], [False, True])
+            self.assertIn("No clipped note", result.items[0].error or "")
+            self.assertEqual(self._commit_paths(repo), {result.items[1].path})
+
+    def test_batch_mixes_local_and_remote_image_policies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            local = "https://example.com/local"
+            remote = "https://example.com/remote"
+            payloads = {
+                local: self._payload_with_image(local, "Local"),
+                remote: self._payload_with_image(remote, "Remote"),
+            }
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payloads[u],
+            ), mock.patch.object(
+                clip, "download_remote_image", side_effect=self._fake_download
+            ):
+                result = service.run_batch(
+                    [f"{local} --save-images yes", f"{remote} --save-images no"]
+                )
+
+            self.assertTrue(
+                all(item.ok for item in result.items),
+                [item.error for item in result.items],
+            )
+            paths = self._commit_paths(repo)
+            self.assertEqual(len(paths), 3)
+            self.assertEqual(len([p for p in paths if p.endswith(".png")]), 1)
+            self.assertEqual(
+                self._meta(self._note(repo, result.items[0].path))["image_mode"],
+                "local",
+            )
+            self.assertEqual(
+                self._meta(self._note(repo, result.items[1].path))["image_mode"],
+                "remote",
+            )
+
+    def test_batch_all_no_git_writes_files_without_a_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            alpha = "https://example.com/alpha"
+            beta = "https://example.com/beta"
+            payloads = {
+                alpha: self._payload(alpha, "Alpha"),
+                beta: self._payload(beta, "Beta"),
+            }
+            before = self._commit_count(repo)
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payloads[u],
+            ):
+                result = service.run_batch(
+                    [
+                        f"{alpha} --save-images no --no-git",
+                        f"{beta} --save-images no --no-git",
+                    ]
+                )
+
+            self.assertEqual(result.commit_state, "disabled")
+            self.assertEqual(result.push_state, "disabled")
+            self.assertEqual([item.ok for item in result.items], [True, True])
+            self.assertEqual(self._commit_count(repo), before)
+            self.assertEqual(len(list((repo / "Inbox").iterdir())), 2)
+
+    def test_batch_applies_no_browser_only_to_its_own_spec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            headless = "https://example.com/headless"
+            rendered = "https://example.com/rendered"
+            seen = {}
+
+            def fake_extract(plugin_root, url, no_browser=False):
+                seen[url] = no_browser
+                return self._payload(url, url.rsplit("/", 1)[-1].title())
+
+            with mock.patch.object(
+                clip, "run_extractor_with_fallback", side_effect=fake_extract
+            ):
+                service.run_batch(
+                    [
+                        f"{headless} --save-images no --no-browser",
+                        f"{rendered} --save-images no",
+                    ]
+                )
+
+            self.assertIs(seen[headless], True)
+            self.assertIs(seen[rendered], False)
+
+    def test_batch_uses_the_supplied_commit_message(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            alpha = "https://example.com/alpha"
+            beta = "https://example.com/beta"
+            payloads = {
+                alpha: self._payload(alpha, "Alpha"),
+                beta: self._payload(beta, "Beta"),
+            }
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payloads[u],
+            ):
+                result = service.run_batch(
+                    [
+                        f"{alpha} --save-images no",
+                        f"{beta} --save-images no",
+                    ],
+                    commit_message="clip: custom batch subject",
+                )
+
+            self.assertEqual(result.commit_state, "committed")
+            subject = (
+                self._git(repo, "log", "-1", "--pretty=%s").stdout.decode().strip()
+            )
+            self.assertEqual(subject, "clip: custom batch subject")
+
+    def test_batch_requires_refresh_only_for_the_changed_article(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            changed = "https://example.com/changed"
+            added = "https://example.com/added"
+            self._prepopulate(service, changed, "Changed")
+            updated = self._payload(changed, "Changed")
+            updated["markdown"] = "# Changed\r\n\r\nUpdated body\r\n"
+            payloads = {changed: updated, added: self._payload(added, "Added")}
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payloads[u],
+            ):
+                blocked = service.run_batch(
+                    [f"{changed} --save-images no", f"{added} --save-images no"]
+                )
+
+            self.assertEqual([item.ok for item in blocked.items], [False, True])
+            self.assertIn("--refresh", blocked.items[0].error or "")
+            self.assertEqual(self._commit_paths(repo), {blocked.items[1].path})
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payloads[u],
+            ):
+                refreshed = service.run_batch(
+                    [f"{changed} --save-images no --refresh"]
+                )
+
+            self.assertTrue(refreshed.items[0].ok, refreshed.items[0].error)
+            self.assertIn(
+                "Updated body", self._note(repo, refreshed.items[0].path)
+            )
+
+    def test_batch_unfavorite_only_removes_an_existing_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            url = "https://example.com/old"
+            self._prepopulate(service, url, "Old", extra="--favorite")
+
+            result = service.run_batch([f"{url} --unfavorite-only"])
+
+            self.assertTrue(result.items[0].ok, result.items[0].error)
+            self.assertEqual(result.items[0].action, "unfavorite")
+            self.assertNotIn("favorite: true", self._note(repo, result.items[0].path))
+            self.assertEqual(self._commit_paths(repo), {result.items[0].path})
+
+    def test_batch_marker_only_with_no_git_marks_the_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            url = "https://example.com/old"
+            self._prepopulate(service, url, "Old")
+            before = self._commit_count(repo)
+
+            result = service.run_batch([f"{url} --favorite-only --no-git"])
+
+            item = result.items[0]
+            self.assertTrue(item.ok, item.error)
+            self.assertEqual(item.action, "favorite")
+            self.assertEqual(result.commit_state, "disabled")
+            self.assertIs(self._meta(self._note(repo, item.path))["favorite"], True)
+            self.assertEqual(self._commit_count(repo), before)
+
+    def test_batch_combines_marker_updates_and_new_clips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            keep = "https://example.com/keep"
+            drop = "https://example.com/drop"
+            fresh = "https://example.com/fresh"
+            gone = "https://example.com/gone"
+            self._prepopulate(service, keep, "Keep")
+            self._prepopulate(service, drop, "Drop", extra="--favorite")
+            before = self._commit_count(repo)
+            payload = self._payload(fresh, "Fresh")
+
+            with mock.patch.object(
+                clip,
+                "run_extractor_with_fallback",
+                side_effect=lambda p, u, no_browser=False: payload,
+            ):
+                result = service.run_batch(
+                    [
+                        f"{keep} --favorite-only",
+                        f"{drop} --unfavorite-only",
+                        f"{fresh} --save-images no",
+                        f"{gone} --favorite-only",
+                    ]
+                )
+
+            self.assertEqual(
+                [item.ok for item in result.items], [True, True, True, False]
+            )
+            self.assertEqual(
+                [item.action for item in result.items[:3]],
+                ["favorite", "unfavorite", "clip"],
+            )
+            self.assertIn("No clipped note", result.items[3].error or "")
+            self.assertEqual(self._commit_count(repo), before + 1)
+            self.assertEqual(len(self._commit_paths(repo)), 3)
+            self.assertIs(
+                self._meta(self._note(repo, result.items[0].path))["favorite"], True
+            )
+            self.assertNotIn(
+                "favorite", self._meta(self._note(repo, result.items[1].path))
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
+

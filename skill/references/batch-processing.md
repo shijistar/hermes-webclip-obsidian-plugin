@@ -39,7 +39,7 @@ except Exception as e:
     print('ERROR|||' + str(e))
 " "$url" "$imgs" 2>&1)
     status=$(echo "$result" | cut -d'|' -f1)
-    msg=$(echo "$result" | cut -d'|' -f3-)
+    msg=$(echo "$result" | cut -d'|' -f4-)
     echo "${label}. [${imgs}] ${status}: ${msg}"
 }
 
@@ -87,6 +87,33 @@ result = service.run(url_flags)
 ```
 
 The delay is per-clip, not per-site. Apply uniformly when processing mixed-site batches.
+
+## Preferred: `run_batch()` — one commit for the whole list
+
+`ClipService.run_batch(specs)` clips every spec under one vault lock and commits
+them together, so a 20-article batch becomes **one** commit instead of 20:
+
+```python
+service = ClipService(Path('.'))
+result = service.run_batch([
+    'https://example.com/a --save-images no',
+    'https://example.com/b --save-images yes --favorite',
+])
+print(result.user_message())   # per-URL ok/path/error + one Git state
+```
+
+Constraints:
+
+- every spec that extracts a page must state `--save-images yes|no` — batch mode
+  rejects the default `ask`, because one pending slot cannot represent several
+  articles;
+- `--no-git` must be identical across the whole batch;
+- a failing URL is reported in `items[]` and does not abort the rest;
+- marker-only specs (`--favorite-only` / `--unfavorite-only`) are exempt from the
+  image flag, since they never fetch the page.
+
+Use the bash loop below only when you need per-article interactive handling or a
+per-article commit.
 
 ## Proven Batch Workflow
 
@@ -195,12 +222,20 @@ For URLs where the extractor fails (QUALITY_GATE, HTTP_STATUS):
 ## GitHub Gist / Repo Notes
 
 - Gist URLs (e.g., `gist.github.com/user/id`) and GitHub repo URLs extract cleanly
-- Use `--save-images no` (default) — these rarely have downloadable images
+- Use `--save-images no` — these rarely have downloadable images (the plugin default is `ask`, not `no`)
 - Gist content is typically README-style markdown
 
 ## Renaming a Clipped Article
 
 If the user wants a different title than what was auto-extracted:
+
+> **Warning**: this bypasses the plugin's managed-note checks. `git mv` + `sed`
+> skips `write_managed_note()`'s `webclip_id` verification and manual-section
+> preservation, and a later `--refresh` may treat the note as changed. Prefer
+> renaming before the clip commits; if you must rename afterwards, make sure the
+> frontmatter `url`/`webclip_id` stay intact and run `git diff` to confirm only the
+> intended lines moved.
+
 ```bash
 cd ~/obsidian/shijistar
 git mv "Inbox/old-filename.md" "Inbox/new-filename.md"

@@ -30,6 +30,7 @@ def test_example(self):
         self._git(repo, "commit", "-m", "initial")
         self._git(repo, "push", "-u", "origin", "master")  # CRITICAL: sets upstream
 
+        # preflight(vault, expected_branch): the first parameter is the vault path
         sync = clip.GitSync.preflight(repo, expected_branch="master")
         # ... test finalize(), etc.
 ```

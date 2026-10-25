@@ -100,9 +100,9 @@ Use the decoded text file for further processing (split into articles, create ma
 
 Stop only the debug Chrome instance started in Step 1 — never `Stop-Process -Name chrome`, which kills the user's normal Chrome sessions. Use the saved PID:
 
-```powershell
-# PID captured by Start-Process -PassThru in Step 1
-$pid = Get-Content /tmp/chrome_debug_pid.txt
+```bash
+# PID captured by Start-Process -PassThru in Step 1 (read with bash, not PowerShell)
+pid=$(cat /tmp/chrome_debug_pid.txt)
 powershell.exe -Command "Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue"
 ```
 

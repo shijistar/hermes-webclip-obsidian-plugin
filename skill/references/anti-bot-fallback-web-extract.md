@@ -4,7 +4,7 @@ When the Node.js extractor fails due to anti-bot measures (Zhihu, Doubao, some p
 
 ## When to Use
 
-- `node extractor/src/cli.mjs <url> --no-browser` returns `ok: false`, `code: "QUALITY_GATE"` or `HTTP_STATUS"`
+- `node extractor/src/cli.mjs <url> --no-browser` returns `ok: false` with `code: "QUALITY_GATE"` or `code: "HTTP_STATUS"`
 - `web_extract` on the same URL returns clean Markdown/HTML content
 - User wants the article saved despite extractor failure
 - Common triggers: Zhihu, Doubao (doubao.com), some paywalled SPA sites
@@ -15,7 +15,7 @@ When the Node.js extractor fails due to anti-bot measures (Zhihu, Doubao, some p
 ```python
 from hermes_tools import web_extract
 result = web_extract([url])
-# result["results"][0]["content"] contains the Markdown/HTML
+content = result["results"][0]["content"]   # the article body you will save
 ```
 
 2. **Build article dict** (must pass `_validate_success_payload`):
@@ -53,7 +53,7 @@ result = service._persist_article(
     captured_at=datetime.now(),
     refresh=False,
     git_sync=git_sync,
-    content_markdown=article["markdown"],
+    content_markdown=content,   # the real body from web_extract — NOT article["markdown"]
     image_mode=None,  # HTML <img> tags don't trigger Markdown image flow
     generated_paths=[],
 )
@@ -71,7 +71,7 @@ print(result.user_message())
 - `image_mode=None` is correct when the extracted content has no Markdown `![](...)` images (only HTML `<img>`)
 - HTML `<img>` tags are NOT processed by the remote-image confirmation flow
 - This bypasses the `PendingClipResult` / `resume_pending()` flow entirely
-- The `markdown` field in article dict can be empty — the real content goes in `content_markdown` param
+- The `markdown` field is **required** (an empty string is allowed): `_validate_success_payload()` rejects a dict without it. The real content goes in the `content_markdown` parameter.
 - Requires: `ok: true`, `method: non-empty`, valid `canonicalUrl` and `url`, non-empty `title`
 
 ## Example: Doubao Article
@@ -88,7 +88,8 @@ article = {
     "keywords": [],
     "url": "https://www.doubao.com/thread/aa1278a169ca5",
     "wordCount": 200,
-    "method": "web_extract_fallback"
+    "method": "web_extract_fallback",
+    "markdown": ""
 }
 ```
 
@@ -99,6 +100,7 @@ article = {
 
 ## Version History
 
-- 2026-09-04: Restored `ClipConfig.from_file()` + `GitSync()` constructor per code review — removes hardcoded vault path, uses config.toml as single source of truth. Fixed markdown field to match PR #15 (not REQUIRED). Rewrote API notes.
+- 2026-10-25: Corrected the example to pass the extracted body (`content`) into `content_markdown`; it previously passed the empty `article["markdown"]` and produced frontmatter-only notes. Clarified that `markdown` is required but may be empty.
+- 2026-09-04: Restored `ClipConfig.from_file()` + `GitSync()` constructor per code review — removes hardcoded vault path, uses config.toml as single source of truth. Rewrote API notes.
 - 2026-09-03-v2: Changed to `ClipConfig.from_env()` + `GitSync.preflight()`. Added doubao.com example. (Reverted — see v3.)
 - 2026-09-03-v1: Created from session where Zhihu article was clipped via web_extract fallback.
