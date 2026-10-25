@@ -1,11 +1,11 @@
 ---
 name: web-clip-to-obsidian
-description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares one or more URLs wanting to save/read-later in Obsidian, or says "web clip"/"clip to obsidian"/"save to vault"/"抓取到obsidian"/"剪藏"/"抓取<url>" (Chinese/English trigger phrases are matched). The slash command accepts exactly one URL per invocation; to clip several URLs, invoke it once per URL, or call `ClipService.run_batch()` so all notes land in a single commit. Each URL keeps its own flags. Single-URL behavior remains unchanged.
+description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares one or more URLs wanting to save/read-later in Obsidian, or says "web clip"/"clip to obsidian"/"save to vault"/"clip<url>"/"抓取到obsidian"/"剪藏"/"剪藏<url>"/"抓取<url>" (Chinese/English trigger phrases are matched). The slash command accepts exactly one URL per invocation; to clip several URLs, invoke it once per URL, or call `ClipService.run_batch()` so all notes land in a single commit. Each URL keeps its own flags.
 version: 1.5.1
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
-    tags: [obsidian, web-clip, productivity, content-management, juejin, reading]
+    tags: [obsidian, web-clip, productivity, content-management, reading]
 ---
 
 # Web Clip to Obsidian
