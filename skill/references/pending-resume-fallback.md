@@ -11,7 +11,7 @@ The article extracts successfully and reports remote images, but the Hermes `web
 Run the plugin's native Python API from the plugin directory and call `ClipService.resume_pending('yes')` or `ClipService.resume_pending('no')` directly.
 
 ```bash
-cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
+cd ~/.hermes/profiles/<profile>/plugins/web-to-obsidian && \
 python3 - <<'PY'
 import sys
 from pathlib import Path

@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip web articles to the Obsidian vault via the hermes-webclip-obsidian-plugin plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares one or more URLs wanting to save/read-later in Obsidian, or says "web clip"/"clip to obsidian"/"save to vault"/"clip<url>"/"抓取到obsidian"/"剪藏"/"剪藏<url>"/"抓取<url>" (Chinese/English trigger phrases are matched). The slash command accepts exactly one URL per invocation; to clip several URLs, invoke it once per URL, or call `ClipService.run_batch()` so all notes land in a single commit. Each URL keeps its own flags.
-version: 1.5.1
+version: 1.5.2
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -26,25 +26,32 @@ developing):
 
 ```
 Source repo:     ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/
-Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/ → source repo (root)
+Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/web-to-obsidian/ → source repo (root)
 Skill symlink:   ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/ → source repo/skill/
 Config:          <source repo>/config.toml
 ```
+
+The symlink **directory name** (`web-to-obsidian`) differs from the plugin's
+registration key (`webclip-obsidian`, from `plugin.yaml`'s `name`). Hermes keys
+plugins by that manifest name, so `plugins.enabled` in `config.yaml` must list
+`webclip-obsidian`; listing the directory name silently leaves the plugin
+disabled. Confirm with `hermes plugins info webclip-obsidian` (`Status: enabled`).
 
 Deploy via symlink (not copies):
 
 ```bash
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin \
-      ~/.hermes/profiles/<profile>/plugins/webclip-obsidian
+      ~/.hermes/profiles/<profile>/plugins/web-to-obsidian
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
       ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
 ```
 
 `config.toml` lives at the plugin package root (`config.toml` in the repo) and is
-tracked in git with sensible defaults — each profile keeps its own local
-config by editing the file at the installed plugin path
-(`<profile>/plugins/webclip-obsidian/config.toml`) or copying the example:
-`cp config.example.toml config.toml` in the source repo.
+tracked in git with sensible defaults. Because the installed path is a symlink to
+the repo, editing `<profile>/plugins/web-to-obsidian/config.toml` edits the
+tracked file — there is no per-profile copy. Machine-specific values therefore
+appear in the source repo's `git status`; commit them deliberately or keep them
+out of Git.
 
 Default config:
 
@@ -60,10 +67,11 @@ pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 
 ## Invocation Pattern
 
-There are **two** Python entry points, both invoked from the plugin root (repo root in a source checkout, or the installed plugin dir):
+There are **three** Python entry points, all invoked from the plugin root (repo root in a source checkout, or the installed plugin dir):
 
 1. **Hermes command boundary** via `build_handler()` — returns a formatted `str` safe to show directly to the user.
 2. **Structured API** via `ClipService.run()` — returns `ClipResult` or `PendingClipResult` for programmatic branching.
+3. **Batch API** via `ClipService.run_batch(specs)` — returns `BatchClipResult` (see *Multiple URLs* below); one vault lock and one commit for the whole list.
 
 Hermes-style string handler:
 
@@ -97,7 +105,7 @@ print(result.user_message())
 CLI shortcut (string handler):
 
 ```bash
-cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
+cd ~/.hermes/profiles/<profile>/plugins/web-to-obsidian && \
 python3 -c "
 import sys; sys.path.insert(0, '.')
 from web_to_obsidian import build_handler; from pathlib import Path
@@ -152,7 +160,7 @@ Rules:
    - `yes` → download and localize images into vault `images/` dir
    - `no` → keep remote image URLs
 3. **Resume**: Call `service.resume_pending('yes')` or `service.resume_pending('no')` (requires `ClipService` + pending state)
-4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`
+4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`, and `action` (`clip` / `favorite` / `unfavorite`)
 5. **Return**: Show the GitHub vault URL to user for preview
 
 ## Multiple URLs (sequential writes, one commit)
@@ -196,10 +204,21 @@ print(result.user_message())
 
 ## Pending State
 
-When images need confirmation, pending state is stored at:
-`~/.hermes/workspace/cache/webclip-obsidian/pending-state`
+When images need confirmation, pending state is stored under
+`config.pending_root` (default
+`~/.hermes/workspace/cache/webclip-obsidian/pending-state`). The layout is a
+pointer plus one state file:
 
-This path is **mandatory** — never use system/state directories for pending state.
+```
+pending-root/
+  active.json          # {"pending_id": "..."} — at most one active confirmation
+  <pending_id>.json    # stored article + the options chosen at clip time
+```
+
+An empty `pending-root/` is normal. Only a present `active.json` means a
+confirmation is outstanding; a pointer whose state file disappeared is cleared
+automatically on the next read. Never point `pending_root` at a system/state
+directory.
 
 ## Result Handling
 
@@ -231,7 +250,19 @@ print(result.user_message())
 - **Site-specific extraction quirks**: netease (163.com) pages hide author/published in `window.__INITIAL_STATE__` embedded JSON, not in standard meta/JSON-LD. See `references/netease-embedded-state-author.md` for root cause, diagnosis path, fix (v0.4.0), and backfill hash-safety notes.
 - **163 `news/v/` video short links are handled by curl fallback**: A `c.m.163.com/news/v/<id>.html` link returns only a video stub + recommendation list (no article body). The Node.js extractor returns `QUALITY_GATE`, but the Python curl fallback (`_parse_netease_video_html`) automatically extracts title, author (from `<div class="s-name">`, video pages lack the JSON `"nickname"` field used by article pages), cover image (from `.poster[data-bg]`), publish date (from the date segment in the cover URL, e.g. `20261008` → `2026-10-08`), and the m3u8/mp4 stream URL. It generates a markdown note with metadata table, cover image, and `<video>` embed. No manual intervention needed. See `references/netease-placeholder-and-video-links.md`.
 - **163 `empty.png` is a placeholder, not a figure — BUT the extractor now resolves the real image**: Netease lazy-loads images via `src=empty.png` + `data-echo=<real url>`; the pre-fix extractor only read `src` and clipped `empty.png`. Since the `fix/extractor-lazy-image` fix (`extractLazyImageSrc()` in `extractor/src/extractor.mjs`), clipped `news/a/` articles now emit the REAL `dingyue.ws.126.net/...` URL instead. So a freshly-clipped netease article shows a real remote image, not `empty.png`. `empty.png` only remains if the source has no lazy-load URL (rare) — it is a 1×1 transparent pixel; localizing it only stores identical pixels — confirm before localizing, default keep-remote. See `references/netease-placeholder-and-video-links.md`.
-- **Stale `pending-state` directory lock**: If a previous clip left a `PendingClipResult` un-resumed, the NEXT `service.run()` fails with `ClipError: The pending image confirmation expired; please run /webclip again.` The `pending-state` path is a DIRECTORY (not a file) — `cat` shows empty but `_load_pending_state` treats its presence as expired. Fix: clear the stale cache directory (safe — it only contains temporary confirmation data), then re-run. To avoid the two-step entirely, pass flags (see below).
+- **Outstanding or stale `pending-state` entry**: pending state is a pointer file
+  (`active.json`) plus one `<pending_id>.json`. An **empty directory is normal**
+  and must not be cleaned reflexively. Four distinct cases:
+  - No `active.json` → `ClipError: No pending image confirmation exists.`
+  - `active.json` points at a missing state file → the pointer is cleared
+    automatically and the same "No pending" error is raised; just re-run.
+  - Entry older than one hour (`PENDING_TTL_SECONDS`) → cleared automatically and
+    rejected with `The pending image confirmation expired; please run /webclip again.`
+  - Valid entry already outstanding → the next clip raises
+    `Another clipped article ('<title>') is already waiting for yes/no confirmation.`
+    Resolve it with `resume_pending('yes'|'no')`, or delete the whole pending root
+    to abandon it, before clipping again.
+  To avoid the two-step entirely, pass `--save-images yes|no`.
 - **Hash-protection on re-clip of an existing note**: If the same URL was already clipped, `write_managed_note` compares semantic state and raises `The saved page changed; rerun with --refresh to update it.` unless `refresh=True`. Common trigger: re-clipping with a different `image_mode` (remote vs local). Before re-clipping, check whether the note already exists in the vault; ask the user keep-vs-refresh rather than auto-overwriting. To refresh AND localize images, pass `--refresh --save-images yes`.
 - **Favorite marker is user intent, not article content**: `--favorite` / `--unfavorite` may be applied to an existing note without `--refresh`, while any body change still requires it. Do not hand-edit `favorite:` in the vault; use the flags so the Git commit and idempotency checks stay intact.
 - **Marker-only flags never fetch**: `--favorite-only` / `--unfavorite-only` require an existing note in the configured destination and fail closed when it is missing or ambiguous. GitSync.preflight runs after a note is found and before its marker is changed; an unknown URL fails without requiring Git preflight or vault cleanup. A dirty worktree still blocks the operation unless `--no-git` is passed.
@@ -243,7 +274,7 @@ print(result.user_message())
 
 - **One-step non-interactive clip via flags**: `service.run('<url> --refresh --save-images yes|no --no-browser')` performs the full clip (including the image decision) in a single call and returns `ClipResult` directly — no `PendingClipResult`, no second `resume_pending()` step. Use this when the image decision is already known (e.g. user confirmed, or dry-run shows only `empty.png` placeholders). This also sidesteps the expired-pending-state error.
 - **Single-URL: always ask about images, never skip confirmation**: When clipping a single URL (or a small handful), ALWAYS use the normal `service.run(url)` flow without `--save-images` flag. If the page has remote images, it returns `PendingClipResult` — prompt the user to choose localize vs remote. Do NOT preemptively pass `--save-images no` just because the user's general preference is remote; the user expects to be consulted on each clip unless they explicitly said 'all remote' or 'all local'. Skipping the confirmation step is a workflow violation that frustrates users. Exception: batch mode (10+ articles) with pre-declared per-article image preferences is acceptable to use flags directly.
-- **163 tracking params are harmless to dedup**: `?spss=...&spsnuid=...&spsvid=...&spstoken=...` are share-source trackers; `canonicalUrl` strips them and `webclip_id` keys off `canonicalUrl`, so tracking params do NOT cause duplicate notes. The `original_url`/`fetched_url` frontmatter retains the full tracked URL. Safe to clip either form.
+- **163 tracking params are not stripped by the plugin**: `?spss=...&spsnuid=...&spsvid=...&spstoken=...` are share-source trackers. `normalize_url` only drops the fragment, and the extractor's `normalizeUrl` filters only `utm_*`, `fbclid`, `gclid`, `share_token`. Dedup therefore relies on the page supplying a clean `<link rel="canonical">` (the normal case for `c.m.163.com`, verified in stored notes). When a page has no canonical tag, `safeCanonical` falls back to the raw URL, so a `?spss=...` variant yields a different `webclip_id` and a duplicate note. `original_url`/`fetched_url` are also written after `normalize_url`, so they do not retain the full tracked URL.
 - **Profile skill vs source-repo drift**: before proposing or creating a PR for `hermes-webclip-obsidian-plugin`, verify whether the loaded profile skill file and `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md` are actually the same file or symlink. If they are not, patching the loaded profile skill alone will not create a source-repo diff; sync the source repo file explicitly first.
 - **`image_mode` is conditional metadata**: treat `image_mode` as metadata for the remote-Markdown-image workflow only. When no remote Markdown images are present, omit the field entirely. Use `image_mode: remote` only when remote Markdown images were detected and intentionally kept remote; use `image_mode: local` only when those images were localized into the vault.
 - **HTML `<img>` is outside `image_mode` flow**: plain HTML image tags in article content do not trigger the yes/no remote-image confirmation path and should not be used as evidence that `image_mode` must be present.
