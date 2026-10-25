@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip web articles to the Obsidian vault via the webclip-obsidian plugin — extract, confirm images, save as dated markdown, commit & push to Git. Use when the user shares one or more URLs wanting to save/read-later in Obsidian, or says "web clip"/"clip to obsidian"/"save to vault"/"clip<url>"/"抓取到obsidian"/"剪藏"/"剪藏<url>"/"抓取<url>" (Chinese/English trigger phrases are matched). The slash command accepts exactly one URL per invocation; to clip several URLs, invoke it once per URL, or call `ClipService.run_batch()` so all notes land in a single commit. Each URL keeps its own flags.
-version: 1.5.2
+version: 1.5.3
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -27,29 +27,30 @@ developing):
 
 ```
 Source repo:     ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/
-Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/web-to-obsidian/ → source repo (root)
+Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/ → source repo (root)
 Skill symlink:   ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/ → source repo/skill/
 Config:          <source repo>/config.toml
 ```
 
-The symlink **directory name** (`web-to-obsidian`) differs from the plugin's
-registration key (`webclip-obsidian`, from `plugin.yaml`'s `name`). Hermes keys
-plugins by that manifest name, so `plugins.enabled` in `config.yaml` must list
-`webclip-obsidian`; listing the directory name silently leaves the plugin
-disabled. Confirm with `hermes plugins info webclip-obsidian` (`Status: enabled`).
+The symlink directory name matches the plugin's registration key
+(`webclip-obsidian`, from `plugin.yaml`'s `name`). Hermes keys plugins by that
+manifest name, and the install directory is expected to carry the same name, so
+`plugins.enabled` in `config.yaml` must list `webclip-obsidian`. A different name
+there silently leaves the plugin disabled — confirm with
+`hermes plugins info webclip-obsidian` (`Status: enabled`).
 
 Deploy via symlink (not copies):
 
 ```bash
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin \
-      ~/.hermes/profiles/<profile>/plugins/web-to-obsidian
+      ~/.hermes/profiles/<profile>/plugins/webclip-obsidian
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
       ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
 ```
 
 `config.toml` lives at the plugin package root (`config.toml` in the repo) and is
 tracked in git with sensible defaults. Because the installed path is a symlink to
-the repo, editing `<profile>/plugins/web-to-obsidian/config.toml` edits the
+the repo, editing `<profile>/plugins/webclip-obsidian/config.toml` edits the
 tracked file — there is no per-profile copy. Machine-specific values therefore
 appear in the source repo's `git status`; commit them deliberately or keep them
 out of Git.
@@ -106,7 +107,7 @@ print(result.user_message())
 CLI shortcut (string handler):
 
 ```bash
-cd ~/.hermes/profiles/<profile>/plugins/web-to-obsidian && \
+cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
 python3 -c "
 import sys; sys.path.insert(0, '.')
 from web_to_obsidian import build_handler; from pathlib import Path
@@ -273,8 +274,9 @@ print(result.user_message())
 
 - **Rule**: Use `--favorite-only --no-git` to mark existing clipped articles as favorite without re-extraction or Git operations. This is efficient for quickly flagging articles you've already saved and avoids the extractor and preflight steps.
 
-- **One-step non-interactive clip via flags**: `service.run('<url> --refresh --save-images yes|no --no-browser')` performs the full clip (including the image decision) in a single call and returns `ClipResult` directly — no `PendingClipResult`, no second `resume_pending()` step. Use this when the image decision is already known (e.g. user confirmed, or dry-run shows only `empty.png` placeholders). This also sidesteps the expired-pending-state error.
-- **Single-URL: always ask about images, never skip confirmation**: When clipping a single URL (or a small handful), ALWAYS use the normal `service.run(url)` flow without `--save-images` flag. If the page has remote images, it returns `PendingClipResult` — prompt the user to choose localize vs remote. Do NOT preemptively pass `--save-images no` just because the user's general preference is remote; the user expects to be consulted on each clip unless they explicitly said 'all remote' or 'all local'. Skipping the confirmation step is a workflow violation that frustrates users. Exception: batch mode (10+ articles) with pre-declared per-article image preferences is acceptable to use flags directly.
+- **Batch mode rejects `--save-images ask`**: every spec that extracts a page must state `--save-images yes|no`. Decide the image policy once before the batch and pass the same decision on every clipping spec. Marker-only specs (`--favorite-only` / `--unfavorite-only`) are exempt because they never fetch the page.
+- **User preference on image confirmations**: single-URL clips always prompt the user for local vs remote images via the normal `service.run(url)` flow; do not preemptively pass `--save-images no` just because the user's general preference is remote. For batches of 10+ articles, the user expects explicit per-article `--save-images yes|no` flags instead of per-article prompts.
+- **One-step non-interactive clip via flags**: `service.run('<url> --refresh --save-images yes|no --no-browser')` performs the full clip in a single call and returns `ClipResult` directly — no `PendingClipResult`, no second `resume_pending()` step. Use this when the image decision is already known.
 - **163 tracking params are not stripped by the plugin**: `?spss=...&spsnuid=...&spsvid=...&spstoken=...` are share-source trackers. `normalize_url` only drops the fragment, and the extractor's `normalizeUrl` filters only `utm_*`, `fbclid`, `gclid`, `share_token`. Dedup therefore relies on the page supplying a clean `<link rel="canonical">` (the normal case for `c.m.163.com`, verified in stored notes). When a page has no canonical tag, `safeCanonical` falls back to the raw URL, so a `?spss=...` variant yields a different `webclip_id` and a duplicate note. `original_url`/`fetched_url` are also written after `normalize_url`, so they do not retain the full tracked URL.
 - **Profile skill vs source-repo drift**: before proposing or creating a PR for `hermes-webclip-obsidian-plugin`, verify whether the loaded profile skill file and `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md` are actually the same file or symlink. If they are not, patching the loaded profile skill alone will not create a source-repo diff; sync the source repo file explicitly first.
 - **`image_mode` is conditional metadata**: treat `image_mode` as metadata for the remote-Markdown-image workflow only. When no remote Markdown images are present, omit the field entirely. Use `image_mode: remote` only when remote Markdown images were detected and intentionally kept remote; use `image_mode: local` only when those images were localized into the vault.

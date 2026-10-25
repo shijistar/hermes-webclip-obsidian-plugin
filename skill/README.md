@@ -27,9 +27,9 @@ ln -s /path/to/hermes-webclip-obsidian-plugin/skill \
 ```
 
 The skill is designed to be used together with the plugin symlink
-(`~/.hermes/profiles/<profile>/plugins/web-to-obsidian -> <repo>`). Note that the
-directory name (`web-to-obsidian`) differs from the plugin registration key
-(`webclip-obsidian`), which is what `plugins.enabled` in `config.yaml` must list.
+(`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`). The directory
+name matches the plugin registration key (`webclip-obsidian`), which is what
+`plugins.enabled` in `config.yaml` must list.
 
 ## Reference index
 

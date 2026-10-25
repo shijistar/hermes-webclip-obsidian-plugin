@@ -27,6 +27,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - `web_to_obsidian_resume_pending` tool declaration in `plugin.yaml`.
 
+### Changed (install path)
+
+- The profile plugin symlink is now named `webclip-obsidian` instead of
+  `web-to-obsidian`, matching the manifest name. Hermes keys plugins by
+  `plugin.yaml`'s `name`, but the install directory is expected to carry the same
+  name, and a mismatched directory lets a later `hermes plugins install` create a
+  second directory for the same key. `plugins.enabled` is unchanged.
+
 ### Fixed (docs)
 
 - Corrected `skill/SKILL.md` and its references against the current code:
