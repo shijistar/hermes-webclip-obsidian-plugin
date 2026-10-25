@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed (docs)
 
 - Corrected `skill/SKILL.md` and its references against the current code:
+  - The skill now names the plugin by its registered key `webclip-obsidian`;
+    `hermes-webclip-obsidian-plugin` is used only for the source repo path.
   - The installed plugin directory is `plugins/web-to-obsidian`, while the
     registration key is `webclip-obsidian` (from `plugin.yaml`'s `name`). Hermes
     keys plugins by that name, so `plugins.enabled` must list `webclip-obsidian`;
