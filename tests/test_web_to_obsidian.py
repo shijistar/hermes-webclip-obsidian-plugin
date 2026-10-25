@@ -1728,7 +1728,10 @@ class BatchClipServiceTests(unittest.TestCase):
             self.assertEqual(
                 [item.action for item in result.items], ["favorite", "clip"]
             )
-            self.assertEqual(len(self._commit_paths(repo)), 2)
+            self.assertEqual(
+                self._commit_paths(repo),
+                {result.items[0].path, result.items[1].path},
+            )
             self.assertIs(
                 self._meta(self._note(repo, result.items[0].path))["favorite"], True
             )
@@ -1951,6 +1954,23 @@ class BatchClipServiceTests(unittest.TestCase):
             self.assertEqual(result.items[0].action, "unfavorite")
             self.assertNotIn("favorite: true", self._note(repo, result.items[0].path))
             self.assertEqual(self._commit_paths(repo), {result.items[0].path})
+
+    def test_batch_marker_only_with_no_git_marks_the_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            url = "https://example.com/old"
+            self._prepopulate(service, url, "Old")
+            before = self._commit_count(repo)
+
+            result = service.run_batch([f"{url} --favorite-only --no-git"])
+
+            item = result.items[0]
+            self.assertTrue(item.ok, item.error)
+            self.assertEqual(item.action, "favorite")
+            self.assertEqual(result.commit_state, "disabled")
+            self.assertIs(self._meta(self._note(repo, item.path))["favorite"], True)
+            self.assertEqual(self._commit_count(repo), before)
 
     def test_batch_combines_marker_updates_and_new_clips(self):
         with tempfile.TemporaryDirectory() as tmp:
