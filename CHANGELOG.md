@@ -18,9 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Batch clipping produces one commit**: `ClipService.run_batch()` clips
   several URLs under a single vault lock and commits/pushes every written note
   once. Per-URL flags stay independent, one failing URL does not abort the
-  rest, and `--save-images ask` is rejected because a single pending
-  confirmation cannot represent multiple articles. The `/webclip` slash
-  command still accepts exactly one URL per invocation.
+  rest, and `--save-images ask` is rejected for any spec that extracts a page
+  (marker-only specs are exempt) because a single pending confirmation cannot
+  represent multiple articles. The `/webclip` slash command still accepts
+  exactly one URL per invocation.
 
 ### Added
 

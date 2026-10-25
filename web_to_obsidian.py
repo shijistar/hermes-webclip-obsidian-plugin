@@ -2561,10 +2561,14 @@ class ClipService:
         if not specs:
             raise ClipError("Batch mode requires at least one URL.")
         options_list = [parse_clip_args(spec) for spec in specs]
-        if any(options.save_images == "ask" for options in options_list):
+        if any(
+            options.save_images == "ask" and not options.metadata_only
+            for options in options_list
+        ):
             raise ClipError(
                 "Batch mode requires an explicit --save-images yes or no for "
-                "every URL, so no per-article image prompt is silently dropped."
+                "every URL that extracts a page, so no per-article image prompt "
+                "is silently dropped."
             )
         no_git_flags = {options.no_git for options in options_list}
         if len(no_git_flags) > 1:

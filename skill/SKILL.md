@@ -182,9 +182,11 @@ print(result.user_message())
 `run_batch()` contract:
 
 - Every spec is `<url> [flags]`; flags bind to the URL they follow.
-- `--save-images ask` is **rejected**. Decide the image policy once before the
-  batch (localize or keep remote) and pass `yes` or `no` on every spec; a single
-  pending confirmation cannot represent more than one article.
+- `--save-images ask` is **rejected for any spec that extracts a page**.
+  Decide the image policy once before the batch (localize or keep remote) and
+  pass `yes` or `no` on every clipping spec; a single pending confirmation
+  cannot represent more than one article. `--favorite-only` and
+  `--unfavorite-only` specs are exempt because they never fetch the page.
 - `--no-git` must be consistent across the whole batch.
 - One article failing does **not** abort the rest. The result carries one
   `BatchClipItem` per URL with `ok` / `path` / `error`, and the Git state
