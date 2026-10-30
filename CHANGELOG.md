@@ -13,10 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   only the first 57) to a 55-character sentence that names all three intents —
   clip, save, favorite — plus the Chinese trigger words the user actually
   types. Routing no longer depends on text the prompt never receives.
-- **Pitfalls slimmed by 60%**: the section went from 36 bullets / 14.4k
-  characters to 27 bullets / ~4k. Executable rules stay inline; root causes,
+- **Pitfalls slimmed by 66%**: the section went from 36 bullets / 14.4k
+  characters to 28 bullets / 4,896 bytes. Executable rules stay inline; root causes,
   diagnosis paths and site deep-dives moved to `references/` behind a one-line
-  pointer. SKILL.md is now ~15.4k characters instead of 27.4k, cutting roughly
+  pointer. SKILL.md shrank from 25,611 to 15,131 bytes (40.3%), cutting roughly
   4.5k tokens from every load without dropping a rule.
 - **Favorite semantics consolidated**: the marker rules and the intent-to-command
   mapping (favorite / unfavorite, clipped target vs bare URL, target resolution

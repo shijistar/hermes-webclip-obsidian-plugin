@@ -150,8 +150,9 @@ Rules:
   field, or on the last frontmatter line when that field is absent. A marker in
   the wrong position is moved into place.
 - Repeating the current state writes nothing and creates no commit
-  (`commit_state == "unchanged"`); report "already favorited" instead of
-  claiming a new commit. The result's `action` is `favorite` or `unfavorite`.
+  (`commit_state == "unchanged"`); report "already in the requested state" instead of
+  claiming a new commit; keep a distinct "already favorited" only for the
+  `favorite` action so `unfavorite` does not claim it was already favorited. The result's `action` is `favorite` or `unfavorite`.
 - Pending image confirmations store the chosen marker state and apply it on
   `resume_pending()`; the pending state itself expires after one hour.
 - In Obsidian the marker is a boolean property, not a tag: query it with

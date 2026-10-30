@@ -10,7 +10,7 @@ a curl-based parser: it fetches the HTML, reads the body from `js_content`,
 converts it to Markdown and returns the same article shape as the extractor.
 No manual step and no second code path in the skill.
 
-## Author field: two page generations
+## Author field: two-page generations
 
 - Older pages: `var nickname = "..."`.
 - Newer pages: `var nickname = htmlDecode("...")`.
