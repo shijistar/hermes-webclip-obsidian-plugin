@@ -36,4 +36,7 @@ ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
 installed path is a symlink to the repo, editing
 `<profile>/plugins/webclip-obsidian/config.toml` edits the tracked file — there
 is no per-profile copy. Machine-specific values therefore show up in the source
-repo's `git status`; commit them deliberately or keep them out of Git.
+repo's `git status`, and the pre-clip check requires that worktree to be
+clean, so commit them before clipping. If a value must stay local, hide it
+with `git update-index --skip-worktree config.toml`; `git status` then stays
+clean, at the cost of possible conflicts when the tracked file changes.

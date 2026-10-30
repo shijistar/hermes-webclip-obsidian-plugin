@@ -51,6 +51,6 @@ distinct cases:
 | No `active.json` | `ClipError: No pending image confirmation exists.` |
 | `active.json` points at a missing state file | the pointer is cleared automatically and the same "No pending" error is raised; re-run the clip |
 | Entry older than one hour (`PENDING_TTL_SECONDS`) | cleared automatically, rejected with `The pending image confirmation expired; please run /webclip again.` |
-| Valid entry already outstanding | the next clip raises `Another clipped article ('<title>') is already waiting for yes/no confirmation.` — resolve it with `resume_pending('yes'|'no')`, or delete the whole pending root to abandon it |
+| Valid entry already outstanding | the next clip raises `Another clipped article ('<title>') is already waiting for yes/no confirmation.` — resolve it by calling `resume_pending` with `yes` or `no`, or delete the whole pending root to abandon it |
 
 Passing `--save-images yes|no` avoids the two-step flow entirely.
