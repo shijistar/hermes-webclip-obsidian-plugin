@@ -93,6 +93,18 @@ article = {
 }
 ```
 
+## When no fallback can work: SPA pages
+
+Some sites render the article entirely in JavaScript (kimi.com and other modern
+SPAs). The HTML response carries only bundles, so the Node.js extractor,
+`web_extract` and a plain curl all return empty or boilerplate content.
+
+- There is no automated path without a real browser session.
+- Do **not** save the empty shell as a note: an empty body with valid frontmatter
+  looks like a successful clip and silently loses the article.
+- Report the URL as requiring manual browser access, and say which methods were
+  tried.
+
 ## Related References
 
 - `zhihu-cookie-and-scraper-diagnostics.md` — layered diagnostics for Zhihu cookie/fetch/browser

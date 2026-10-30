@@ -273,6 +273,16 @@ When extractor fails for some articles in a batch (QUALITY_GATE, HTTP_STATUS, We
 4. For successful `web_extract` results, save via `_persist_article()` with `article["markdown"]` field (see `anti-bot-fallback-web-extract.md`)
 5. For local-image articles that failed extraction, re-clip with `--refresh --save-images yes` after the fallback save
 
+## Explicit image policy per spec
+
+`run_batch()` rejects `--save-images ask` for **any spec that extracts a page**:
+a single pending confirmation cannot represent several articles. Decide the
+policy once before the batch and pass `yes` or `no` on every clipping spec.
+
+Marker-only specs (`--favorite-only` / `--unfavorite-only`) are exempt because
+they never fetch the page, so a batch of pure marker updates needs no image
+flag at all.
+
 ## Version History
 
 - 2026-09-03-v3: Added per-article image preference pattern. Added anti-bot fallback workflow for batch failures.
