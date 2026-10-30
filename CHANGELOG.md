@@ -4,6 +4,37 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-10-30
+
+### Changed
+
+- **Skill index description fits the 57-character window**: the frontmatter
+  description dropped from 638 characters (of which the system prompt showed
+  only the first 57) to a 55-character sentence that names all three intents —
+  clip, save, favorite — plus the Chinese trigger words the user actually
+  types. Routing no longer depends on text the prompt never receives.
+- **Pitfalls slimmed by 66%**: the section went from 36 bullets / 14.4k
+  characters to 28 bullets / 4,896 bytes. Executable rules stay inline; root causes,
+  diagnosis paths and site deep-dives moved to `references/` behind a one-line
+  pointer. SKILL.md shrank from 25,611 to 15,131 bytes (40.3%), cutting roughly
+  4.5k tokens from every load without dropping a rule.
+- **Favorite semantics consolidated**: the marker rules and the intent-to-command
+  mapping (favorite / unfavorite, clipped target vs bare URL, target resolution
+  order, `bookmarks.json` ban) now live in one section instead of being spread
+  across a section and six pitfall bullets.
+- **Six unreferenced references are now reachable**: git sync testing, GitHub
+  blob/image_mode, profile-vs-source drift, repo-linked maintenance, WSL Chrome
+  CDP and pending resume were dead files; the slimmed Pitfalls link them.
+
+### Added
+
+- `references/wechat-curl-extraction.md` — curl fallback, the two `nickname`
+  page formats, the CAPTCHA wall and the failure judgement.
+- Pending-state table (four states and their exact errors) in
+  `references/pending-resume-fallback.md`; SPA "cannot be extracted" section in
+  `references/anti-bot-fallback-web-extract.md`; explicit per-spec image policy
+  in `references/batch-processing.md`.
+
 ## 2026-10-25
 
 ### Changed

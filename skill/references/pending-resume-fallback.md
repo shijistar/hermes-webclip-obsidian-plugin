@@ -39,3 +39,18 @@ PY
 2. `path` is non-empty.
 3. `github_url` is present when git push succeeds.
 4. The generated markdown frontmatter reflects the user's image choice, e.g. `image_mode: remote` when the user declined image download.
+
+## Pending states and their errors
+
+Pending state is a pointer file (`active.json`) plus one `<pending_id>.json`.
+An **empty directory is normal** and must not be cleaned reflexively. Four
+distinct cases:
+
+| State | Behaviour |
+| --- | --- |
+| No `active.json` | `ClipError: No pending image confirmation exists.` |
+| `active.json` points at a missing state file | the pointer is cleared automatically and the same "No pending" error is raised; re-run the clip |
+| Entry older than one hour (`PENDING_TTL_SECONDS`) | cleared automatically, rejected with `The pending image confirmation expired; please run /webclip again.` |
+| Valid entry already outstanding | the next clip raises `Another clipped article ('<title>') is already waiting for yes/no confirmation.` — resolve it by calling `resume_pending` with `yes` or `no`, or delete the whole pending root to abandon it |
+
+Passing `--save-images yes|no` avoids the two-step flow entirely.

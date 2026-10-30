@@ -12,7 +12,7 @@ save a dated Markdown note, and commit & push it to the Obsidian vault Git.
 
 ## Version
 
-`SKILL.md` frontmatter `version` is the skill version (currently `1.5.2`).
+`SKILL.md` frontmatter `version` is the skill version (currently `1.5.4`).
 The plugin version is tracked separately in `../plugin.yaml` and
 `../CHANGELOG.md`.
 
