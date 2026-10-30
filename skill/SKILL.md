@@ -18,6 +18,7 @@ Clip web articles to the user's Obsidian vault using the `webclip-obsidian` plug
 - User shares a URL with intent to save it to Obsidian
 - Keywords: "clip to obsidian", "save to vault", "web clip", "抓取到obsidian", "抓取<url>", "剪藏" (Chinese phrases are user-input triggers, not documentation prose)
 - User pastes a link from Juejin, WeChat, Zhihu, or any web source wanting to archive it
+- User asks to favorite or unfavorite an article already in the vault
 
 ## Plugin Location & Config
 
