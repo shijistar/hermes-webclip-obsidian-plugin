@@ -109,8 +109,9 @@ Constraints:
   articles;
 - `--no-git` must be identical across the whole batch;
 - a failing URL is reported in `items[]` and does not abort the rest;
-- marker-only specs (`--favorite-only` / `--unfavorite-only`) are exempt from the
-  image flag, since they never fetch the page.
+- marker specs (`--favorite` on a clipped URL, `--unfavorite`, or any
+  `webclip_id` target) are exempt from the image flag, since they never fetch
+  the page.
 
 Use the bash loop below only when you need per-article interactive handling or a
 per-article commit.
@@ -279,9 +280,9 @@ When extractor fails for some articles in a batch (QUALITY_GATE, HTTP_STATUS, We
 a single pending confirmation cannot represent several articles. Decide the
 policy once before the batch and pass `yes` or `no` on every clipping spec.
 
-Marker-only specs (`--favorite-only` / `--unfavorite-only`) are exempt because
-they never fetch the page, so a batch of pure marker updates needs no image
-flag at all.
+Marker specs (`--favorite` on an already-clipped URL, `--unfavorite`, or any
+`webclip_id` target) are exempt because they never fetch the page, so a batch
+of pure marker updates needs no image flag at all.
 
 ## Version History
 

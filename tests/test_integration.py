@@ -588,7 +588,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             ):
                 marked = cast(
                     clip.ClipResult,
-                    service.run("https://example.com/article --favorite-only"),
+                    service.run("https://example.com/article --favorite"),
                 )
 
             self.assertEqual(marked.action, "favorite")
@@ -613,7 +613,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             ):
                 again = cast(
                     clip.ClipResult,
-                    service.run("https://example.com/article --favorite-only"),
+                    service.run("https://example.com/article --favorite"),
                 )
             self.assertEqual(again.commit_state, "unchanged")
             self.assertEqual(
@@ -622,7 +622,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
 
             cleared = cast(
                 clip.ClipResult,
-                service.run("https://example.com/article --unfavorite-only --no-git"),
+                service.run("https://example.com/article --unfavorite --no-git"),
             )
             self.assertEqual(cleared.action, "unfavorite")
             self.assertEqual(cleared.commit_state, "disabled")
@@ -648,7 +648,9 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertNotIn("favorite", self._metadata(note))
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
             ):
                 marked = cast(
                     clip.ClipResult,
@@ -657,15 +659,122 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(marked.commit_state, "committed")
             self.assertIs(self._metadata(note).get("favorite"), True)
 
-    def test_favorite_only_rejects_unknown_url_without_creating_a_note(self):
+    def test_favorite_by_webclip_id_marks_without_extracting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(clip.ClipResult, service.run(f"{digest} --favorite"))
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.matched_by, "webclip_id")
+            self.assertEqual(marked.paths, (first.path,))
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_favorite_by_content_hash_falls_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            metadata = self._metadata(note)
+            self.assertNotEqual(
+                metadata["webclip_id"], metadata["source_content_hash"]
+            )
+            content_hash = str(metadata["source_content_hash"]).removeprefix("sha256:")
+
+            marked = cast(clip.ClipResult, service.run(f"sha256:{content_hash} --favorite"))
+
+            self.assertEqual(marked.matched_by, "source_content_hash")
+            self.assertIn("Matched by source_content_hash", marked.user_message())
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_favorite_by_hash_marks_every_duplicate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            duplicate = vault / "Inbox" / "duplicate-copy.md"
+            duplicate.write_text(note.read_text(encoding="utf-8"), encoding="utf-8")
+            self._git(vault, "add", str(duplicate))
+            self._git(vault, "commit", "-m", "duplicate copy")
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+
+            marked = cast(clip.ClipResult, service.run(f"{digest} --favorite"))
+
+            self.assertEqual(len(marked.paths), 2)
+            for relative in marked.paths:
+                self.assertIs(self._metadata(vault / relative).get("favorite"), True)
+            self.assertIn("2 notes", marked.user_message())
+
+    def test_unknown_hash_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _vault, env = self._setup(tmp)
+            service = self._service(env)
+            with self.assertRaisesRegex(
+                clip.ClipError, "No clipped note matches this webclip_id"
+            ):
+                service.run(f"{'0' * 64} --favorite")
+
+    def test_unfavorite_by_webclip_id_clears_the_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite"),
+                )
+            note = vault / first.path
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+
+            cleared = cast(clip.ClipResult, service.run(f"{digest} --unfavorite"))
+
+            self.assertEqual(cleared.action, "unfavorite")
+            self.assertNotIn("favorite", self._metadata(note))
+
+    def test_unfavorite_rejects_unknown_url_without_creating_a_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)
             service = self._service(env)
             with self.assertRaisesRegex(clip.ClipError, "No clipped note exists"):
-                service.run("https://example.com/never-clipped --favorite-only")
+                service.run("https://example.com/never-clipped --unfavorite")
             self.assertEqual(list((vault / "Inbox").glob("*.md")), [])
 
-    def test_favorite_only_does_not_create_a_missing_destination(self):
+    def test_unfavorite_does_not_create_a_missing_destination(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             remote = root / "remote.git"
@@ -687,10 +796,10 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             }
             service = self._service(env)
             with self.assertRaisesRegex(clip.ClipError, "No clipped note exists"):
-                service.run("https://example.com/article --favorite-only --no-git")
+                service.run("https://example.com/article --unfavorite --no-git")
             self.assertFalse((vault / "Inbox").exists())
 
-    def test_favorite_only_supports_no_git(self):
+    def test_marker_only_supports_no_git(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)
             service = self._service(env)
@@ -712,7 +821,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             ):
                 marked = cast(
                     clip.ClipResult,
-                    service.run("https://example.com/article --favorite-only --no-git"),
+                    service.run("https://example.com/article --favorite --no-git"),
                 )
 
             self.assertEqual(marked.action, "favorite")

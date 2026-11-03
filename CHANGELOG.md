@@ -4,6 +4,38 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-03
+
+### Changed
+
+- **`--favorite` is now idempotent (`ensure-favorited`)**: a new URL is clipped
+  and marked; an existing note is marked in place without fetching; `--refresh`
+  is the only way to re-fetch. `--unfavorite` always clears the marker and never
+  clips. This removes the need to remember which of the two favorite flags
+  applies to a given target.
+- **A `webclip_id` is a first-class target**: the 64-hex digest from a note's
+  frontmatter (with or without the `sha256:` prefix) selects a clipped note.
+  Resolution checks `webclip_id` first and falls back to `source_content_hash`.
+  A `webclip_id` target requires `--favorite`/`--unfavorite` and rejects
+  `--refresh`/`--save-images`.
+- **Duplicate notes are all marked**: a selector matching several notes updates
+  every match in one commit and reports them as "N notes" instead of failing on
+  ambiguity.
+- **Batch mode classifies specs before enforcing the image flag**: marker specs
+  no longer need `--save-images`, while every spec that extracts a page still
+  does.
+
+### Added
+
+- `ClipResult.paths` and `ClipResult.matched_by`, plus multi-note result
+  messages that list every marked path.
+
+### Removed
+
+- **`--favorite-only` and `--unfavorite-only`**: use `--favorite`/`--unfavorite`
+  instead. With an existing note they keep the old marker-only behaviour, and a
+  `webclip_id` target is always marker-only.
+
 ## 2026-10-30
 
 ### Changed

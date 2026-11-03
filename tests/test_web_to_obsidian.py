@@ -34,7 +34,8 @@ class ArgsTests(unittest.TestCase):
         parsed = clip.parse_clip_args(
             '"https://example.com/a?x=1&y=2" --no-browser --no-git'
         )
-        self.assertEqual(parsed.url, "https://example.com/a?x=1&y=2")
+        self.assertEqual(parsed.selector, "https://example.com/a?x=1&y=2")
+        self.assertEqual(parsed.target_kind, "url")
         self.assertTrue(parsed.no_browser)
         self.assertTrue(parsed.no_git)
         self.assertEqual(parsed.save_images, "ask")
@@ -54,6 +55,7 @@ class ArgsTests(unittest.TestCase):
             "file:///etc/passwd",
             "",
             "https://example.com --save-images maybe",
+            "not-a-url-or-hash --favorite",
         )
         for raw in invalid:
             with self.subTest(raw=raw), self.assertRaises(clip.ClipError):
@@ -64,25 +66,38 @@ class ArgsTests(unittest.TestCase):
             clip.parse_clip_args("'https://example.com")
 
     def test_parses_favorite_flags(self):
-        cases = (
-            ("--favorite", True, False),
-            ("--unfavorite", False, False),
-            ("--favorite-only", True, True),
-            ("--unfavorite-only", False, True),
-        )
-        for flag, value, metadata_only in cases:
+        for flag, value in (("--favorite", True), ("--unfavorite", False)):
             with self.subTest(flag=flag):
                 parsed = clip.parse_clip_args(f"https://example.com/article {flag}")
                 self.assertIs(parsed.favorite, value)
-                self.assertIs(parsed.metadata_only, metadata_only)
+                self.assertEqual(parsed.target_kind, "url")
 
-    def test_rejects_conflicting_favorite_flags(self):
+    def test_accepts_webclip_id_selectors(self):
+        digest = "a" * 64
+        for raw in (digest, f"sha256:{digest}", f"SHA256:{digest.upper()}"):
+            with self.subTest(raw=raw):
+                parsed = clip.parse_clip_args(f"{raw} --favorite")
+                self.assertEqual(parsed.target_kind, "webclip_id")
+                self.assertEqual(parsed.target_hash, digest)
+                self.assertEqual(parsed.selector, f"sha256:{digest}")
+
+    def test_webclip_id_rejects_extraction_flags_and_requires_favorite(self):
+        digest = "b" * 64
+        invalid = (
+            digest,
+            f"{digest} --refresh --favorite",
+            f"{digest} --favorite --save-images no",
+            f"{digest} --favorite --save-images ask",
+        )
+        for raw in invalid:
+            with self.subTest(raw=raw), self.assertRaises(clip.ClipError):
+                clip.parse_clip_args(raw)
+
+    def test_rejects_conflicting_favorite_flags_and_removed_only_flags(self):
         invalid = (
             "https://example.com/article --favorite --unfavorite",
-            "https://example.com/article --favorite --favorite-only",
-            "https://example.com/article --favorite-only --refresh",
-            "https://example.com/article --unfavorite-only --save-images no",
-            "https://example.com/article --favorite-only --save-images ask",
+            "https://example.com/article --favorite-only",
+            "https://example.com/article --unfavorite-only",
         )
         for raw in invalid:
             with self.subTest(raw=raw), self.assertRaises(clip.ClipError):
@@ -1679,6 +1694,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 plain: self._payload(plain, "Plain"),
                 unfav: self._payload(unfav, "Unfav"),
             }
+            self._prepopulate(service, unfav, "Unfav", extra="--favorite")
 
             with mock.patch.object(
                 clip,
@@ -1689,12 +1705,12 @@ class BatchClipServiceTests(unittest.TestCase):
                     [
                         f"{fav} --save-images no --favorite",
                         f"{plain} --save-images no",
-                        f"{unfav} --save-images no --unfavorite",
+                        f"{unfav} --unfavorite",
                     ]
                 )
 
             self.assertEqual([item.ok for item in result.items], [True, True, True])
-            self.assertEqual(self._commit_count(repo), 2)
+            self.assertEqual(self._commit_count(repo), 3)
             self.assertEqual(len(self._commit_paths(repo)), 3)
             self.assertIs(
                 self._meta(self._note(repo, result.items[0].path))["favorite"], True
@@ -1721,7 +1737,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
                 result = service.run_batch(
-                    [f"{old} --favorite-only", f"{new} --save-images no"]
+                    [f"{old} --favorite", f"{new} --save-images no"]
                 )
 
             self.assertEqual([item.ok for item in result.items], [True, True])
@@ -1752,7 +1768,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
                 result = service.run_batch(
-                    [f"{old} --favorite-only", f"{new} --save-images no"]
+                    [f"{old} --favorite", f"{new} --save-images no"]
                 )
 
             self.assertEqual([item.ok for item in result.items], [True, True])
@@ -1773,7 +1789,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
                 result = service.run_batch(
-                    [f"{missing} --favorite-only", f"{new} --save-images no"]
+                    [f"{missing} --unfavorite", f"{new} --save-images no"]
                 )
 
             self.assertEqual([item.ok for item in result.items], [False, True])
@@ -1941,14 +1957,14 @@ class BatchClipServiceTests(unittest.TestCase):
                 "Updated body", self._note(repo, refreshed.items[0].path)
             )
 
-    def test_batch_unfavorite_only_removes_an_existing_marker(self):
+    def test_batch_unfavorite_removes_an_existing_marker(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, repo = self._vault(tmp)
             service = self._service(root, repo)
             url = "https://example.com/old"
             self._prepopulate(service, url, "Old", extra="--favorite")
 
-            result = service.run_batch([f"{url} --unfavorite-only"])
+            result = service.run_batch([f"{url} --unfavorite"])
 
             self.assertTrue(result.items[0].ok, result.items[0].error)
             self.assertEqual(result.items[0].action, "unfavorite")
@@ -1963,7 +1979,7 @@ class BatchClipServiceTests(unittest.TestCase):
             self._prepopulate(service, url, "Old")
             before = self._commit_count(repo)
 
-            result = service.run_batch([f"{url} --favorite-only --no-git"])
+            result = service.run_batch([f"{url} --favorite --no-git"])
 
             item = result.items[0]
             self.assertTrue(item.ok, item.error)
@@ -1992,10 +2008,10 @@ class BatchClipServiceTests(unittest.TestCase):
             ):
                 result = service.run_batch(
                     [
-                        f"{keep} --favorite-only",
-                        f"{drop} --unfavorite-only",
+                        f"{keep} --favorite",
+                        f"{drop} --unfavorite",
                         f"{fresh} --save-images no",
-                        f"{gone} --favorite-only",
+                        f"{gone} --unfavorite",
                     ]
                 )
 
