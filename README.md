@@ -92,7 +92,8 @@ an absent field means the note is not favorited.
 
 `--favorite` is idempotent: it clips a URL that is not in the vault yet, marks
 an existing note without fetching it, and only re-fetches when you ask with
-`--refresh`. `--unfavorite` always clears the marker and never creates content.
+`--refresh`. `--unfavorite` clears the marker and, without `--refresh`, never
+fetches.
 
 | Target | Command | Fetches page | Changes body | Result |
 | --- | --- | --- | --- | --- |

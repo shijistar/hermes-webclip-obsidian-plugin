@@ -109,7 +109,9 @@ untrusted extractor process.
 - `--no-git` disables Git preflight, commit, and push for that invocation.
 - `--favorite` ensures the note is favorited: a new URL is clipped, an existing
   note is marked in place, and `--refresh` is the only way to re-fetch.
-- `--unfavorite` clears the marker and never clips.
+- `--unfavorite` clears the marker; without `--refresh` it never fetches
+  (`--refresh --unfavorite` updates the content and clears the marker in one
+  run).
 - A `webclip_id` target requires `--favorite` or `--unfavorite` and cannot be
   combined with `--refresh` or `--save-images`.
 - `--save-images yes` downloads remote Markdown/HTML image references into

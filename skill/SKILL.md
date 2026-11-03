@@ -116,7 +116,8 @@ plugin, and the two stores drift apart the moment only one is updated.
 
 `--favorite` is idempotent: a URL that is not clipped yet is clipped and marked;
 an existing note is marked in place without fetching; `--refresh` is the only
-way to re-fetch. `--unfavorite` clears the marker and never clips.
+way to re-fetch. `--unfavorite` clears the marker and, without `--refresh`,
+never fetches.
 
 | User intent | Target | Command |
 | --- | --- | --- |

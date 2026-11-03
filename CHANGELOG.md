@@ -10,9 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - **`--favorite` is now idempotent (`ensure-favorited`)**: a new URL is clipped
   and marked; an existing note is marked in place without fetching; `--refresh`
-  is the only way to re-fetch. `--unfavorite` always clears the marker and never
-  clips. This removes the need to remember which of the two favorite flags
-  applies to a given target.
+  is the only way to re-fetch. `--unfavorite` clears the marker and, without
+  `--refresh`, never fetches. This removes the need to remember which of the two
+  favorite flags applies to a given target.
 - **A `webclip_id` is a first-class target**: the 64-hex digest from a note's
   frontmatter (with or without the `sha256:` prefix) selects a clipped note.
   Resolution checks `webclip_id` first and falls back to `source_content_hash`.
