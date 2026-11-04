@@ -278,6 +278,13 @@ class PendingClipResult:
         )
 
 
+def _batch_label(selector: str) -> str:
+    """Shorten a sha256 selector for batch summaries; URLs pass through."""
+    if selector.startswith("sha256:") and len(selector) > 27:
+        return f"{selector[:19]}…"
+    return selector
+
+
 @dataclass(frozen=True)
 class BatchClipItem:
     url: str
@@ -312,7 +319,9 @@ class BatchClipResult:
                 "saved notes remain on disk."
             )
         lines.extend(f"- saved: {item.path}" for item in saved)
-        lines.extend(f"- failed: {item.url} ({item.error})" for item in failed)
+        lines.extend(
+            f"- failed: {_batch_label(item.url)} ({item.error})" for item in failed
+        )
         lines.extend(f"GitHub: {url}" for url in self.github_urls)
         return "\n".join(lines)
 
@@ -2783,10 +2792,20 @@ class ClipService:
             elif not collected:
                 outcome = GitOutcome("unchanged", "not_needed")
             else:
+                # A marker-only batch commits under its own action, and the
+                # count reflects the notes actually changed, not every match.
+                actions = {item.action for item in items if item.ok}
+                if actions == {"favorite"}:
+                    batch_message = f"favorite: batch ({len(collected)} notes)"
+                elif actions == {"unfavorite"}:
+                    batch_message = f"unfavorite: batch ({len(collected)} notes)"
+                elif actions <= {"favorite", "unfavorite"}:
+                    batch_message = f"marker: batch ({len(collected)} notes)"
+                else:
+                    batch_message = f"clip: batch ({len(saved)} notes)"
                 outcome = git_sync.finalize(
                     collected,
-                    commit_message=commit_message
-                    or f"clip: batch ({len(saved)} notes)",
+                    commit_message=commit_message or batch_message,
                 )
 
             github_urls: list[str] = []

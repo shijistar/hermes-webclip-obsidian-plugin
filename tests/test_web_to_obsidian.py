@@ -1971,6 +1971,38 @@ class BatchClipServiceTests(unittest.TestCase):
             self.assertNotIn("favorite: true", self._note(repo, result.items[0].path))
             self.assertEqual(self._commit_paths(repo), {result.items[0].path})
 
+    def test_batch_commit_message_reflects_marker_actions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            url = "https://example.com/old"
+            self._prepopulate(service, url, "Old")
+
+            service.run_batch([f"{url} --favorite"])
+            subject = (
+                self._git(repo, "log", "-1", "--pretty=%s").stdout.decode().strip()
+            )
+            self.assertEqual(subject, "favorite: batch (1 notes)")
+
+            service.run_batch([f"{url} --unfavorite"])
+            subject = (
+                self._git(repo, "log", "-1", "--pretty=%s").stdout.decode().strip()
+            )
+            self.assertEqual(subject, "unfavorite: batch (1 notes)")
+
+    def test_batch_message_shortens_hash_selectors(self):
+        item = clip.BatchClipItem(
+            "sha256:" + "a" * 64,
+            False,
+            error="No clipped note matches this webclip_id or source_content_hash.",
+        )
+        result = clip.BatchClipResult((item,), "unchanged", "not_needed")
+
+        message = result.user_message()
+
+        self.assertIn("sha256:aaaaaaaaaaaa…", message)
+        self.assertNotIn("a" * 64, message)
+
     def test_batch_marker_only_with_no_git_marks_the_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             root, repo = self._vault(tmp)

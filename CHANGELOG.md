@@ -54,6 +54,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   any of them: a malformed duplicate among hash-matched notes now fails with
   zero writes instead of leaving earlier notes modified but uncommitted in a
   dirty worktree.
+- A marker-only batch now commits as `favorite: batch (N notes)` or
+  `unfavorite: batch (N notes)` instead of `clip: batch`, with the count
+  reflecting the notes actually changed, and failed sha256 selectors are
+  shortened in the batch summary.
 
 ## 2026-10-30
 

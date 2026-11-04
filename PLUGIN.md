@@ -149,7 +149,8 @@ Behavior rules:
 - **Marker operations never fetch the page.** The note is located by its
   normalized source URL, or by `webclip_id` with a `source_content_hash`
   fallback; only the `favorite` frontmatter line is added or removed, and the
-  managed body plus the manual section stay byte-for-byte unchanged. A missing
+  managed body plus the manual section stay byte-for-byte unchanged (a marker
+  rewrite normalizes line endings to LF). A missing
   selector fails closed. Marker operations accept `--no-git`: the marker is
   written locally without Git preflight, commit, or push.
 - **Duplicate notes are all marked.** When a selector matches several notes

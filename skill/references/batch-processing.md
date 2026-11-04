@@ -113,6 +113,13 @@ Constraints:
   `webclip_id` target) are exempt from the image flag, since they never fetch
   the page.
 
+Classification is a snapshot taken before any spec runs: a URL that an earlier
+spec in the same batch clips does not exist yet when a later `--favorite` spec
+for it is classified, so that spec is treated as a clip and must state
+`--save-images`. Combine both intents into one spec
+(`<url> --favorite --save-images no`) instead of listing separate clip and
+favorite specs for the same URL.
+
 Use the bash loop below only when you need per-article interactive handling or a
 per-article commit.
 

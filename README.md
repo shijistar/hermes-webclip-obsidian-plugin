@@ -110,7 +110,8 @@ fetches.
   (`source_content_hash`) is accepted as a fallback when no `webclip_id`
   matches.
 - Marker operations patch exactly one frontmatter line and leave the article
-  body and manual section byte-for-byte unchanged. A `webclip_id` target
+  body and manual section byte-for-byte unchanged (a marker rewrite normalizes
+  line endings to LF). A `webclip_id` target
   cannot be combined with `--refresh` or `--save-images`.
 - Every note matching the selector is marked; duplicate clips of the same
   article are reported as "N notes" in the result.
