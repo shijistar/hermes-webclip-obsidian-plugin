@@ -856,6 +856,65 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(cleared.action, "unfavorite")
             self.assertNotIn("favorite", self._metadata(note))
 
+    def test_clip_does_not_hijack_a_note_that_only_fetched_the_url(self):
+        entry = "https://example.com/entry"
+        canonical = "https://example.com/canonical"
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            original_payload = {
+                **ARTICLE_NO_IMAGES,
+                "url": entry,
+                "canonicalUrl": canonical,
+            }
+            with mock.patch.object(
+                clip, "run_extractor", return_value=original_payload
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run(f"{entry} --save-images no"),
+                )
+            original = vault / first.path
+            self.assertIn("fetched_url", self._metadata(original))
+
+            # A different article whose canonical URL is the old entry URL:
+            # the note that only fetched that URL must not be rewritten.
+            other_payload = {
+                **ARTICLE_NO_IMAGES,
+                "title": "Another Article",
+                "url": entry,
+                "canonicalUrl": entry,
+                "markdown": "# Another Article\n\nDifferent content.\n",
+            }
+            with mock.patch.object(
+                clip, "run_extractor", return_value=other_payload
+            ):
+                second = cast(
+                    clip.ClipResult,
+                    service.run(f"{entry} --save-images no"),
+                )
+
+            self.assertNotEqual(second.path, first.path)
+            self.assertEqual(
+                self._metadata(original)["url"], clip.normalize_url(canonical)
+            )
+            self.assertEqual(
+                self._metadata(vault / second.path)["url"], clip.normalize_url(entry)
+            )
+
+            # Re-clipping the original article via its entry URL still
+            # converges on the original note.
+            with mock.patch.object(
+                clip, "run_extractor", return_value=original_payload
+            ):
+                third = cast(
+                    clip.ClipResult,
+                    service.run(f"{entry} --save-images no"),
+                )
+            self.assertEqual(third.path, first.path)
+            self.assertEqual(third.commit_state, "unchanged")
+
     def test_marker_runs_rebase_a_stale_vault_before_scanning(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)

@@ -1485,6 +1485,19 @@ def _scan_hash_matches(destination: Path, digest: str) -> tuple[list[Path], str 
     return [], None
 
 
+def _write_target_ok(note: Path, webclip_id: str) -> bool:
+    """A scan match is a write target only when its webclip_id agrees.
+
+    A note can record a URL under ``fetched_url`` while belonging to a
+    different canonical source. Marker lookups may match any recorded URL
+    form, but rewriting such a note from a new clip would hijack another
+    article's note, so choose_target skips it. Legacy notes without a
+    webclip_id keep the pre-existing behavior.
+    """
+    note_id, _ = _note_hashes(note)
+    return note_id is None or note_id == webclip_id
+
+
 def choose_target(
     destination: Path,
     title: str,
@@ -1496,7 +1509,13 @@ def choose_target(
     destination = destination.resolve()
     if not destination.is_dir():
         raise ClipError("The configured clip destination is unavailable.")
-    matches = _scan_source_matches(destination, source)
+    digest = _url_hash(source)
+    webclip_id = f"sha256:{digest}"
+    matches = [
+        note
+        for note in _scan_source_matches(destination, source)
+        if _write_target_ok(note, webclip_id)
+    ]
     if len(matches) > 1:
         raise ClipError("The clip destination contains multiple notes for this source.")
     if matches:
@@ -1514,16 +1533,19 @@ def choose_target(
     normalized_source = normalize_url(source)
     dated_title = f"{capture_date}-{title}"
     base = _checked_candidate(destination, safe_filename(dated_title, source))
-    if not base.exists() or normalized_source in _sources_from_note(base):
+    if not base.exists() or (
+        normalized_source in _sources_from_note(base)
+        and _write_target_ok(base, webclip_id)
+    ):
         return base
 
-    digest = _url_hash(source)
     for length in range(8, len(digest) + 1, 4):
         candidate = _checked_candidate(
             destination, _filename_with_suffix(dated_title, source, digest[:length])
         )
-        if not candidate.exists() or normalized_source in _sources_from_note(
-            candidate
+        if not candidate.exists() or (
+            normalized_source in _sources_from_note(candidate)
+            and _write_target_ok(candidate, webclip_id)
         ):
             return candidate
     raise ClipError("Unable to choose a unique filename for the clip.")
@@ -2740,6 +2762,10 @@ class ClipService:
             collected: list[Path] = []
             items: list[BatchClipItem] = []
             saved: list[str] = []
+            # Only actions that changed a note may name the commit: a no-op
+            # re-favorite must not turn an unfavorite batch into "marker".
+            changed_actions: set[str] = set()
+            has_clip = False
 
             for options, kind in plans:
                 try:
@@ -2760,6 +2786,8 @@ class ClipService:
                             defer_git=True,
                             collected=collected,
                         )
+                        if result.commit_state != "unchanged":
+                            changed_actions.add(result.action)
                         for relative in result.paths:
                             items.append(
                                 BatchClipItem(
@@ -2780,6 +2808,7 @@ class ClipService:
                         raise ClipError(
                             "remote images require an explicit --save-images decision"
                         )
+                    has_clip = True
                     items.append(
                         BatchClipItem(options.selector, True, result.path, result.action)
                     )
@@ -2794,12 +2823,13 @@ class ClipService:
             else:
                 # A marker-only batch commits under its own action, and the
                 # count reflects the notes actually changed, not every match.
-                actions = {item.action for item in items if item.ok}
-                if actions == {"favorite"}:
+                if has_clip:
+                    batch_message = f"clip: batch ({len(saved)} notes)"
+                elif changed_actions == {"favorite"}:
                     batch_message = f"favorite: batch ({len(collected)} notes)"
-                elif actions == {"unfavorite"}:
+                elif changed_actions == {"unfavorite"}:
                     batch_message = f"unfavorite: batch ({len(collected)} notes)"
-                elif actions <= {"favorite", "unfavorite"}:
+                elif changed_actions:
                     batch_message = f"marker: batch ({len(collected)} notes)"
                 else:
                     batch_message = f"clip: batch ({len(saved)} notes)"

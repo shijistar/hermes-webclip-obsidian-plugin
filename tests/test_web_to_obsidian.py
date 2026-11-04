@@ -1990,6 +1990,23 @@ class BatchClipServiceTests(unittest.TestCase):
             )
             self.assertEqual(subject, "unfavorite: batch (1 notes)")
 
+    def test_batch_commit_message_uses_only_changed_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            keep = "https://example.com/keep"
+            drop = "https://example.com/drop"
+            self._prepopulate(service, keep, "Keep", extra="--favorite")
+            self._prepopulate(service, drop, "Drop", extra="--favorite")
+
+            result = service.run_batch([f"{keep} --favorite", f"{drop} --unfavorite"])
+
+            self.assertTrue(all(item.ok for item in result.items))
+            subject = (
+                self._git(repo, "log", "-1", "--pretty=%s").stdout.decode().strip()
+            )
+            self.assertEqual(subject, "unfavorite: batch (1 notes)")
+
     def test_batch_message_shortens_hash_selectors(self):
         item = clip.BatchClipItem(
             "sha256:" + "a" * 64,

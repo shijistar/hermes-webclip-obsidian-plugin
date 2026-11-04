@@ -44,7 +44,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   and re-clipping it no longer writes a duplicate note.
 - Marker lookup now also matches the `fetched_url` a note recorded, so
   `--favorite`/`--unfavorite` accept the original entry URL of a page whose
-  canonical URL differs.
+  canonical URL differs. The write path is guarded separately: a clip whose
+  canonical URL equals another note's `fetched_url` creates a new note
+  instead of rewriting (and failing on) the note that only fetched that URL.
 - Git preflight (fetch + rebase) now runs before marker lookups and batch
   classification, so a vault behind its remote no longer misreads a note as
   missing: `--favorite`/`--unfavorite` and marker-only batch specs resolve
@@ -56,8 +58,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   dirty worktree.
 - A marker-only batch now commits as `favorite: batch (N notes)` or
   `unfavorite: batch (N notes)` instead of `clip: batch`, with the count
-  reflecting the notes actually changed, and failed sha256 selectors are
-  shortened in the batch summary.
+  reflecting the notes actually changed; no-op marker specs do not influence
+  the subject, and failed sha256 selectors are shortened in the batch
+  summary.
 
 ## 2026-10-30
 
