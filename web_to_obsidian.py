@@ -1352,27 +1352,43 @@ def _frontmatter_from_text(text: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _source_from_note(path: Path) -> str | None:
+def _note_prefix(path: Path, limit: int = 64 * 1024) -> str | None:
+    """Read a bounded note prefix for frontmatter lookups.
+
+    The writer puts the frontmatter at the top, so a prefix identifies the
+    note even when the article body pushes the file past *limit*. Decoding
+    ignores a multibyte character split at the read boundary.
+    """
     try:
         with path.open("rb") as handle:
-            raw = handle.read(64 * 1024 + 1)
-        if len(raw) > 64 * 1024:
-            return None
-        text = raw.decode("utf-8")
-    except (OSError, UnicodeError):
+            raw = handle.read(limit)
+        return raw.decode("utf-8", errors="ignore")
+    except OSError:
         return None
+
+
+def _sources_from_note(path: Path) -> set[str]:
+    """Return every normalized source URL the note records for itself.
+
+    ``fetched_url`` is included so a note clipped through an entry URL whose
+    canonical URL differs can still be found by the URL the user requested.
+    """
+    text = _note_prefix(path)
+    if text is None:
+        return set()
     metadata = _frontmatter_from_text(text)
-    source = None
-    if metadata is not None:
-        for field in ("url", "original_url", "source"):
-            candidate = metadata.get(field)
-            if isinstance(candidate, str) and candidate:
-                source = candidate
-                break
-    try:
-        return normalize_url(source) if isinstance(source, str) else None
-    except ClipError:
-        return None
+    sources: set[str] = set()
+    if metadata is None:
+        return sources
+    for field in ("url", "original_url", "source", "fetched_url"):
+        candidate = metadata.get(field)
+        if not isinstance(candidate, str) or not candidate:
+            continue
+        try:
+            sources.add(normalize_url(candidate))
+        except ClipError:
+            continue
+    return sources
 
 
 def _checked_candidate(destination: Path, filename: str) -> Path:
@@ -1409,19 +1425,14 @@ def _scan_source_matches(destination: Path, source: str) -> list[Path]:
     return [
         note
         for note in _destination_notes(destination)
-        if _source_from_note(note) == normalized_source
+        if normalized_source in _sources_from_note(note)
     ]
 
 
 def _note_hashes(path: Path) -> tuple[str | None, str | None]:
     """Return ``(webclip_id, source_content_hash)`` from a note's frontmatter."""
-    try:
-        with path.open("rb") as handle:
-            raw = handle.read(64 * 1024 + 1)
-        if len(raw) > 64 * 1024:
-            return None, None
-        text = raw.decode("utf-8")
-    except (OSError, UnicodeError):
+    text = _note_prefix(path)
+    if text is None:
         return None, None
     metadata = _frontmatter_from_text(text)
     if not metadata:
@@ -1494,7 +1505,7 @@ def choose_target(
     normalized_source = normalize_url(source)
     dated_title = f"{capture_date}-{title}"
     base = _checked_candidate(destination, safe_filename(dated_title, source))
-    if not base.exists() or _source_from_note(base) == normalized_source:
+    if not base.exists() or normalized_source in _sources_from_note(base):
         return base
 
     digest = _url_hash(source)
@@ -1502,7 +1513,9 @@ def choose_target(
         candidate = _checked_candidate(
             destination, _filename_with_suffix(dated_title, source, digest[:length])
         )
-        if not candidate.exists() or _source_from_note(candidate) == normalized_source:
+        if not candidate.exists() or normalized_source in _sources_from_note(
+            candidate
+        ):
             return candidate
     raise ClipError("Unable to choose a unique filename for the clip.")
 

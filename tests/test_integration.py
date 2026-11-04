@@ -766,6 +766,96 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(cleared.action, "unfavorite")
             self.assertNotIn("favorite", self._metadata(note))
 
+    def test_marker_lookup_finds_oversized_notes(self):
+        oversized = {
+            **ARTICLE_NO_IMAGES,
+            "markdown": "# An Article\n\n" + ("Long paragraph. " * 5200),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=oversized
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            self.assertGreater(note.stat().st_size, 64 * 1024)
+
+            # URL and webclip_id lookups must resolve a note whose body pushed
+            # the file past the bounded read; neither path may extract.
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite"),
+                )
+                digest = str(self._metadata(note)["webclip_id"]).removeprefix(
+                    "sha256:"
+                )
+                by_hash = cast(clip.ClipResult, service.run(f"{digest} --favorite"))
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(by_hash.matched_by, "webclip_id")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+            # A plain re-clip converges on the same oversized note instead of
+            # writing a duplicate.
+            with mock.patch.object(clip, "run_extractor", return_value=oversized):
+                reclipped = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            self.assertEqual(reclipped.commit_state, "unchanged")
+            self.assertEqual(list((vault / "Inbox").glob("*.md")), [note])
+
+    def test_marker_lookup_matches_the_fetched_url(self):
+        redirected = {
+            **ARTICLE_NO_IMAGES,
+            "url": "https://example.com/entry",
+            "canonicalUrl": "https://example.com/canonical",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=redirected
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/entry --save-images no"),
+                )
+            note = vault / first.path
+            self.assertIn("fetched_url", self._metadata(note))
+
+            # Both the entry URL the user requested and the canonical URL the
+            # note records must reach the marker path without extraction.
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/entry --favorite"),
+                )
+                self.assertEqual(marked.action, "favorite")
+                self.assertIs(self._metadata(note).get("favorite"), True)
+                cleared = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/canonical --unfavorite"),
+                )
+
+            self.assertEqual(cleared.action, "unfavorite")
+            self.assertNotIn("favorite", self._metadata(note))
+
     def test_unfavorite_rejects_unknown_url_without_creating_a_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)

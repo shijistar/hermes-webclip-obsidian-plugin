@@ -73,7 +73,9 @@ before writing.
 
 ## Usage
 
-`/webclip <url> [flags]` accepts exactly one public `http://` or `https://` URL.
+`/webclip <url|webclip_id> [flags]` accepts exactly one public `http://` or
+`https://` URL, or one `webclip_id` (64 hex characters, `sha256:` prefix
+optional). A `webclip_id` target requires `--favorite` or `--unfavorite`.
 
 ### Command and flags
 

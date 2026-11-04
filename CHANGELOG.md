@@ -36,6 +36,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   instead. With an existing note they keep the old marker-only behaviour, and a
   `webclip_id` target is always marker-only.
 
+### Fixed
+
+- Notes larger than 64 KiB are no longer invisible to URL, `webclip_id`, and
+  re-clip lookups: frontmatter is read from a bounded prefix instead of
+  rejecting the whole file, so a long article can be marked by any selector
+  and re-clipping it no longer writes a duplicate note.
+- Marker lookup now also matches the `fetched_url` a note recorded, so
+  `--favorite`/`--unfavorite` accept the original entry URL of a page whose
+  canonical URL differs.
+
 ## 2026-10-30
 
 ### Changed
