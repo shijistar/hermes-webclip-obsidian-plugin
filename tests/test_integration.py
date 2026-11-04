@@ -856,6 +856,69 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(cleared.action, "unfavorite")
             self.assertNotIn("favorite", self._metadata(note))
 
+    def test_marker_runs_rebase_a_stale_vault_before_scanning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+            url = "https://example.com/article"
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run(f"{url} --save-images no"),
+                )
+            note = vault / first.path
+
+            # Simulate this clone being behind another machine's push.
+            self._git(vault, "reset", "--hard", "HEAD~1")
+            self.assertFalse(note.exists())
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(clip.ClipResult, service.run(f"{url} --favorite"))
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.commit_state, "committed")
+            self.assertTrue(note.exists())
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_batch_classification_sees_a_rebased_vault(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+            url = "https://example.com/article"
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run(f"{url} --favorite --save-images no"),
+                )
+            note = vault / first.path
+
+            # Behind the remote: the batch classification must rebase first and
+            # treat the spec as a marker, not demand --save-images for a clip.
+            self._git(vault, "reset", "--hard", "HEAD~1")
+            self.assertFalse(note.exists())
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                result = service.run_batch([f"{url} --favorite"])
+
+            item = result.items[0]
+            self.assertTrue(item.ok, item.error)
+            self.assertEqual(item.action, "favorite")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
     def test_unfavorite_rejects_unknown_url_without_creating_a_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)

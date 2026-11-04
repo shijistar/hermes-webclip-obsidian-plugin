@@ -2632,20 +2632,31 @@ class ClipService:
         options = parse_clip_args(raw_args)
         config = self._load_config()
         with VaultLock(config.lock_file):
+            # Preflight (fetch + rebase) before any scan: marker lookups and
+            # clip targeting must see the same vault state Git commits against.
+            git_sync = (
+                None
+                if options.no_git
+                else GitSync.preflight(config.vault, config.sync_branch)
+            )
             if options.target_kind == "webclip_id":
-                return self._mark_by_hash(options, config)
+                return self._mark_by_hash(options, config, git_sync)
             if options.favorite is False and not options.refresh:
                 # Clearing a marker never creates or refreshes content.
                 targets = self._marker_targets(config, options.selector)
                 if not targets:
                     raise ClipError("No clipped note exists for this URL.")
-                return self._mark_targets(options, config, targets)
+                return self._mark_targets(
+                    options, config, targets, git_sync=git_sync
+                )
             if options.favorite is True and not options.refresh:
                 # ensure-favorited: an existing note is marked without the network.
                 targets = self._marker_targets(config, options.selector)
                 if targets:
-                    return self._mark_targets(options, config, targets)
-            return self._run_locked(options, config)
+                    return self._mark_targets(
+                        options, config, targets, git_sync=git_sync
+                    )
+            return self._run_locked(options, config, git_sync=git_sync)
 
     def resume_pending(self, decision: str) -> ClipResult:
         normalized = decision.strip().lower()
@@ -2678,6 +2689,13 @@ class ClipService:
 
         config = self._load_config()
         with VaultLock(config.lock_file):
+            # Preflight (fetch + rebase) before classifying: marker detection
+            # reads the vault, so it must see the state Git will commit against.
+            git_sync = (
+                None
+                if no_git
+                else GitSync.preflight(config.vault, config.sync_branch)
+            )
             # Classify each spec before enforcing the image decision: a spec that
             # only marks an existing note must not require --save-images.
             plans: list[tuple[ClipOptions, str]] = []
@@ -2705,11 +2723,6 @@ class ClipService:
                     "is silently dropped."
                 )
 
-            git_sync = (
-                None
-                if no_git
-                else GitSync.preflight(config.vault, config.sync_branch)
-            )
             collected: list[Path] = []
             items: list[BatchClipItem] = []
             saved: list[str] = []
@@ -2905,10 +2918,17 @@ class ClipService:
             )
         return matches, matched_by
 
-    def _mark_by_hash(self, options: ClipOptions, config: ClipConfig) -> ClipResult:
+    def _mark_by_hash(
+        self,
+        options: ClipOptions,
+        config: ClipConfig,
+        git_sync: GitSync | None,
+    ) -> ClipResult:
         """Mark every note matching a webclip_id, falling back to its content hash."""
         matches, matched_by = self._hash_targets(options, config)
-        return self._mark_targets(options, config, matches, matched_by=matched_by)
+        return self._mark_targets(
+            options, config, matches, git_sync=git_sync, matched_by=matched_by
+        )
 
     def _mark_targets(
         self,
@@ -2916,16 +2936,14 @@ class ClipService:
         config: ClipConfig,
         targets: Sequence[Path],
         *,
+        git_sync: GitSync | None,
         matched_by: str | None = None,
-        git_sync: GitSync | None = None,
         defer_git: bool = False,
         collected: list[Path] | None = None,
     ) -> ClipResult:
         """Apply the favorite marker to every target, committing all changes once."""
         if options.favorite is None:
             raise ClipError("A favorite option is required.")
-        if git_sync is None and not options.no_git and not defer_git:
-            git_sync = GitSync.preflight(config.vault, config.sync_branch)
         action = "favorite" if options.favorite else "unfavorite"
         changed = [
             target

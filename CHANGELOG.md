@@ -45,6 +45,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Marker lookup now also matches the `fetched_url` a note recorded, so
   `--favorite`/`--unfavorite` accept the original entry URL of a page whose
   canonical URL differs.
+- Git preflight (fetch + rebase) now runs before marker lookups and batch
+  classification, so a vault behind its remote no longer misreads a note as
+  missing: `--favorite`/`--unfavorite` and marker-only batch specs resolve
+  against the rebased state instead of failing or demanding `--save-images`
+  for a clip that would not happen.
 
 ## 2026-10-30
 
