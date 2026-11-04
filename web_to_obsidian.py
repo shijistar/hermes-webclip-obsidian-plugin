@@ -1751,16 +1751,21 @@ def _set_favorite_marker(text: str, favorite: bool) -> tuple[str, bool]:
     return "---\n" + "\n".join(lines) + normalized[end:], True
 
 
-def set_frontmatter_flag(target: Path, *, favorite: bool) -> str:
-    """Set or clear the favorite marker without touching the article body."""
+def _read_note_for_marker(target: Path) -> str:
+    """Read a note for a marker update, refusing symlinks and missing files."""
     if target.is_symlink():
         raise ClipError("Refusing to modify a symbolic-link note.")
     if not target.exists():
         raise ClipError("The clipped note does not exist.")
     try:
-        existing = target.read_text(encoding="utf-8")
+        return target.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         raise ClipError("Could not read the existing clipped note.") from exc
+
+
+def set_frontmatter_flag(target: Path, *, favorite: bool) -> str:
+    """Set or clear the favorite marker without touching the article body."""
+    existing = _read_note_for_marker(target)
     updated, changed = _set_favorite_marker(existing, favorite)
     if not changed:
         return "unchanged"
@@ -2851,6 +2856,8 @@ class ClipService:
         action: str = "clip",
         matched_by: str | None = None,
     ) -> ClipResult:
+        if not targets:
+            raise ClipError("No target notes were supplied.")
         relative_paths = tuple(
             target.resolve().relative_to(config.vault).as_posix() for target in targets
         )
@@ -2945,11 +2952,18 @@ class ClipService:
         if options.favorite is None:
             raise ClipError("A favorite option is required.")
         action = "favorite" if options.favorite else "unfavorite"
-        changed = [
-            target
-            for target in targets
-            if set_frontmatter_flag(target, favorite=options.favorite) != "unchanged"
-        ]
+        # Validate every target and compute its update before writing anything,
+        # so one malformed duplicate cannot leave a half-marked vault behind.
+        updates: list[tuple[Path, str]] = []
+        for target in targets:
+            updated, changed = _set_favorite_marker(
+                _read_note_for_marker(target), options.favorite
+            )
+            if changed:
+                updates.append((target, updated))
+        for target, updated in updates:
+            atomic_write(target, updated)
+        changed = [target for target, _ in updates]
         if not changed:
             return self._result_for_targets(
                 config,

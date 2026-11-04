@@ -919,6 +919,44 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(item.action, "favorite")
             self.assertIs(self._metadata(note).get("favorite"), True)
 
+    def test_partial_marker_failure_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            # A second note with the same webclip_id but broken boundaries: the
+            # scan matches it, the marker update must refuse it.
+            duplicate = vault / "Inbox" / "duplicate-copy.md"
+            duplicate.write_text(
+                note.read_text(encoding="utf-8").replace(
+                    "<!-- webclip:manual:start -->", "<!-- broken -->"
+                ),
+                encoding="utf-8",
+            )
+            self._git(vault, "add", str(duplicate))
+            self._git(vault, "commit", "-m", "duplicate copy")
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+            before = note.read_bytes()
+
+            with self.assertRaisesRegex(
+                clip.ClipError, "not a valid webclip note"
+            ):
+                service.run(f"{digest} --favorite")
+
+            # The healthy note must be byte-for-byte untouched and the worktree
+            # clean: no partial marker may survive a failed multi-target run.
+            self.assertEqual(note.read_bytes(), before)
+            status = self._git(vault, "status", "--porcelain")
+            self.assertEqual(status.stdout.decode().strip(), "")
+
     def test_unfavorite_rejects_unknown_url_without_creating_a_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)

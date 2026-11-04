@@ -50,6 +50,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   missing: `--favorite`/`--unfavorite` and marker-only batch specs resolve
   against the rebased state instead of failing or demanding `--save-images`
   for a clip that would not happen.
+- `_mark_targets` validates and computes every marker update before writing
+  any of them: a malformed duplicate among hash-matched notes now fails with
+  zero writes instead of leaving earlier notes modified but uncommitted in a
+  dirty worktree.
 
 ## 2026-10-30
 
