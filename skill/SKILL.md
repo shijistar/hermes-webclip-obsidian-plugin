@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.5.4
+version: 1.6.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -105,7 +105,7 @@ print(build_handler(Path('.'))('<URL>'))
 ```
 
 Flags: `--no-browser`, `--no-git`, `--refresh`, `--save-images yes|no|ask`,
-`--favorite`, `--unfavorite`, `--favorite-only`, `--unfavorite-only`
+`--favorite`, `--unfavorite`
 
 ## Favorite Marker
 
@@ -114,32 +114,44 @@ plugin-managed, independent of the article body, and never stored by editing
 `.obsidian/bookmarks.json` — that file belongs to Obsidian's own Bookmarks
 plugin, and the two stores drift apart the moment only one is updated.
 
-| User intent | Target already clipped | Only a URL, not clipped |
+`--favorite` is idempotent: a URL that is not clipped yet is clipped and marked;
+an existing note is marked in place without fetching; `--refresh` is the only
+way to re-fetch. `--unfavorite` clears the marker and, without `--refresh`,
+never fetches.
+
+| User intent | Target | Command |
 | --- | --- | --- |
-| favorite | `--favorite-only` | `--favorite` |
-| unfavorite | `--unfavorite-only` | `--unfavorite` |
+| favorite | URL, new or already clipped | `--favorite` |
+| favorite | `webclip_id` from the note | `--favorite` |
+| unfavorite | URL or `webclip_id` | `--unfavorite` |
+| refresh content, keep the marker | URL | `--favorite --refresh` |
 
 Trigger phrases: "收藏", "收藏这篇文章", "收藏一下", "favorite this", "star it".
 
 Resolve the target before running anything, in this order: a URL in the same
-message; the clip made earlier in this conversation (its `path`); a title the
-user names, matched against exactly one note in `Inbox/`. If that does not
-identify a single note, ask — never favorite "the most recent note" on a guess.
+message; the clip made earlier in this conversation (its `path`); a `webclip_id`
+the user pastes; a title the user names, matched against exactly one note in
+`Inbox/`. If that does not identify a single note, ask — never favorite "the
+most recent note" on a guess.
 
 Address a clipped note by its recorded source URL: read `url:` from the note
-frontmatter and pass it, e.g. `service.run("https://example.com/a --favorite-only")`.
-Do not rebuild the URL from the title and do not rewrite the host (`c.m.` and
-`www.` normalize to different sources). If the plugin answers that no clipped
-note exists for the URL, retry once with `original_url`, then report and ask.
+frontmatter and pass it, e.g. `service.run("https://example.com/a --favorite")`.
+A `webclip_id` (64 hex characters, `sha256:` prefix optional) also works and is
+more robust when the URL form is uncertain; the plugin falls back to
+`source_content_hash` when no `webclip_id` matches. Do not rebuild the URL from
+the title and do not rewrite the host (`c.m.` and `www.` normalize to different
+sources).
 
 Rules:
 
 - A refresh or plain re-clip **without** a favorite option preserves the stored
-  marker. Clear it explicitly with `--unfavorite` or `--unfavorite-only`.
-- Marker-only flags never call the extractor, cannot be combined with
-  `--refresh` or `--save-images`, and fail closed when no note exists for the
-  URL or the match is ambiguous. A dirty worktree blocks the run unless
-  `--no-git` is passed, which writes the marker locally without a commit.
+  marker. Clear it explicitly with `--unfavorite`.
+- Marker operations never call the extractor; a `webclip_id` target cannot be
+  combined with `--refresh` or `--save-images`. A missing selector fails closed.
+  A dirty worktree blocks the run unless `--no-git` is passed, which writes the
+  marker locally without a commit.
+- Every note matching the selector is marked. Duplicate clips of the same
+  article are all updated in one commit and the result lists them as "N notes".
 - Only notes carrying `webclip_id` plus the managed/manual boundaries can be
   modified; arbitrary vault notes are refused.
 - A change limited to `favorite` does not require `--refresh`; any body change

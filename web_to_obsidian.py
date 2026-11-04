@@ -103,15 +103,18 @@ class ClipError(Exception):
 
 @dataclass(frozen=True)
 class ClipOptions:
-    url: str
+    # A URL, or a sha256 selector (``sha256:<hex>``) naming a clipped note.
+    selector: str
     no_browser: bool
     no_git: bool
     refresh: bool
     save_images: str = "ask"
     # None means "not specified": an existing note keeps its current marker.
     favorite: bool | None = None
-    # True means "apply only the favorite marker; do not extract the page".
-    metadata_only: bool = False
+    # "url" extracts the page; "webclip_id" can only mark an existing note.
+    target_kind: str = "url"
+    # The bare 64-hex digest when target_kind == "webclip_id".
+    target_hash: str | None = None
 
 
 @dataclass(frozen=True)
@@ -214,42 +217,52 @@ class ClipResult:
     push_state: str
     github_url: str | None = None
     action: str = "clip"
+    # Every note the operation touched; ``path`` is the first entry.
+    paths: tuple[str, ...] = ()
+    # Which frontmatter field resolved a hash selector, when applicable.
+    matched_by: str | None = None
+
+    def _git_detail(self) -> str:
+        if self.commit_state == "disabled":
+            return "Git synchronization disabled"
+        if self.commit_state == "committed" and self.push_state == "pushed":
+            return "committed and pushed"
+        if self.commit_state == "unchanged":
+            return (
+                "content unchanged; no Git commit needed"
+                if self.action == "clip"
+                else "already in the requested state; no Git commit needed"
+            )
+        if self.commit_state == "committed":
+            return "committed; push failed"
+        if self.commit_state == "committed_unverified":
+            return (
+                "local commit created, but post-commit verification failed; not pushed"
+            )
+        if self.commit_state == "commit_failed":
+            return "Git commit failed; not pushed"
+        if self.commit_state == "stage_failed":
+            return "Git staging failed; not committed or pushed"
+        return "Git safety verification refused synchronization; not committed or pushed"
 
     def user_message(self) -> str:
         headline = {
             "favorite": "Marked clip as favorite",
             "unfavorite": "Removed favorite marker from clip",
         }.get(self.action, "Saved clip")
-        if self.commit_state == "disabled":
-            message = f"{headline}: {self.path} (Git synchronization disabled)."
-            return f"{message} GitHub: {self.github_url}" if self.github_url else message
-        if self.commit_state == "committed" and self.push_state == "pushed":
-            message = f"{headline}: {self.path} (committed and pushed)."
-            return f"{message} GitHub: {self.github_url}" if self.github_url else message
-        if self.commit_state == "unchanged":
-            detail = (
-                "content unchanged; no Git commit needed"
-                if self.action == "clip"
-                else "already in the requested state; no Git commit needed"
-            )
-            message = f"{headline}: {self.path} ({detail})."
-            return f"{message} GitHub: {self.github_url}" if self.github_url else message
-        if self.commit_state == "committed":
-            message = f"{headline}: {self.path} (committed; push failed)."
-            return f"{message} GitHub: {self.github_url}" if self.github_url else message
-        if self.commit_state == "committed_unverified":
-            return (
-                f"{headline}: {self.path} "
-                "(local commit created, but post-commit verification failed; not pushed)."
-            )
-        if self.commit_state == "commit_failed":
-            return f"{headline}: {self.path} (Git commit failed; not pushed)."
-        if self.commit_state == "stage_failed":
-            return f"{headline}: {self.path} (Git staging failed; not committed or pushed)."
-        return (
-            f"{headline}: {self.path} "
-            "(Git safety verification refused synchronization; not committed or pushed)."
-        )
+        paths: tuple[str, ...] = tuple(self.paths) if self.paths else (self.path,)
+        if len(paths) > 1:
+            lines = [f"{headline} ({len(paths)} notes):"]
+            lines.extend(f"- {path}" for path in paths)
+            lines.append(f"({self._git_detail()}).")
+            message = "\n".join(lines)
+        else:
+            message = f"{headline}: {paths[0]} ({self._git_detail()})."
+        if self.matched_by == "source_content_hash":
+            message += " Matched by source_content_hash."
+        if self.github_url:
+            message += f" GitHub: {self.github_url}"
+        return message
 
 
 @dataclass(frozen=True)
@@ -263,6 +276,13 @@ class PendingClipResult:
             f"Found {self.image_count} remote {noun} in '{self.title}'. "
             "Reply yes or no: yes downloads and localizes them, no keeps the remote image URLs."
         )
+
+
+def _batch_label(selector: str) -> str:
+    """Shorten a sha256 selector for batch summaries; URLs pass through."""
+    if selector.startswith("sha256:") and len(selector) > 27:
+        return f"{selector[:19]}…"
+    return selector
 
 
 @dataclass(frozen=True)
@@ -299,7 +319,9 @@ class BatchClipResult:
                 "saved notes remain on disk."
             )
         lines.extend(f"- saved: {item.path}" for item in saved)
-        lines.extend(f"- failed: {item.url} ({item.error})" for item in failed)
+        lines.extend(
+            f"- failed: {_batch_label(item.url)} ({item.error})" for item in failed
+        )
         lines.extend(f"GitHub: {url}" for url in self.github_urls)
         return "\n".join(lines)
 
@@ -394,8 +416,25 @@ def _validate_http_url(value: str) -> None:
         raise ClipError("A valid HTTP or HTTPS URL is required.")
 
 
+_SHA256_SELECTOR_RE = re.compile(r"^(?:sha256:)?([0-9a-fA-F]{64})$", re.IGNORECASE)
+
+
+def _parse_target_selector(value: str) -> tuple[str, str, str | None]:
+    """Classify the positional as a URL or a sha256 selector.
+
+    Returns ``(target_kind, selector, digest)`` where *digest* is the bare
+    lowercase hex string for a ``webclip_id`` target and ``None`` for a URL.
+    """
+    match = _SHA256_SELECTOR_RE.match(value.strip())
+    if match:
+        digest = match.group(1).lower()
+        return "webclip_id", f"sha256:{digest}", digest
+    _validate_http_url(value)
+    return "url", value, None
+
+
 def parse_clip_args(raw_args: str) -> ClipOptions:
-    """Parse one URL and the supported flags without invoking a shell."""
+    """Parse one URL or webclip_id and the supported flags without invoking a shell."""
     try:
         tokens = shlex.split(raw_args, posix=True)
     except ValueError as exc:
@@ -407,8 +446,7 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
     save_images = "ask"
     save_images_seen = False
     favorite: bool | None = None
-    favorite_mode: str | None = None
-    urls: list[str] = []
+    selectors: list[str] = []
     index = 0
     while index < len(tokens):
         token = tokens[index]
@@ -418,22 +456,11 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
             no_git = True
         elif token == "--refresh":
             refresh = True
-        elif token in {
-            "--favorite",
-            "--unfavorite",
-            "--favorite-only",
-            "--unfavorite-only",
-        }:
-            value = token in {"--favorite", "--favorite-only"}
+        elif token in {"--favorite", "--unfavorite"}:
+            value = token == "--favorite"
             if favorite is not None and favorite != value:
                 raise ClipError("Conflicting favorite options were provided.")
-            mode = "marker-only" if token.endswith("-only") else "clip"
-            if favorite_mode is not None and favorite_mode != mode:
-                raise ClipError(
-                    "Clip-time and marker-only favorite options cannot be combined."
-                )
             favorite = value
-            favorite_mode = mode
         elif token == "--save-images":
             index += 1
             if index >= len(tokens):
@@ -445,32 +472,32 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
         elif token.startswith("-"):
             raise ClipError("Unknown /webclip option.")
         else:
-            urls.append(token)
+            selectors.append(token)
         index += 1
-    if len(urls) != 1:
+    if len(selectors) != 1:
         raise ClipError(
-            "Usage: /webclip <url> [--refresh] [--no-browser] [--no-git] "
-            "[--save-images yes|no|ask] [--favorite|--unfavorite] "
-            "[--favorite-only|--unfavorite-only]"
+            "Usage: /webclip <url|webclip_id> [--refresh] [--no-browser] [--no-git] "
+            "[--save-images yes|no|ask] [--favorite|--unfavorite]"
         )
-    _validate_http_url(urls[0])
-    metadata_only = favorite_mode == "marker-only"
-    if metadata_only and refresh:
-        raise ClipError(
-            "The marker-only favorite options cannot be combined with --refresh."
-        )
-    if metadata_only and save_images_seen:
-        raise ClipError(
-            "The marker-only favorite options cannot be combined with --save-images."
-        )
+    target_kind, selector, target_hash = _parse_target_selector(selectors[0])
+    if target_kind == "webclip_id":
+        if favorite is None:
+            raise ClipError(
+                "A webclip_id target requires --favorite or --unfavorite."
+            )
+        if refresh:
+            raise ClipError("--refresh cannot be used with a webclip_id.")
+        if save_images_seen:
+            raise ClipError("--save-images cannot be used with a webclip_id.")
     return ClipOptions(
-        url=urls[0],
+        selector=selector,
         no_browser=no_browser,
         no_git=no_git,
         refresh=refresh,
         save_images=save_images,
         favorite=favorite,
-        metadata_only=metadata_only,
+        target_kind=target_kind,
+        target_hash=target_hash,
     )
 
 
@@ -1334,27 +1361,43 @@ def _frontmatter_from_text(text: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _source_from_note(path: Path) -> str | None:
+def _note_prefix(path: Path, limit: int = 64 * 1024) -> str | None:
+    """Read a bounded note prefix for frontmatter lookups.
+
+    The writer puts the frontmatter at the top, so a prefix identifies the
+    note even when the article body pushes the file past *limit*. Decoding
+    ignores a multibyte character split at the read boundary.
+    """
     try:
         with path.open("rb") as handle:
-            raw = handle.read(64 * 1024 + 1)
-        if len(raw) > 64 * 1024:
-            return None
-        text = raw.decode("utf-8")
-    except (OSError, UnicodeError):
+            raw = handle.read(limit)
+        return raw.decode("utf-8", errors="ignore")
+    except OSError:
         return None
+
+
+def _sources_from_note(path: Path) -> set[str]:
+    """Return every normalized source URL the note records for itself.
+
+    ``fetched_url`` is included so a note clipped through an entry URL whose
+    canonical URL differs can still be found by the URL the user requested.
+    """
+    text = _note_prefix(path)
+    if text is None:
+        return set()
     metadata = _frontmatter_from_text(text)
-    source = None
-    if metadata is not None:
-        for field in ("url", "original_url", "source"):
-            candidate = metadata.get(field)
-            if isinstance(candidate, str) and candidate:
-                source = candidate
-                break
-    try:
-        return normalize_url(source) if isinstance(source, str) else None
-    except ClipError:
-        return None
+    sources: set[str] = set()
+    if metadata is None:
+        return sources
+    for field in ("url", "original_url", "source", "fetched_url"):
+        candidate = metadata.get(field)
+        if not isinstance(candidate, str) or not candidate:
+            continue
+        try:
+            sources.add(normalize_url(candidate))
+        except ClipError:
+            continue
+    return sources
 
 
 def _checked_candidate(destination: Path, filename: str) -> Path:
@@ -1366,24 +1409,93 @@ def _checked_candidate(destination: Path, filename: str) -> Path:
     return candidate
 
 
-def _scan_source_matches(destination: Path, source: str) -> list[Path]:
-    """Return notes in *destination* whose recorded source matches *source*."""
-    normalized_source = normalize_url(source)
+def _destination_notes(destination: Path) -> list[Path]:
+    """Regular ``.md`` notes in *destination*, refusing symlinks and bounded scans."""
     entries: list[Path] = []
     for index, existing in enumerate(destination.iterdir(), start=1):
         if index > MAX_DESTINATION_SCAN_ENTRIES:
             raise ClipError("The clip destination contains too many entries to scan safely.")
         entries.append(existing)
 
-    matches: list[Path] = []
+    notes: list[Path] = []
     for existing in sorted(entries, key=lambda path: path.name):
         if existing.suffix.lower() != ".md":
             continue
         if existing.is_symlink():
             raise ClipError("Refusing to scan a symbolic-link note.")
-        if existing.is_file() and _source_from_note(existing) == normalized_source:
-            matches.append(existing)
-    return matches
+        if existing.is_file():
+            notes.append(existing)
+    return notes
+
+
+def _scan_source_matches(destination: Path, source: str) -> list[Path]:
+    """Return notes in *destination* whose recorded source matches *source*."""
+    normalized_source = normalize_url(source)
+    return [
+        note
+        for note in _destination_notes(destination)
+        if normalized_source in _sources_from_note(note)
+    ]
+
+
+def _note_hashes(path: Path) -> tuple[str | None, str | None]:
+    """Return ``(webclip_id, source_content_hash)`` from a note's frontmatter."""
+    text = _note_prefix(path)
+    if text is None:
+        return None, None
+    metadata = _frontmatter_from_text(text)
+    if not metadata:
+        return None, None
+    webclip_id = metadata.get("webclip_id")
+    content_hash = metadata.get("source_content_hash")
+    return (
+        webclip_id if isinstance(webclip_id, str) else None,
+        content_hash if isinstance(content_hash, str) else None,
+    )
+
+
+def _digest_matches(value: str | None, digest: str) -> bool:
+    """Whether a frontmatter hash equals *digest* (bare or ``sha256:`` prefixed)."""
+    if not value:
+        return False
+    normalized = value.strip().lower()
+    if normalized.startswith("sha256:"):
+        normalized = normalized[len("sha256:") :]
+    return normalized == digest
+
+
+def _scan_hash_matches(destination: Path, digest: str) -> tuple[list[Path], str | None]:
+    """Find notes by ``webclip_id`` first, then by ``source_content_hash``.
+
+    Returns every match plus the field that matched (``None`` when nothing did).
+    """
+    wanted = digest.lower()
+    by_id: list[Path] = []
+    by_content: list[Path] = []
+    for note in _destination_notes(destination):
+        webclip_id, content_hash = _note_hashes(note)
+        if _digest_matches(webclip_id, wanted):
+            by_id.append(note)
+        elif _digest_matches(content_hash, wanted):
+            by_content.append(note)
+    if by_id:
+        return by_id, "webclip_id"
+    if by_content:
+        return by_content, "source_content_hash"
+    return [], None
+
+
+def _write_target_ok(note: Path, webclip_id: str) -> bool:
+    """A scan match is a write target only when its webclip_id agrees.
+
+    A note can record a URL under ``fetched_url`` while belonging to a
+    different canonical source. Marker lookups may match any recorded URL
+    form, but rewriting such a note from a new clip would hijack another
+    article's note, so choose_target skips it. Legacy notes without a
+    webclip_id keep the pre-existing behavior.
+    """
+    note_id, _ = _note_hashes(note)
+    return note_id is None or note_id == webclip_id
 
 
 def choose_target(
@@ -1397,7 +1509,13 @@ def choose_target(
     destination = destination.resolve()
     if not destination.is_dir():
         raise ClipError("The configured clip destination is unavailable.")
-    matches = _scan_source_matches(destination, source)
+    digest = _url_hash(source)
+    webclip_id = f"sha256:{digest}"
+    matches = [
+        note
+        for note in _scan_source_matches(destination, source)
+        if _write_target_ok(note, webclip_id)
+    ]
     if len(matches) > 1:
         raise ClipError("The clip destination contains multiple notes for this source.")
     if matches:
@@ -1415,15 +1533,20 @@ def choose_target(
     normalized_source = normalize_url(source)
     dated_title = f"{capture_date}-{title}"
     base = _checked_candidate(destination, safe_filename(dated_title, source))
-    if not base.exists() or _source_from_note(base) == normalized_source:
+    if not base.exists() or (
+        normalized_source in _sources_from_note(base)
+        and _write_target_ok(base, webclip_id)
+    ):
         return base
 
-    digest = _url_hash(source)
     for length in range(8, len(digest) + 1, 4):
         candidate = _checked_candidate(
             destination, _filename_with_suffix(dated_title, source, digest[:length])
         )
-        if not candidate.exists() or _source_from_note(candidate) == normalized_source:
+        if not candidate.exists() or (
+            normalized_source in _sources_from_note(candidate)
+            and _write_target_ok(candidate, webclip_id)
+        ):
             return candidate
     raise ClipError("Unable to choose a unique filename for the clip.")
 
@@ -1659,16 +1782,21 @@ def _set_favorite_marker(text: str, favorite: bool) -> tuple[str, bool]:
     return "---\n" + "\n".join(lines) + normalized[end:], True
 
 
-def set_frontmatter_flag(target: Path, *, favorite: bool) -> str:
-    """Set or clear the favorite marker without touching the article body."""
+def _read_note_for_marker(target: Path) -> str:
+    """Read a note for a marker update, refusing symlinks and missing files."""
     if target.is_symlink():
         raise ClipError("Refusing to modify a symbolic-link note.")
     if not target.exists():
         raise ClipError("The clipped note does not exist.")
     try:
-        existing = target.read_text(encoding="utf-8")
+        return target.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         raise ClipError("Could not read the existing clipped note.") from exc
+
+
+def set_frontmatter_flag(target: Path, *, favorite: bool) -> str:
+    """Set or clear the favorite marker without touching the article body."""
+    existing = _read_note_for_marker(target)
     updated, changed = _set_favorite_marker(existing, favorite)
     if not changed:
         return "unchanged"
@@ -1696,6 +1824,13 @@ def _note_title(target: Path) -> str:
     if not isinstance(title, str) or not title.strip():
         return target.stem
     return title.strip()
+
+
+def _marker_commit_message(action: str, targets: Sequence[Path]) -> str:
+    """One title for a single note, a count when several notes share the marker."""
+    if len(targets) == 1:
+        return f"{action}: {_note_title(targets[0])[:60]}"
+    return f"{action}: {len(targets)} notes"
 
 
 def write_managed_note(target: Path, content: str, *, refresh: bool) -> str:
@@ -2533,9 +2668,31 @@ class ClipService:
         options = parse_clip_args(raw_args)
         config = self._load_config()
         with VaultLock(config.lock_file):
-            if options.metadata_only:
-                return self._mark_locked(options, config)
-            return self._run_locked(options, config)
+            # Preflight (fetch + rebase) before any scan: marker lookups and
+            # clip targeting must see the same vault state Git commits against.
+            git_sync = (
+                None
+                if options.no_git
+                else GitSync.preflight(config.vault, config.sync_branch)
+            )
+            if options.target_kind == "webclip_id":
+                return self._mark_by_hash(options, config, git_sync)
+            if options.favorite is False and not options.refresh:
+                # Clearing a marker never creates or refreshes content.
+                targets = self._marker_targets(config, options.selector)
+                if not targets:
+                    raise ClipError("No clipped note exists for this URL.")
+                return self._mark_targets(
+                    options, config, targets, git_sync=git_sync
+                )
+            if options.favorite is True and not options.refresh:
+                # ensure-favorited: an existing note is marked without the network.
+                targets = self._marker_targets(config, options.selector)
+                if targets:
+                    return self._mark_targets(
+                        options, config, targets, git_sync=git_sync
+                    )
+            return self._run_locked(options, config, git_sync=git_sync)
 
     def resume_pending(self, decision: str) -> ClipResult:
         normalized = decision.strip().lower()
@@ -2559,17 +2716,8 @@ class ClipService:
         cannot represent more than one article.
         """
         if not specs:
-            raise ClipError("Batch mode requires at least one URL.")
+            raise ClipError("Batch mode requires at least one URL or webclip_id.")
         options_list = [parse_clip_args(spec) for spec in specs]
-        if any(
-            options.save_images == "ask" and not options.metadata_only
-            for options in options_list
-        ):
-            raise ClipError(
-                "Batch mode requires an explicit --save-images yes or no for "
-                "every URL that extracts a page, so no per-article image prompt "
-                "is silently dropped."
-            )
         no_git_flags = {options.no_git for options in options_list}
         if len(no_git_flags) > 1:
             raise ClipError("Batch mode requires a consistent --no-git setting.")
@@ -2577,30 +2725,76 @@ class ClipService:
 
         config = self._load_config()
         with VaultLock(config.lock_file):
+            # Preflight (fetch + rebase) before classifying: marker detection
+            # reads the vault, so it must see the state Git will commit against.
             git_sync = (
                 None
                 if no_git
                 else GitSync.preflight(config.vault, config.sync_branch)
             )
+            # Classify each spec before enforcing the image decision: a spec that
+            # only marks an existing note must not require --save-images.
+            plans: list[tuple[ClipOptions, str]] = []
+            for options in options_list:
+                if (
+                    options.target_kind == "webclip_id"
+                    or (options.favorite is False and not options.refresh)
+                ):
+                    plans.append((options, "marker"))
+                elif (
+                    options.favorite is True
+                    and not options.refresh
+                    and self._marker_targets(config, options.selector)
+                ):
+                    plans.append((options, "marker"))
+                else:
+                    plans.append((options, "clip"))
+            if any(
+                options.save_images == "ask" and kind == "clip"
+                for options, kind in plans
+            ):
+                raise ClipError(
+                    "Batch mode requires an explicit --save-images yes or no for "
+                    "every URL that extracts a page, so no per-article image prompt "
+                    "is silently dropped."
+                )
+
             collected: list[Path] = []
             items: list[BatchClipItem] = []
             saved: list[str] = []
+            # Only actions that changed a note may name the commit: a no-op
+            # re-favorite must not turn an unfavorite batch into "marker".
+            changed_actions: set[str] = set()
+            has_clip = False
 
-            for options in options_list:
+            for options, kind in plans:
                 try:
-                    if options.metadata_only:
-                        if options.favorite is None:
-                            raise ClipError("A favorite option is required.")
-                        target = self._find_target_for_source(config, options.url)
-                        state = set_frontmatter_flag(target, favorite=options.favorite)
-                        action = "favorite" if options.favorite else "unfavorite"
-                        relative = target.resolve().relative_to(config.vault).as_posix()
-                        if state != "unchanged":
-                            collected.append(target)
-                        items.append(
-                            BatchClipItem(options.url, True, relative, action)
+                    if kind == "marker":
+                        matched_by = None
+                        if options.target_kind == "webclip_id":
+                            matches, matched_by = self._hash_targets(options, config)
+                        else:
+                            matches = self._marker_targets(config, options.selector)
+                            if not matches:
+                                raise ClipError("No clipped note exists for this URL.")
+                        result = self._mark_targets(
+                            options,
+                            config,
+                            matches,
+                            matched_by=matched_by,
+                            git_sync=git_sync,
+                            defer_git=True,
+                            collected=collected,
                         )
-                        saved.append(relative)
+                        if result.commit_state != "unchanged":
+                            changed_actions.add(result.action)
+                        for relative in result.paths:
+                            items.append(
+                                BatchClipItem(
+                                    options.selector, True, relative, result.action
+                                )
+                            )
+                            saved.append(relative)
                         continue
 
                     result = self._run_locked(
@@ -2614,22 +2808,34 @@ class ClipService:
                         raise ClipError(
                             "remote images require an explicit --save-images decision"
                         )
+                    has_clip = True
                     items.append(
-                        BatchClipItem(options.url, True, result.path, result.action)
+                        BatchClipItem(options.selector, True, result.path, result.action)
                     )
                     saved.append(result.path)
                 except ClipError as exc:
-                    items.append(BatchClipItem(options.url, False, error=str(exc)))
+                    items.append(BatchClipItem(options.selector, False, error=str(exc)))
 
             if git_sync is None:
                 outcome = GitOutcome("disabled", "disabled")
             elif not collected:
                 outcome = GitOutcome("unchanged", "not_needed")
             else:
+                # A marker-only batch commits under its own action, and the
+                # count reflects the notes actually changed, not every match.
+                if has_clip:
+                    batch_message = f"clip: batch ({len(saved)} notes)"
+                elif changed_actions == {"favorite"}:
+                    batch_message = f"favorite: batch ({len(collected)} notes)"
+                elif changed_actions == {"unfavorite"}:
+                    batch_message = f"unfavorite: batch ({len(collected)} notes)"
+                elif changed_actions:
+                    batch_message = f"marker: batch ({len(collected)} notes)"
+                else:
+                    batch_message = f"clip: batch ({len(saved)} notes)"
                 outcome = git_sync.finalize(
                     collected,
-                    commit_message=commit_message
-                    or f"clip: batch ({len(saved)} notes)",
+                    commit_message=commit_message or batch_message,
                 )
 
             github_urls: list[str] = []
@@ -2690,6 +2896,39 @@ class ClipService:
             capture_date=date_prefix,
         )
 
+    def _result_for_targets(
+        self,
+        config: ClipConfig,
+        targets: Sequence[Path],
+        outcome: GitOutcome,
+        git_sync: GitSync | None,
+        action: str = "clip",
+        matched_by: str | None = None,
+    ) -> ClipResult:
+        if not targets:
+            raise ClipError("No target notes were supplied.")
+        relative_paths = tuple(
+            target.resolve().relative_to(config.vault).as_posix() for target in targets
+        )
+        github_url = None
+        if git_sync is not None and relative_paths:
+            remote = GitSync._git(git_sync.repo_root, "remote", "get-url", "origin")
+            if remote.returncode == 0:
+                github_url = github_blob_url(
+                    _decode_output(remote).strip(),
+                    git_sync.branch,
+                    relative_paths[0],
+                )
+        return ClipResult(
+            relative_paths[0],
+            outcome.commit_state,
+            outcome.push_state,
+            github_url,
+            action,
+            relative_paths,
+            matched_by,
+        )
+
     def _result_with_github_url(
         self,
         config: ClipConfig,
@@ -2698,60 +2937,104 @@ class ClipService:
         git_sync: GitSync | None,
         action: str = "clip",
     ) -> ClipResult:
-        relative_path = target.resolve().relative_to(config.vault).as_posix()
-        github_url = None
-        if git_sync is not None:
-            remote = GitSync._git(git_sync.repo_root, "remote", "get-url", "origin")
-            if remote.returncode == 0:
-                github_url = github_blob_url(
-                    _decode_output(remote).strip(),
-                    git_sync.branch,
-                    relative_path,
-                )
-        return ClipResult(
-            relative_path, outcome.commit_state, outcome.push_state, github_url, action
+        return self._result_for_targets(
+            config, [target], outcome, git_sync, action
         )
 
-    def _find_target_for_source(self, config: ClipConfig, source: str) -> Path:
-        """Locate the existing note for *source*, refusing ambiguity."""
+    def _marker_destination(self, config: ClipConfig) -> Path | None:
+        """The clip destination when it exists; marker operations never create it."""
         destination = config.destination.resolve()
         _require_within(
             destination,
             config.vault,
             "Configured destination escaped the Obsidian vault.",
         )
-        if not destination.is_dir():
-            raise ClipError("No clipped note exists for this URL in the clip destination.")
-        matches = _scan_source_matches(destination, source)
-        if not matches:
-            raise ClipError("No clipped note exists for this URL in the clip destination.")
-        if len(matches) > 1:
-            raise ClipError("The clip destination contains multiple notes for this source.")
-        return matches[0]
+        return destination if destination.is_dir() else None
 
-    def _mark_locked(self, options: ClipOptions, config: ClipConfig) -> ClipResult:
-        """Apply only the favorite marker to an already-clipped note."""
+    def _marker_targets(self, config: ClipConfig, source: str) -> list[Path]:
+        """Notes recorded for *source*; duplicates are all returned."""
+        destination = self._marker_destination(config)
+        if destination is None:
+            return []
+        return _scan_source_matches(destination, source)
+
+    def _hash_targets(
+        self, options: ClipOptions, config: ClipConfig
+    ) -> tuple[list[Path], str | None]:
+        """Notes matching a webclip_id, falling back to their content hash."""
+        destination = self._marker_destination(config)
+        if destination is None:
+            raise ClipError(
+                "No clipped note matches this webclip_id or source_content_hash."
+            )
+        matches, matched_by = _scan_hash_matches(destination, options.target_hash or "")
+        if not matches:
+            raise ClipError(
+                "No clipped note matches this webclip_id or source_content_hash."
+            )
+        return matches, matched_by
+
+    def _mark_by_hash(
+        self,
+        options: ClipOptions,
+        config: ClipConfig,
+        git_sync: GitSync | None,
+    ) -> ClipResult:
+        """Mark every note matching a webclip_id, falling back to its content hash."""
+        matches, matched_by = self._hash_targets(options, config)
+        return self._mark_targets(
+            options, config, matches, git_sync=git_sync, matched_by=matched_by
+        )
+
+    def _mark_targets(
+        self,
+        options: ClipOptions,
+        config: ClipConfig,
+        targets: Sequence[Path],
+        *,
+        git_sync: GitSync | None,
+        matched_by: str | None = None,
+        defer_git: bool = False,
+        collected: list[Path] | None = None,
+    ) -> ClipResult:
+        """Apply the favorite marker to every target, committing all changes once."""
         if options.favorite is None:
             raise ClipError("A favorite option is required.")
-        target = self._find_target_for_source(config, options.url)
-        git_sync = (
-            None
-            if options.no_git
-            else GitSync.preflight(config.vault, config.sync_branch)
-        )
-        state = set_frontmatter_flag(target, favorite=options.favorite)
         action = "favorite" if options.favorite else "unfavorite"
-        if state == "unchanged":
-            return self._result_with_github_url(
-                config, target, GitOutcome("unchanged", "not_needed"), git_sync, action
+        # Validate every target and compute its update before writing anything,
+        # so one malformed duplicate cannot leave a half-marked vault behind.
+        updates: list[tuple[Path, str]] = []
+        for target in targets:
+            updated, changed = _set_favorite_marker(
+                _read_note_for_marker(target), options.favorite
             )
-        commit_msg = f"{action}: {_note_title(target)[:60]}"
-        outcome = (
-            GitOutcome("disabled", "disabled")
-            if git_sync is None
-            else git_sync.finalize([target], commit_message=commit_msg)
+            if changed:
+                updates.append((target, updated))
+        for target, updated in updates:
+            atomic_write(target, updated)
+        changed = [target for target, _ in updates]
+        if not changed:
+            return self._result_for_targets(
+                config,
+                targets,
+                GitOutcome("unchanged", "not_needed"),
+                git_sync,
+                action,
+                matched_by,
+            )
+        if defer_git:
+            if collected is not None:
+                collected.extend(changed)
+            outcome = GitOutcome("deferred", "deferred")
+        elif git_sync is None:
+            outcome = GitOutcome("disabled", "disabled")
+        else:
+            outcome = git_sync.finalize(
+                changed, commit_message=_marker_commit_message(action, changed)
+            )
+        return self._result_for_targets(
+            config, targets, outcome, git_sync, action, matched_by
         )
-        return self._result_with_github_url(config, target, outcome, git_sync, action)
 
     def _persist_article(
         self,
@@ -2817,7 +3100,7 @@ class ClipService:
             git_sync = GitSync.preflight(config.vault, config.sync_branch)
         article = _validate_success_payload(
             run_extractor_with_fallback(
-                self.plugin_root, options.url, no_browser=options.no_browser
+                self.plugin_root, options.selector, no_browser=options.no_browser
             )
         )
         captured_at = datetime.now(timezone.utc)

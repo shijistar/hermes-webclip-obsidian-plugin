@@ -30,7 +30,7 @@ def register(ctx) -> None:
         "webclip",
         handler=handler,
         description="Clip a public web article into an Obsidian vault with guarded Git sync.",
-        args_hint="<url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask] [--favorite|--unfavorite] [--favorite-only|--unfavorite-only]",
+        args_hint="<url|webclip_id> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask] [--favorite|--unfavorite]",
     )
     ctx.register_tool(
         name="web_to_obsidian_resume_pending",

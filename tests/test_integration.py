@@ -588,7 +588,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             ):
                 marked = cast(
                     clip.ClipResult,
-                    service.run("https://example.com/article --favorite-only"),
+                    service.run("https://example.com/article --favorite"),
                 )
 
             self.assertEqual(marked.action, "favorite")
@@ -613,7 +613,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             ):
                 again = cast(
                     clip.ClipResult,
-                    service.run("https://example.com/article --favorite-only"),
+                    service.run("https://example.com/article --favorite"),
                 )
             self.assertEqual(again.commit_state, "unchanged")
             self.assertEqual(
@@ -622,7 +622,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
 
             cleared = cast(
                 clip.ClipResult,
-                service.run("https://example.com/article --unfavorite-only --no-git"),
+                service.run("https://example.com/article --unfavorite --no-git"),
             )
             self.assertEqual(cleared.action, "unfavorite")
             self.assertEqual(cleared.commit_state, "disabled")
@@ -648,7 +648,9 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertNotIn("favorite", self._metadata(note))
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
             ):
                 marked = cast(
                     clip.ClipResult,
@@ -657,15 +659,372 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertEqual(marked.commit_state, "committed")
             self.assertIs(self._metadata(note).get("favorite"), True)
 
-    def test_favorite_only_rejects_unknown_url_without_creating_a_note(self):
+    def test_favorite_by_webclip_id_marks_without_extracting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(clip.ClipResult, service.run(f"{digest} --favorite"))
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.matched_by, "webclip_id")
+            self.assertEqual(marked.paths, (first.path,))
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_favorite_by_content_hash_falls_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            metadata = self._metadata(note)
+            self.assertNotEqual(
+                metadata["webclip_id"], metadata["source_content_hash"]
+            )
+            content_hash = str(metadata["source_content_hash"]).removeprefix("sha256:")
+
+            marked = cast(clip.ClipResult, service.run(f"sha256:{content_hash} --favorite"))
+
+            self.assertEqual(marked.matched_by, "source_content_hash")
+            self.assertIn("Matched by source_content_hash", marked.user_message())
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_favorite_by_hash_marks_every_duplicate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            duplicate = vault / "Inbox" / "duplicate-copy.md"
+            duplicate.write_text(note.read_text(encoding="utf-8"), encoding="utf-8")
+            self._git(vault, "add", str(duplicate))
+            self._git(vault, "commit", "-m", "duplicate copy")
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+
+            marked = cast(clip.ClipResult, service.run(f"{digest} --favorite"))
+
+            self.assertEqual(len(marked.paths), 2)
+            for relative in marked.paths:
+                self.assertIs(self._metadata(vault / relative).get("favorite"), True)
+            self.assertIn("2 notes", marked.user_message())
+
+    def test_unknown_hash_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _vault, env = self._setup(tmp)
+            service = self._service(env)
+            with self.assertRaisesRegex(
+                clip.ClipError, "No clipped note matches this webclip_id"
+            ):
+                service.run(f"{'0' * 64} --favorite")
+
+    def test_unfavorite_by_webclip_id_clears_the_marker(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite"),
+                )
+            note = vault / first.path
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+
+            cleared = cast(clip.ClipResult, service.run(f"{digest} --unfavorite"))
+
+            self.assertEqual(cleared.action, "unfavorite")
+            self.assertNotIn("favorite", self._metadata(note))
+
+    def test_marker_lookup_finds_oversized_notes(self):
+        oversized = {
+            **ARTICLE_NO_IMAGES,
+            "markdown": "# An Article\n\n" + ("Long paragraph. " * 5200),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=oversized
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            self.assertGreater(note.stat().st_size, 64 * 1024)
+
+            # URL and webclip_id lookups must resolve a note whose body pushed
+            # the file past the bounded read; neither path may extract.
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --favorite"),
+                )
+                digest = str(self._metadata(note)["webclip_id"]).removeprefix(
+                    "sha256:"
+                )
+                by_hash = cast(clip.ClipResult, service.run(f"{digest} --favorite"))
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(by_hash.matched_by, "webclip_id")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+            # A plain re-clip converges on the same oversized note instead of
+            # writing a duplicate.
+            with mock.patch.object(clip, "run_extractor", return_value=oversized):
+                reclipped = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            self.assertEqual(reclipped.commit_state, "unchanged")
+            self.assertEqual(list((vault / "Inbox").glob("*.md")), [note])
+
+    def test_marker_lookup_matches_the_fetched_url(self):
+        redirected = {
+            **ARTICLE_NO_IMAGES,
+            "url": "https://example.com/entry",
+            "canonicalUrl": "https://example.com/canonical",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=redirected
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/entry --save-images no"),
+                )
+            note = vault / first.path
+            self.assertIn("fetched_url", self._metadata(note))
+
+            # Both the entry URL the user requested and the canonical URL the
+            # note records must reach the marker path without extraction.
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/entry --favorite"),
+                )
+                self.assertEqual(marked.action, "favorite")
+                self.assertIs(self._metadata(note).get("favorite"), True)
+                cleared = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/canonical --unfavorite"),
+                )
+
+            self.assertEqual(cleared.action, "unfavorite")
+            self.assertNotIn("favorite", self._metadata(note))
+
+    def test_clip_does_not_hijack_a_note_that_only_fetched_the_url(self):
+        entry = "https://example.com/entry"
+        canonical = "https://example.com/canonical"
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            original_payload = {
+                **ARTICLE_NO_IMAGES,
+                "url": entry,
+                "canonicalUrl": canonical,
+            }
+            with mock.patch.object(
+                clip, "run_extractor", return_value=original_payload
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run(f"{entry} --save-images no"),
+                )
+            original = vault / first.path
+            self.assertIn("fetched_url", self._metadata(original))
+
+            # A different article whose canonical URL is the old entry URL:
+            # the note that only fetched that URL must not be rewritten.
+            other_payload = {
+                **ARTICLE_NO_IMAGES,
+                "title": "Another Article",
+                "url": entry,
+                "canonicalUrl": entry,
+                "markdown": "# Another Article\n\nDifferent content.\n",
+            }
+            with mock.patch.object(
+                clip, "run_extractor", return_value=other_payload
+            ):
+                second = cast(
+                    clip.ClipResult,
+                    service.run(f"{entry} --save-images no"),
+                )
+
+            self.assertNotEqual(second.path, first.path)
+            self.assertEqual(
+                self._metadata(original)["url"], clip.normalize_url(canonical)
+            )
+            self.assertEqual(
+                self._metadata(vault / second.path)["url"], clip.normalize_url(entry)
+            )
+
+            # Re-clipping the original article via its entry URL still
+            # converges on the original note.
+            with mock.patch.object(
+                clip, "run_extractor", return_value=original_payload
+            ):
+                third = cast(
+                    clip.ClipResult,
+                    service.run(f"{entry} --save-images no"),
+                )
+            self.assertEqual(third.path, first.path)
+            self.assertEqual(third.commit_state, "unchanged")
+
+    def test_marker_runs_rebase_a_stale_vault_before_scanning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+            url = "https://example.com/article"
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run(f"{url} --save-images no"),
+                )
+            note = vault / first.path
+
+            # Simulate this clone being behind another machine's push.
+            self._git(vault, "reset", "--hard", "HEAD~1")
+            self.assertFalse(note.exists())
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                marked = cast(clip.ClipResult, service.run(f"{url} --favorite"))
+
+            self.assertEqual(marked.action, "favorite")
+            self.assertEqual(marked.commit_state, "committed")
+            self.assertTrue(note.exists())
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_batch_classification_sees_a_rebased_vault(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+            url = "https://example.com/article"
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run(f"{url} --favorite --save-images no"),
+                )
+            note = vault / first.path
+
+            # Behind the remote: the batch classification must rebase first and
+            # treat the spec as a marker, not demand --save-images for a clip.
+            self._git(vault, "reset", "--hard", "HEAD~1")
+            self.assertFalse(note.exists())
+
+            with mock.patch.object(
+                clip,
+                "run_extractor",
+                side_effect=AssertionError("the extractor must not run"),
+            ):
+                result = service.run_batch([f"{url} --favorite"])
+
+            item = result.items[0]
+            self.assertTrue(item.ok, item.error)
+            self.assertEqual(item.action, "favorite")
+            self.assertIs(self._metadata(note).get("favorite"), True)
+
+    def test_partial_marker_failure_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault, env = self._setup(tmp)
+            service = self._service(env)
+
+            with mock.patch.object(
+                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+            ):
+                first = cast(
+                    clip.ClipResult,
+                    service.run("https://example.com/article --save-images no"),
+                )
+            note = vault / first.path
+            # A second note with the same webclip_id but broken boundaries: the
+            # scan matches it, the marker update must refuse it.
+            duplicate = vault / "Inbox" / "duplicate-copy.md"
+            duplicate.write_text(
+                note.read_text(encoding="utf-8").replace(
+                    "<!-- webclip:manual:start -->", "<!-- broken -->"
+                ),
+                encoding="utf-8",
+            )
+            self._git(vault, "add", str(duplicate))
+            self._git(vault, "commit", "-m", "duplicate copy")
+            digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
+            before = note.read_bytes()
+
+            with self.assertRaisesRegex(
+                clip.ClipError, "not a valid webclip note"
+            ):
+                service.run(f"{digest} --favorite")
+
+            # The healthy note must be byte-for-byte untouched and the worktree
+            # clean: no partial marker may survive a failed multi-target run.
+            self.assertEqual(note.read_bytes(), before)
+            status = self._git(vault, "status", "--porcelain")
+            self.assertEqual(status.stdout.decode().strip(), "")
+
+    def test_unfavorite_rejects_unknown_url_without_creating_a_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)
             service = self._service(env)
             with self.assertRaisesRegex(clip.ClipError, "No clipped note exists"):
-                service.run("https://example.com/never-clipped --favorite-only")
+                service.run("https://example.com/never-clipped --unfavorite")
             self.assertEqual(list((vault / "Inbox").glob("*.md")), [])
 
-    def test_favorite_only_does_not_create_a_missing_destination(self):
+    def test_unfavorite_does_not_create_a_missing_destination(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             remote = root / "remote.git"
@@ -687,10 +1046,10 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             }
             service = self._service(env)
             with self.assertRaisesRegex(clip.ClipError, "No clipped note exists"):
-                service.run("https://example.com/article --favorite-only --no-git")
+                service.run("https://example.com/article --unfavorite --no-git")
             self.assertFalse((vault / "Inbox").exists())
 
-    def test_favorite_only_supports_no_git(self):
+    def test_marker_only_supports_no_git(self):
         with tempfile.TemporaryDirectory() as tmp:
             vault, env = self._setup(tmp)
             service = self._service(env)
@@ -712,7 +1071,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             ):
                 marked = cast(
                     clip.ClipResult,
-                    service.run("https://example.com/article --favorite-only --no-git"),
+                    service.run("https://example.com/article --favorite --no-git"),
                 )
 
             self.assertEqual(marked.action, "favorite")

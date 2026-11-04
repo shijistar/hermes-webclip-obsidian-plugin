@@ -4,6 +4,64 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-03
+
+### Changed
+
+- **`--favorite` is now idempotent (`ensure-favorited`)**: a new URL is clipped
+  and marked; an existing note is marked in place without fetching; `--refresh`
+  is the only way to re-fetch. `--unfavorite` clears the marker and, without
+  `--refresh`, never fetches. This removes the need to remember which of the two
+  favorite flags applies to a given target.
+- **A `webclip_id` is a first-class target**: the 64-hex digest from a note's
+  frontmatter (with or without the `sha256:` prefix) selects a clipped note.
+  Resolution checks `webclip_id` first and falls back to `source_content_hash`.
+  A `webclip_id` target requires `--favorite`/`--unfavorite` and rejects
+  `--refresh`/`--save-images`.
+- **Duplicate notes are all marked**: a selector matching several notes updates
+  every match in one commit and reports them as "N notes" instead of failing on
+  ambiguity.
+- **Batch mode classifies specs before enforcing the image flag**: marker specs
+  no longer need `--save-images`, while every spec that extracts a page still
+  does.
+
+### Added
+
+- `ClipResult.paths` and `ClipResult.matched_by`, plus multi-note result
+  messages that list every marked path.
+
+### Removed
+
+- **`--favorite-only` and `--unfavorite-only`**: use `--favorite`/`--unfavorite`
+  instead. With an existing note they keep the old marker-only behaviour, and a
+  `webclip_id` target is always marker-only.
+
+### Fixed
+
+- Notes larger than 64 KiB are no longer invisible to URL, `webclip_id`, and
+  re-clip lookups: frontmatter is read from a bounded prefix instead of
+  rejecting the whole file, so a long article can be marked by any selector
+  and re-clipping it no longer writes a duplicate note.
+- Marker lookup now also matches the `fetched_url` a note recorded, so
+  `--favorite`/`--unfavorite` accept the original entry URL of a page whose
+  canonical URL differs. The write path is guarded separately: a clip whose
+  canonical URL equals another note's `fetched_url` creates a new note
+  instead of rewriting (and failing on) the note that only fetched that URL.
+- Git preflight (fetch + rebase) now runs before marker lookups and batch
+  classification, so a vault behind its remote no longer misreads a note as
+  missing: `--favorite`/`--unfavorite` and marker-only batch specs resolve
+  against the rebased state instead of failing or demanding `--save-images`
+  for a clip that would not happen.
+- `_mark_targets` validates and computes every marker update before writing
+  any of them: a malformed duplicate among hash-matched notes now fails with
+  zero writes instead of leaving earlier notes modified but uncommitted in a
+  dirty worktree.
+- A marker-only batch now commits as `favorite: batch (N notes)` or
+  `unfavorite: batch (N notes)` instead of `clip: batch`, with the count
+  reflecting the notes actually changed; no-op marker specs do not influence
+  the subject, and failed sha256 selectors are shortened in the batch
+  summary.
+
 ## 2026-10-30
 
 ### Changed

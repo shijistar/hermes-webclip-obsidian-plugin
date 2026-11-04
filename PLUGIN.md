@@ -97,23 +97,26 @@ untrusted extractor process.
 ## Usage
 
 ```text
-/webclip <url> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask]
-             [--favorite|--unfavorite] [--favorite-only|--unfavorite-only]
+/webclip <url|webclip_id> [--refresh] [--no-browser] [--no-git]
+         [--save-images yes|no|ask] [--favorite|--unfavorite]
 ```
 
-- Exactly one public `http://` or `https://` URL is accepted.
+- Exactly one target: a public `http://` or `https://` URL, or a `webclip_id`
+  (64 hex characters, with or without the `sha256:` prefix).
 - `--refresh` explicitly updates changed managed content while preserving the
   manual section.
 - `--no-browser` disables the Playwright fallback in the extractor.
 - `--no-git` disables Git preflight, commit, and push for that invocation.
-- `--favorite` writes `favorite: true` into the note frontmatter.
-- `--unfavorite` keeps the note without a favorite marker (explicit clear).
-- `--favorite-only` / `--unfavorite-only` update the marker on an existing note
-  without downloading or re-extracting the article. They cannot be combined
-  with `--refresh` or `--save-images`, and they fail when the URL has no
-  clipped note in the destination.
+- `--favorite` ensures the note is favorited: a new URL is clipped, an existing
+  note is marked in place, and `--refresh` is the only way to re-fetch.
+- `--unfavorite` clears the marker; without `--refresh` it never fetches
+  (`--refresh --unfavorite` updates the content and clears the marker in one
+  run).
+- A `webclip_id` target requires `--favorite` or `--unfavorite` and cannot be
+  combined with `--refresh` or `--save-images`.
 - `--save-images yes` downloads remote Markdown/HTML image references into
-  `images/<article-slug>/...` before saving the note.
+  `images/<article-slug>/...` before saving the note. It applies only when the
+  page is clipped or refreshed.
 - `--save-images no` preserves remote image URLs and saves immediately.
 - Omitting `--save-images` behaves as `ask`: if the final sanitized Markdown
   has remote `http/https` image references, `/webclip` stores one pending
@@ -132,22 +135,27 @@ favorite: true
 
 | Command | Effect |
 | --- | --- |
-| `/webclip <url> --favorite` | Clip (or refresh) and write `favorite: true` |
-| `/webclip <url> --unfavorite` | Clip (or refresh) without a favorite marker |
-| `/webclip <url> --favorite-only` | Mark an existing note; no extraction, no body change |
-| `/webclip <url> --unfavorite-only` | Clear an existing note's marker; no extraction, no body change |
+| `/webclip <url> --favorite` | Clip a new URL, or mark an existing note; no fetch for an existing note |
+| `/webclip <url> --favorite --refresh` | Re-fetch, update the managed content, keep the marker |
+| `/webclip <url> --unfavorite` | Clear the marker; no extraction, no body change |
+| `/webclip <webclip_id> --favorite` | Mark every matching note; no extraction |
+| `/webclip <webclip_id> --unfavorite` | Clear the marker on every match |
 
 Behavior rules:
 
 - **Refresh preserves the marker.** When `--refresh` (or a plain re-clip) does
   not specify `--favorite` or `--unfavorite`, the existing note's marker is
-  carried over. Use `--unfavorite` / `--unfavorite-only` to clear it explicitly.
-- **Marker-only operations never fetch the page.** The note is located by its
-  normalized source URL, only the `favorite` frontmatter line is added or
-  removed, and the managed body plus the manual section stay byte-for-byte
-  unchanged. A missing note or an ambiguous match fails closed. Both
-  marker-only flags accept `--no-git`: the marker is written locally without
-  Git preflight, commit, or push.
+  carried over. Use `--unfavorite` to clear it explicitly.
+- **Marker operations never fetch the page.** The note is located by its
+  normalized source URL, or by `webclip_id` with a `source_content_hash`
+  fallback; only the `favorite` frontmatter line is added or removed, and the
+  managed body plus the manual section stay byte-for-byte unchanged (a marker
+  rewrite normalizes line endings to LF). A missing
+  selector fails closed. Marker operations accept `--no-git`: the marker is
+  written locally without Git preflight, commit, or push.
+- **Duplicate notes are all marked.** When a selector matches several notes
+  (for example the same article clipped twice), every match is updated in one
+  commit and the result lists them as "N notes".
 - **Only webclip-managed notes are eligible.** The note must carry a
   `webclip_id`, the managed boundaries, and the manual boundaries; arbitrary
   vault notes are refused.

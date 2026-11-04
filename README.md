@@ -73,7 +73,9 @@ before writing.
 
 ## Usage
 
-`/webclip <url> [flags]` accepts exactly one public `http://` or `https://` URL.
+`/webclip <url|webclip_id> [flags]` accepts exactly one public `http://` or
+`https://` URL, or one `webclip_id` (64 hex characters, `sha256:` prefix
+optional). A `webclip_id` target requires `--favorite` or `--unfavorite`.
 
 ### Command and flags
 
@@ -82,31 +84,43 @@ before writing.
 | `--refresh` | Update changed managed content while preserving the manual section. |
 | `--no-browser` | Disable the Playwright fallback in the extractor. |
 | `--no-git` | Skip Git preflight, commit, and push for this invocation. |
-| `--save-images yes\|no\|ask` | Download images, keep remote URLs, or ask (default). |
-| `--favorite` / `--unfavorite` | Set or clear the marker (see below). |
-| `--favorite-only` / `--unfavorite-only` | Update an existing note without fetching (see below). |
+| `--save-images yes\|no\|ask` | Download images, keep remote URLs, or ask (default). Applies only when the page is clipped or refreshed. |
+| `--favorite` / `--unfavorite` | Ensure the note carries (or does not carry) the marker (see below). |
 
 ### Favorite marker
 
 `favorite` is a plugin-managed boolean property. It is written only when true;
 an absent field means the note is not favorited.
 
-| Command | Fetches page | Changes body | Result |
-| --- | --- | --- | --- |
-| `--favorite` | Yes | Only if clipping/refreshing | Writes `favorite: true` |
-| `--unfavorite` | Yes | Only if clipping/refreshing | Removes the marker |
-| `--favorite-only` | No | No | Writes `favorite: true` |
-| `--unfavorite-only` | No | No | Removes the marker |
+`--favorite` is idempotent: it clips a URL that is not in the vault yet, marks
+an existing note without fetching it, and only re-fetches when you ask with
+`--refresh`. `--unfavorite` clears the marker and, without `--refresh`, never
+fetches.
 
-- Marker-only flags patch exactly one frontmatter line and leave the article
-  body and manual section byte-for-byte unchanged. They cannot be combined with
-  `--refresh` or `--save-images`, and they fail when the URL has no clipped note.
+| Target | Command | Fetches page | Changes body | Result |
+| --- | --- | --- | --- | --- |
+| new URL | `--favorite` | Yes | Yes (first clip) | Clips and writes `favorite: true` |
+| clipped URL | `--favorite` | No | No | Writes `favorite: true` |
+| clipped URL | `--favorite --refresh` | Yes | Only if the page changed | Refreshes and keeps the marker |
+| clipped URL | `--unfavorite` | No | No | Removes the marker |
+| `webclip_id` | `--favorite` / `--unfavorite` | No | No | Marks the matching note(s) |
+
+- A target is either an `http(s)` URL or a `webclip_id`: the 64-hex digest from
+  the note frontmatter, with or without the `sha256:` prefix. A content hash
+  (`source_content_hash`) is accepted as a fallback when no `webclip_id`
+  matches.
+- Marker operations patch exactly one frontmatter line and leave the article
+  body and manual section byte-for-byte unchanged (a marker rewrite normalizes
+  line endings to LF). A `webclip_id` target
+  cannot be combined with `--refresh` or `--save-images`.
+- Every note matching the selector is marked; duplicate clips of the same
+  article are reported as "N notes" in the result.
 - Refreshing or re-clipping **without** a favorite flag keeps the existing
-  marker. Clear it explicitly with `--unfavorite` or `--unfavorite-only`.
+  marker. Clear it explicitly with `--unfavorite`.
 - A change limited to `favorite` does not require `--refresh`; article-body
   changes still do.
 - Only notes carrying a `webclip_id` and the managed/manual boundaries can be
-  marked. Unknown or ambiguous URLs fail closed.
+  marked. Unknown selectors fail closed.
 - Repeating the current state writes nothing and creates no Git commit.
 
 In Obsidian, query the boolean property directly. With the Dataview community
