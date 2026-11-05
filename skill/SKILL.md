@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.7.0
+version: 1.7.1
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:

@@ -8,7 +8,7 @@ dated notes into an Obsidian vault, and synchronizes them via guarded Git.
 
 | Path         | What it is                                                                 | Key files                                                                                                         |
 | ------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| repo root    | Hermes plugin package: config, safe vault writes, image handling, Git sync | `__init__.py`, `web_to_obsidian.py`, `plugin.yaml`, `config.example.toml`, `config.toml`                          |
+| repo root    | Hermes plugin package: config, safe vault writes, image handling, Git sync | `__init__.py`, `web_to_obsidian.py`, `plugin.yaml`, `config.example.toml`                          |
 | `extractor/` | Hardened Node.js extraction engine (Defuddle static + Playwright fallback) | `src/cli.mjs`, `src/extractor.mjs`, `src/network-policy.mjs`, `package.json`                                      |
 | `skill/`     | Hermes agent skill teaching the clip-to-Obsidian workflow                  | `SKILL.md`, `references/*.md`                                                                                     |
 | `tests/`     | Python plugin test suites                                                  | `conftest.py`, `test_web_to_obsidian.py`, `test_integration.py`, `test_plugin.py`, `test_security_regressions.py` |
@@ -32,7 +32,7 @@ hermes-webclip-obsidian-plugin/
 ├── web_to_obsidian.py          # core logic
 ├── plugin.yaml                 # plugin metadata + version
 ├── post-install.sh                  # one-shot installer (ships with hermes plugins install)
-├── config.toml                 # local non-secret config (tracked; edit per install)
+├── config.toml                 # local config (gitignored; generated from config.example.toml)
 ├── config.example.toml         # Configuration template
 ├── docs/                       # user-facing reference docs
 │   └── preview-link-params.md  # opening preview links in a browser
@@ -88,9 +88,9 @@ The project tracks module versions in **three** places. The CHANGELOG uses
 
 | Place                    | Field                    | Current           |
 | ------------------------ | ------------------------ | ----------------- |
-| `plugin.yaml`            | `version`                | 0.18.0            |
+| `plugin.yaml`            | `version`                | 0.19.0            |
 | `extractor/package.json` | `version`                | 0.4.1             |
-| `skill/SKILL.md`         | frontmatter `version`    | 1.7.0             |
+| `skill/SKILL.md`         | frontmatter `version`    | 1.7.1             |
 | `CHANGELOG.md`           | `## YYYY-MM-DD` headings | 2026-11-05 latest |
 
 Module versions are independent of each other and of the CHANGELOG; there is

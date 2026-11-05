@@ -52,10 +52,12 @@ steps are in [`PLUGIN.md`](PLUGIN.md#install).
 
 ### Configure
 
-Review `config.toml` in the plugin directory before the first clip. The shipped
-defaults target `~/obsidian/shijistar`, write to `Inbox`, and sync `master`;
-the [Configuration](#configuration) section lists every key. Restart your Hermes
-gateway after changing the configuration.
+Review `config.toml` in the plugin directory before the first clip. The
+installer generates it from `config.example.toml` (defaults target
+`~/obsidian/shijistar`, write to `Inbox`, and sync `master`); the
+[Configuration](#configuration) section lists every key. `config.toml` is
+gitignored, so a machine's local values are never published with the plugin.
+Restart your Hermes gateway after changing the configuration.
 
 ### Clip your first article
 
@@ -143,7 +145,8 @@ not a tag, so `#favorite` will not match. Full rules:
 
 ## Configuration
 
-`config.toml` lives in the plugin directory:
+`config.toml` lives in the plugin directory. It is gitignored and generated
+from `config.example.toml` on install:
 
 | Key | Default | Purpose |
 | --- | --- | --- |

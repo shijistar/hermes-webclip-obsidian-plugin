@@ -22,6 +22,8 @@ browser-state/
 
 # Runtime state and secrets
 .env
+# Local plugin configuration (per-install; generated from config.example.toml)
+/config.toml
 .env.*
 !.env.example
 *.log

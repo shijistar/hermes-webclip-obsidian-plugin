@@ -32,11 +32,15 @@ ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
       ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
 ```
 
-`config.toml` lives at the plugin package root and is tracked in git. Because the
+`config.toml` lives at the plugin package root but is **gitignored**. Because the
 installed path is a symlink to the repo, editing
-`<profile>/plugins/webclip-obsidian/config.toml` edits the tracked file — there
-is no per-profile copy. Machine-specific values therefore show up in the source
-repo's `git status`, and the pre-clip check requires that worktree to be
-clean, so commit them before clipping. If a value must stay local, hide it
-with `git update-index --skip-worktree config.toml`; `git status` then stays
-clean, at the cost of possible conflicts when the tracked file changes.
+`<profile>/plugins/webclip-obsidian/config.toml` edits that local file — there
+is no per-profile copy and no tracked file to dirty. Machine-specific values
+therefore never appear in the source repo's `git status`, and the pre-clip
+clean-worktree check stays satisfied.
+
+The installer bootstraps `config.toml` from `config.example.toml` when it is
+absent (`post-install.sh`, step 4). On upgrade from a version that tracked
+`config.toml`, the file disappears once the tracking-removal commit is pulled;
+recreate it with `cp config.example.toml config.toml` and re-apply local values
+(or re-run `post-install.sh`).

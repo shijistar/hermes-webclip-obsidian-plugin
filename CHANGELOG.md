@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `ClipConfig` accepts `preview_url_params` and the equivalent
   `WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variable. Both the
   single-clip and batch result URLs honour it.
+- `config.toml` is no longer tracked: it is listed in `.gitignore` and
+  generated from `config.example.toml` on install, so a user's local paths and
+  preview parameters are never published with the plugin. On upgrade from a
+  tracked `config.toml`, recreate it with `cp config.example.toml config.toml`
+  (or re-run `post-install.sh`) and re-apply local values.
 
 ## 2026-11-03
 
