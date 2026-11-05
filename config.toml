@@ -8,4 +8,4 @@ pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 # Query parameters appended to the article preview (GitHub blob) URL.
 # Leave empty to keep the URL unchanged. Feishu/Lark example:
 #   "lk_jump_to_browser=true&lk_mobile_jump_to_browser=true"
-preview_url_params = ""
+preview_url_params = "lk_mobile_jump_to_browser=true"
