@@ -1142,7 +1142,13 @@ def _normalize_preview_url_params(value: str) -> str:
 
 
 def append_query_params(url: str, params: str) -> str:
-    """Append pre-validated query parameters to *url* without touching its path."""
+    """Append pre-validated query parameters to *url*.
+
+    The path is preserved verbatim, but an existing query string is parsed and
+    re-encoded together with *params*, so its byte representation may change
+    (for example ``%20`` becomes ``+``). *params* must already be normalized by
+    ``_normalize_preview_url_params``; a malformed value raises ``ValueError``.
+    """
     if not params:
         return url
     pairs = parse_qsl(params, keep_blank_values=True, strict_parsing=True)

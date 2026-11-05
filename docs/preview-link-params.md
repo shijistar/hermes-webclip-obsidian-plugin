@@ -24,9 +24,14 @@ preview_url_params = "lk_jump_to_browser=true&lk_mobile_jump_to_browser=true"
   anything that is not a `k=v` pair are rejected when the
   config is loaded. The plugin raises `ClipError` rather than producing a
   malformed link.
+- Only `&` separates pairs. A `;` is literal text and is percent-encoded, so
+  `a=1;b=2` is a single parameter value, not two pairs.
+- `?` and `#` are rejected as literal characters. To pass a value that contains
+  them (for example a URL), percent-encode them as `%3F` and `%23`.
 - Parameters are appended to the preview URL only. They are never forwarded to
   the untrusted extractor process, and they have no meaning for GitHub itself.
-- Equivalent environment variable: `WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS`.
+- Equivalent environment variable (only when `config.toml` is absent):
+  `WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS`.
 
 ## Per-platform reference
 
