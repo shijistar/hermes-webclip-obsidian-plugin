@@ -54,6 +54,7 @@ hermes-webclip-obsidian-plugin/
 ### Python plugin
 
 ```bash
+pip install -r requirements-dev.txt
 python3 -m pytest tests/ -v
 ```
 
