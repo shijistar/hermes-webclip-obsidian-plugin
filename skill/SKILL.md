@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.6.0
+version: 1.7.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -54,6 +54,10 @@ images = "images"
 sync_branch = "master"
 lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
 pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
+# Query parameters appended to the article preview (GitHub blob) URL.
+# Leave empty to keep the URL unchanged. Feishu/Lark example:
+#   "lk_jump_to_browser=true&lk_mobile_jump_to_browser=true"
+preview_url_params = ""
 ```
 
 ## Invocation Pattern
@@ -246,7 +250,7 @@ live in `references/` and are linked from the rule they belong to.
 - **Node.js required**: the extractor shells out to `node`.
 - **Vault lock**: writes take a file lock; a concurrent clip blocks until it is released.
 - **Image confirmation is two-step**: `service.run(url)` returns `PendingClipResult` and saves nothing; the note is written only by `resume_pending('yes'|'no')`. Pass `--save-images yes|no` to skip the prompt.
-- **Always return the GitHub URL**: after a save, report `ClipResult.github_url` so the user can preview the note.
+- **Always return the GitHub URL**: after a save, report `ClipResult.github_url` so the user can preview the note. The URL may already carry the `preview_url_params` query parameters configured in `config.toml`; do not strip or duplicate them (see `docs/preview-link-params.md`).
 - **Pre-clip repo hygiene (both repos)**: before clipping, confirm the vault (`~/obsidian/shijistar`) and the plugin source repo are both on a clean `master`; a leftover feature branch would take the clip commit. Run `git switch master && git pull --ff-only` and `git status --short` in each repo.
 - **Dry-run preflight**: run `node extractor/src/cli.mjs <url> --no-browser` once and check `ok:true`, a non-empty `author` and a sane markdown length before `service.run()`; this catches 404s and anti-bot walls early.
 - **Hash protection on re-clip**: an existing note whose content changed raises `The saved page changed; rerun with --refresh to update it.` Check whether the note already exists and ask keep-vs-refresh instead of overwriting; `--refresh --save-images yes` refreshes and localizes.
@@ -286,5 +290,5 @@ New clips use the article's **published date** (from frontmatter `published` fie
 
 After article is saved and pushed:
 
-1. Show the GitHub vault URL from `ClipResult.github_url`
+1. Show the GitHub vault URL from `ClipResult.github_url` (it already includes any configured `preview_url_params`)
 2. Update any tracking (e.g., reading list) if user maintains one

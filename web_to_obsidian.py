@@ -21,7 +21,14 @@ import tempfile
 import threading
 import tomllib
 import unicodedata
-from urllib.parse import quote, urljoin, urlsplit, urlunsplit
+from urllib.parse import (
+    parse_qsl,
+    quote,
+    urlencode,
+    urljoin,
+    urlsplit,
+    urlunsplit,
+)
 from typing import Mapping, Sequence
 
 import yaml
@@ -125,6 +132,7 @@ class ClipConfig:
     sync_branch: str
     lock_file: Path
     pending_root: Path
+    preview_url_params: str = ""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "ClipConfig":
@@ -158,6 +166,9 @@ class ClipConfig:
         pending_root = Path(
             values.get("WEB_TO_OBSIDIAN_PENDING_ROOT", str(default_pending_root))
         ).expanduser().resolve()
+        preview_url_params = _normalize_preview_url_params(
+            values.get("WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS", "")
+        )
         return cls(
             vault=vault,
             destination=destination,
@@ -165,6 +176,7 @@ class ClipConfig:
             sync_branch=sync_branch,
             lock_file=lock_file,
             pending_root=pending_root,
+            preview_url_params=preview_url_params,
         )
 
     @classmethod
@@ -178,7 +190,15 @@ class ClipConfig:
         section = data.get("clip")
         if not isinstance(section, dict):
             raise ClipError("The plugin config.toml must contain a [clip] table.")
-        supported = {"vault", "destination", "images", "sync_branch", "lock_file", "pending_root"}
+        supported = {
+            "vault",
+            "destination",
+            "images",
+            "sync_branch",
+            "lock_file",
+            "pending_root",
+            "preview_url_params",
+        }
         if set(section) - supported or any(
             not isinstance(value, str) for value in section.values()
         ):
@@ -193,6 +213,10 @@ class ClipConfig:
             mapping["WEB_TO_OBSIDIAN_LOCK_FILE"] = section["lock_file"]
         if "pending_root" in section:
             mapping["WEB_TO_OBSIDIAN_PENDING_ROOT"] = section["pending_root"]
+        if "preview_url_params" in section:
+            mapping["WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS"] = section[
+                "preview_url_params"
+            ]
         return cls.from_env(mapping)
 
 
@@ -1081,6 +1105,58 @@ def find_remote_images(markdown: str) -> list[str]:
     if plain:
         _scan_remote_images_in_plain_text("".join(plain), seen, found)
     return found
+
+
+MAX_PREVIEW_URL_PARAMS_BYTES = 1024
+
+
+def _normalize_preview_url_params(value: str) -> str:
+    """Validate and canonicalize the configured preview query parameters.
+
+    Only plain ``k=v&k2=v2`` pairs are accepted, with at most one optional
+    leading ``?``. Surrounding whitespace is rejected rather than trimmed, and
+    control characters (C0, DEL and C1) are refused. The value becomes part of a
+    Markdown link, so anything that could alter the URL structure or inject
+    markup is rejected here.
+    """
+    raw = value
+    if not raw:
+        return ""
+    if len(raw.encode("utf-8")) > MAX_PREVIEW_URL_PARAMS_BYTES:
+        raise ClipError("The configured preview URL parameters are too long.")
+    if raw.startswith("?"):
+        raw = raw[1:]
+    if not raw or any(ch in raw for ch in "?#") or any(
+        unicodedata.category(ch) == "Cc" or ch.isspace() for ch in raw
+    ):
+        raise ClipError(
+            "The configured preview URL parameters contain unsafe characters."
+        )
+    try:
+        pairs = parse_qsl(raw, keep_blank_values=True, strict_parsing=True)
+    except ValueError as exc:
+        raise ClipError(
+            "The configured preview URL parameters must be k=v pairs."
+        ) from exc
+    if not pairs or any(not key for key, _ in pairs):
+        raise ClipError("The configured preview URL parameters must be k=v pairs.")
+    return urlencode(pairs, doseq=True)
+
+
+def append_query_params(url: str, params: str) -> str:
+    """Append pre-validated query parameters to *url*.
+
+    The path is preserved verbatim, but an existing query string is parsed and
+    re-encoded together with *params*, so its byte representation may change
+    (for example ``%20`` becomes ``+``). *params* must already be normalized by
+    ``_normalize_preview_url_params``; a malformed value raises ``ValueError``.
+    """
+    if not params:
+        return url
+    pairs = parse_qsl(params, keep_blank_values=True, strict_parsing=True)
+    parts = urlsplit(url)
+    merged = parse_qsl(parts.query, keep_blank_values=True) + pairs
+    return urlunsplit(parts._replace(query=urlencode(merged, doseq=True)))
 
 
 def github_blob_url(origin_url: str, branch: str, relative_path: str) -> str | None:
@@ -2850,7 +2926,9 @@ class ClipService:
                             remote_url, git_sync.branch, relative
                         )
                         if url:
-                            github_urls.append(url)
+                            github_urls.append(
+                                append_query_params(url, config.preview_url_params)
+                            )
             return BatchClipResult(
                 tuple(items),
                 outcome.commit_state,
@@ -2919,6 +2997,10 @@ class ClipService:
                     git_sync.branch,
                     relative_paths[0],
                 )
+                if github_url is not None:
+                    github_url = append_query_params(
+                        github_url, config.preview_url_params
+                    )
         return ClipResult(
             relative_paths[0],
             outcome.commit_state,

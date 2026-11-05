@@ -220,6 +220,146 @@ class ConfigAndFilenameTests(unittest.TestCase):
         self.assertRegex(first, r"^[0-9a-f]{12}\.md$")
 
 
+class PreviewUrlParamsTests(unittest.TestCase):
+    def test_append_query_params_returns_url_unchanged_when_unset(self):
+        url = "https://github.com/o/r/blob/master/Inbox/a%20b.md"
+        self.assertEqual(clip.append_query_params(url, ""), url)
+
+    def test_append_query_params_appends_single_and_multiple_params(self):
+        url = "https://github.com/o/r/blob/master/Inbox/a.md"
+        self.assertEqual(clip.append_query_params(url, "a=1"), url + "?a=1")
+        self.assertEqual(
+            clip.append_query_params(
+                url, "lk_jump_to_browser=true&lk_mobile_jump_to_browser=true"
+            ),
+            url + "?lk_jump_to_browser=true&lk_mobile_jump_to_browser=true",
+        )
+
+    def test_append_query_params_merges_existing_query_and_preserves_path(self):
+        url = "https://github.com/o/r/blob/master/Inbox/a%20b.md?plain=1"
+        self.assertEqual(
+            clip.append_query_params(url, "x=2"),
+            "https://github.com/o/r/blob/master/Inbox/a%20b.md?plain=1&x=2",
+        )
+
+    def test_append_query_params_keeps_percent_encoded_values(self):
+        url = "https://github.com/o/r/blob/master/Inbox/a.md"
+        self.assertEqual(
+            clip.append_query_params(url, "q=hello+world&r=a%2Fb"),
+            url + "?q=hello+world&r=a%2Fb",
+        )
+
+    def test_normalize_accepts_optional_leading_question_mark(self):
+        self.assertEqual(
+            clip._normalize_preview_url_params("?a=1&b=2"), "a=1&b=2"
+        )
+
+    def test_normalize_rejects_surrounding_whitespace(self):
+        for value in (
+            "  a=1",
+            "a=1  ",
+            chr(9) + "a=1" + chr(9),
+            "a=1" + chr(10),
+        ):
+            with self.subTest(value=repr(value)):
+                with self.assertRaises(clip.ClipError):
+                    clip._normalize_preview_url_params(value)
+
+    def test_normalize_rejects_control_characters(self):
+        for codepoint in (0x01, 0x7F, 0x80, 0x9F):
+            with self.subTest(codepoint=hex(codepoint)):
+                with self.assertRaises(clip.ClipError):
+                    clip._normalize_preview_url_params(f"a={chr(codepoint)}")
+
+    def test_from_file_loads_preview_url_params(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            vault.mkdir()
+            config_path = root / "config.toml"
+            config_path.write_text(
+                "[clip]\n"
+                f'vault = "{vault}"\n'
+                'destination = "Inbox"\n'
+                'images = "images"\n'
+                'sync_branch = "master"\n'
+                f'lock_file = "{root / "vault.lock"}"\n'
+                'preview_url_params = "?a=1&b=2"\n',
+                encoding="utf-8",
+            )
+            config = clip.ClipConfig.from_file(config_path)
+            self.assertEqual(config.preview_url_params, "a=1&b=2")
+
+    def test_from_file_without_new_key_keeps_legacy_behaviour(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            vault.mkdir()
+            config_path = root / "config.toml"
+            config_path.write_text(
+                "[clip]\n"
+                f'vault = "{vault}"\n'
+                'destination = "Inbox"\n'
+                'images = "images"\n'
+                'sync_branch = "master"\n'
+                f'lock_file = "{root / "vault.lock"}"\n',
+                encoding="utf-8",
+            )
+            config = clip.ClipConfig.from_file(config_path)
+            self.assertEqual(config.preview_url_params, "")
+
+    def test_from_env_reads_preview_url_params(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            vault.mkdir()
+            config = clip.ClipConfig.from_env(
+                {
+                    "WEB_TO_OBSIDIAN_VAULT": str(vault),
+                    "WEB_TO_OBSIDIAN_LOCK_FILE": str(root / "vault.lock"),
+                    "WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS": "a=1",
+                }
+            )
+            self.assertEqual(config.preview_url_params, "a=1")
+
+    def test_result_for_targets_appends_params_and_keeps_url_when_unset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            target = vault / "Inbox" / "note.md"
+            target.parent.mkdir(parents=True)
+            target.write_text("---\ntitle: x\n---\n", encoding="utf-8")
+            env = {
+                "WEB_TO_OBSIDIAN_VAULT": str(vault),
+                "WEB_TO_OBSIDIAN_DEST": "Inbox",
+                "WEB_TO_OBSIDIAN_IMAGES": "images",
+                "WEB_TO_OBSIDIAN_SYNC_BRANCH": "master",
+                "WEB_TO_OBSIDIAN_LOCK_FILE": str(root / "vault.lock"),
+                "WEB_TO_OBSIDIAN_PENDING_ROOT": str(root / "pending"),
+            }
+            remote = clip.ProcessResult(0, b"https://github.com/o/r.git\n", b"")
+            git_sync = mock.Mock()
+            git_sync.repo_root = vault
+            git_sync.branch = "master"
+            outcome = clip.GitOutcome("committed", "pushed")
+            service = clip.ClipService(root)
+            with mock.patch.object(clip.GitSync, "_git", return_value=remote):
+                plain = service._result_for_targets(
+                    clip.ClipConfig.from_env(env), [target], outcome, git_sync
+                )
+                configured = service._result_for_targets(
+                    clip.ClipConfig.from_env(
+                        {**env, "WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS": "a=1&b=2"}
+                    ),
+                    [target],
+                    outcome,
+                    git_sync,
+                )
+            expected = "https://github.com/o/r/blob/master/Inbox/note.md"
+            self.assertEqual(plain.github_url, expected)
+            self.assertEqual(configured.github_url, expected + "?a=1&b=2")
+
+
 class RenderingTests(unittest.TestCase):
     def test_yaml_quotes_injection_strings_and_normalizes_line_endings(self):
         data = dict(SUCCESS)
@@ -1511,7 +1651,7 @@ class BatchClipServiceTests(unittest.TestCase):
         self._git(repo, "push", "-u", "origin", "master")
         return root, repo
 
-    def _service(self, root, repo):
+    def _service(self, root, repo, *, preview_url_params=None):
         env = {
             "WEB_TO_OBSIDIAN_VAULT": str(repo),
             "WEB_TO_OBSIDIAN_DEST": "Inbox",
@@ -1520,6 +1660,8 @@ class BatchClipServiceTests(unittest.TestCase):
             "WEB_TO_OBSIDIAN_LOCK_FILE": str(Path(root) / "vault.lock"),
             "WEB_TO_OBSIDIAN_PENDING_ROOT": str(Path(root) / "pending"),
         }
+        if preview_url_params is not None:
+            env["WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS"] = preview_url_params
         return clip.ClipService(Path("."), env=env)
 
     @staticmethod
@@ -2080,6 +2222,93 @@ class BatchClipServiceTests(unittest.TestCase):
             self.assertNotIn(
                 "favorite", self._meta(self._note(repo, result.items[1].path))
             )
+
+    def test_batch_github_urls_carry_preview_params(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo, preview_url_params="a=1&b=2")
+            payload = self._payload("https://example.com/a", "Alpha")
+            with (
+                mock.patch.object(
+                    clip,
+                    "run_extractor_with_fallback",
+                    side_effect=lambda plugin_root, u, no_browser=False: payload,
+                ),
+                mock.patch.object(
+                    clip,
+                    "github_blob_url",
+                    return_value="https://github.com/o/r/blob/master/Inbox/Alpha.md",
+                ),
+            ):
+                result = service.run_batch(
+                    ["https://example.com/a --save-images no"]
+                )
+            self.assertTrue(result.items[0].ok, result.items[0].error)
+            self.assertEqual(
+                result.github_urls,
+                ("https://github.com/o/r/blob/master/Inbox/Alpha.md?a=1&b=2",),
+            )
+
+    def test_batch_github_urls_unchanged_when_params_unset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo)
+            payload = self._payload("https://example.com/b", "Beta")
+            with (
+                mock.patch.object(
+                    clip,
+                    "run_extractor_with_fallback",
+                    side_effect=lambda plugin_root, u, no_browser=False: payload,
+                ),
+                mock.patch.object(
+                    clip,
+                    "github_blob_url",
+                    return_value="https://github.com/o/r/blob/master/Inbox/Beta.md",
+                ),
+            ):
+                result = service.run_batch(
+                    ["https://example.com/b --save-images no"]
+                )
+            self.assertTrue(result.items[0].ok, result.items[0].error)
+            self.assertEqual(
+                result.github_urls,
+                ("https://github.com/o/r/blob/master/Inbox/Beta.md",),
+            )
+
+    def test_batch_github_urls_carry_preview_params_for_every_article(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo, preview_url_params="a=1")
+            payloads = [
+                self._payload("https://example.com/a", "Alpha"),
+                self._payload("https://example.com/b", "Beta"),
+            ]
+            def fake_extract(plugin_root, url, no_browser=False):
+                return payloads[0] if url.endswith("/a") else payloads[1]
+
+            def fake_blob(origin_url, branch, relative_path):
+                return f"https://github.com/o/r/blob/{branch}/{relative_path}"
+
+            with (
+                mock.patch.object(
+                    clip, "run_extractor_with_fallback", side_effect=fake_extract
+                ),
+                mock.patch.object(clip, "github_blob_url", side_effect=fake_blob),
+            ):
+                result = service.run_batch(
+                    [
+                        "https://example.com/a --save-images no",
+                        "https://example.com/b --save-images no",
+                    ]
+                )
+            self.assertEqual(len(result.items), 2)
+            self.assertEqual(len(result.github_urls), 2)
+            for item, url in zip(result.items, result.github_urls):
+                self.assertTrue(item.ok, item.error)
+                self.assertEqual(
+                    url,
+                    f"https://github.com/o/r/blob/master/{item.path}?a=1",
+                )
 
 
 if __name__ == "__main__":

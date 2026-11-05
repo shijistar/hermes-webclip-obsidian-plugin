@@ -4,6 +4,27 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-05
+
+### Added
+
+- `preview_url_params` in `config.toml` appends custom query parameters to the
+  article preview (GitHub blob) URL. It is empty by default, so existing
+  installs keep byte-identical URLs. Clients such as Feishu/Lark support
+  `lk_jump_to_browser=true` and `lk_mobile_jump_to_browser=true` to open a link
+  in the system browser. Invalid values (fragments, control characters,
+  values that are not `k=v` pairs, and overlong strings) are rejected when the
+  config is loaded.
+- `docs/preview-link-params.md`: a per-platform reference for opening preview
+  links in a browser, listing which platforms support a URL query parameter and
+  which require a client setting or an in-app JSAPI instead.
+
+### Changed
+
+- `ClipConfig` accepts `preview_url_params` and the equivalent
+  `WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variable. Both the
+  single-clip and batch result URLs honour it.
+
 ## 2026-11-03
 
 ### Changed
