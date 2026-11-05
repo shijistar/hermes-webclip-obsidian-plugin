@@ -122,8 +122,9 @@ not a messaging-platform standard. iOS Safari can be targeted with
 [iOSProgramming](https://www.reddit.com/r/iOSProgramming/comments/tpuowz/figured_out_safari_url_scheme/)),
 but those replace the URL scheme instead of appending a query parameter, and
 WeChat's in-app browser restricts arbitrary scheme launches
-([CSDN](https://ask.csdn.net/questions/9340818)). None of these are usable
-through `preview_url_params`.
+([CSDN](https://ask.csdn.net/questions/9340818)). The scheme-based approaches
+are not usable through `preview_url_params`; the GoodBarber parameter above is
+a query parameter and is not affected.
 
 ## Sources
 

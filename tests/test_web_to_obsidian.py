@@ -254,6 +254,23 @@ class PreviewUrlParamsTests(unittest.TestCase):
             clip._normalize_preview_url_params("?a=1&b=2"), "a=1&b=2"
         )
 
+    def test_normalize_rejects_surrounding_whitespace(self):
+        for value in (
+            "  a=1",
+            "a=1  ",
+            chr(9) + "a=1" + chr(9),
+            "a=1" + chr(10),
+        ):
+            with self.subTest(value=repr(value)):
+                with self.assertRaises(clip.ClipError):
+                    clip._normalize_preview_url_params(value)
+
+    def test_normalize_rejects_control_characters(self):
+        for codepoint in (0x01, 0x7F, 0x80, 0x9F):
+            with self.subTest(codepoint=hex(codepoint)):
+                with self.assertRaises(clip.ClipError):
+                    clip._normalize_preview_url_params(f"a={chr(codepoint)}")
+
     def test_from_file_loads_preview_url_params(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2257,6 +2274,41 @@ class BatchClipServiceTests(unittest.TestCase):
                 result.github_urls,
                 ("https://github.com/o/r/blob/master/Inbox/Beta.md",),
             )
+
+    def test_batch_github_urls_carry_preview_params_for_every_article(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, repo = self._vault(tmp)
+            service = self._service(root, repo, preview_url_params="a=1")
+            payloads = [
+                self._payload("https://example.com/a", "Alpha"),
+                self._payload("https://example.com/b", "Beta"),
+            ]
+            def fake_extract(plugin_root, url, no_browser=False):
+                return payloads[0] if url.endswith("/a") else payloads[1]
+
+            def fake_blob(origin_url, branch, relative_path):
+                return f"https://github.com/o/r/blob/{branch}/{relative_path}"
+
+            with (
+                mock.patch.object(
+                    clip, "run_extractor_with_fallback", side_effect=fake_extract
+                ),
+                mock.patch.object(clip, "github_blob_url", side_effect=fake_blob),
+            ):
+                result = service.run_batch(
+                    [
+                        "https://example.com/a --save-images no",
+                        "https://example.com/b --save-images no",
+                    ]
+                )
+            self.assertEqual(len(result.items), 2)
+            self.assertEqual(len(result.github_urls), 2)
+            for item, url in zip(result.items, result.github_urls):
+                self.assertTrue(item.ok, item.error)
+                self.assertEqual(
+                    url,
+                    f"https://github.com/o/r/blob/master/{item.path}?a=1",
+                )
 
 
 if __name__ == "__main__":

@@ -1114,10 +1114,12 @@ def _normalize_preview_url_params(value: str) -> str:
     """Validate and canonicalize the configured preview query parameters.
 
     Only plain ``k=v&k2=v2`` pairs are accepted, with at most one optional
-    leading ``?``. The value becomes part of a Markdown link, so anything that
-    could alter the URL structure or inject markup is rejected here.
+    leading ``?``. Surrounding whitespace is rejected rather than trimmed, and
+    control characters (C0, DEL and C1) are refused. The value becomes part of a
+    Markdown link, so anything that could alter the URL structure or inject
+    markup is rejected here.
     """
-    raw = value.strip()
+    raw = value
     if not raw:
         return ""
     if len(raw.encode("utf-8")) > MAX_PREVIEW_URL_PARAMS_BYTES:
@@ -1125,7 +1127,7 @@ def _normalize_preview_url_params(value: str) -> str:
     if raw.startswith("?"):
         raw = raw[1:]
     if not raw or any(ch in raw for ch in "?#") or any(
-        ord(ch) < 32 or ord(ch) == 127 or ch.isspace() for ch in raw
+        unicodedata.category(ch) == "Cc" or ch.isspace() for ch in raw
     ):
         raise ClipError(
             "The configured preview URL parameters contain unsafe characters."

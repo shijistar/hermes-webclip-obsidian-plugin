@@ -262,6 +262,9 @@ class PreviewUrlParamsSecurityTests(unittest.TestCase):
             "justkey",
             "=novalue",
             "a=" * 600,
+            "  a=1",
+            "a=1  ",
+            "a=" + chr(0x80),
         ]
         for value in unsafe:
             with self.subTest(value=value[:24]):
@@ -276,6 +279,34 @@ class PreviewUrlParamsSecurityTests(unittest.TestCase):
         rendered = clip.append_query_params(url, configured)
         self.assertEqual(rendered, url + "?a=1")
         self.assertNotIn("#", rendered)
+
+    def test_loader_rejects_unsafe_preview_params(self):
+        unsafe = "a=1#fragment"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            vault.mkdir()
+            mapping = {
+                "WEB_TO_OBSIDIAN_VAULT": str(vault),
+                "WEB_TO_OBSIDIAN_LOCK_FILE": str(root / "vault.lock"),
+            }
+            with self.assertRaises(clip.ClipError):
+                clip.ClipConfig.from_env(
+                    {**mapping, "WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS": unsafe}
+                )
+            config_path = root / "config.toml"
+            config_path.write_text(
+                "[clip]\n"
+                f'vault = "{vault}"\n'
+                'destination = "Inbox"\n'
+                'images = "images"\n'
+                'sync_branch = "master"\n'
+                f'lock_file = "{root / "vault.lock"}"\n'
+                f'preview_url_params = "{unsafe}"\n',
+                encoding="utf-8",
+            )
+            with self.assertRaises(clip.ClipError):
+                clip.ClipConfig.from_file(config_path)
 
 
 if __name__ == "__main__":
