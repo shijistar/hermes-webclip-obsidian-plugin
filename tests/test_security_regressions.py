@@ -251,5 +251,32 @@ class SharedLockRegressionTests(unittest.TestCase):
                         self.fail("second contender unexpectedly acquired the lock")
 
 
+class PreviewUrlParamsSecurityTests(unittest.TestCase):
+    def test_unsafe_preview_params_are_rejected(self):
+        unsafe = [
+            "a=1#fragment",
+            "a=1\r\nX-Injected: 1",
+            "a=1\nX-Injected: 1",
+            "a=1\tX",
+            "a=1&&b=2",
+            "justkey",
+            "=novalue",
+            "a=" * 600,
+        ]
+        for value in unsafe:
+            with self.subTest(value=value[:24]):
+                with self.assertRaises(clip.ClipError):
+                    clip._normalize_preview_url_params(value)
+
+    def test_rejected_params_never_reach_the_preview_url(self):
+        url = "https://github.com/o/r/blob/master/Inbox/note.md"
+        with self.assertRaises(clip.ClipError):
+            clip._normalize_preview_url_params("a=1#evil")
+        configured = clip._normalize_preview_url_params("a=1")
+        rendered = clip.append_query_params(url, configured)
+        self.assertEqual(rendered, url + "?a=1")
+        self.assertNotIn("#", rendered)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -153,12 +153,13 @@ not a tag, so `#favorite` will not match. Full rules:
 | `sync_branch` | `master` | Branch the vault must be on for Git sync. |
 | `lock_file` | `~/.hermes/workspace/cache/webclip-obsidian/vault.lock` | Cross-process lock; must be outside the vault. |
 | `pending_root` | `~/.hermes/workspace/cache/webclip-obsidian/pending-state` | Pending image confirmations; one active at a time. |
+| `preview_url_params` | `""` (empty) | Query parameters appended to the article preview URL; see [Opening preview links in a browser](docs/preview-link-params.md). |
 
 The equivalent `WEB_TO_OBSIDIAN_VAULT`, `WEB_TO_OBSIDIAN_DEST`,
 `WEB_TO_OBSIDIAN_IMAGES`, `WEB_TO_OBSIDIAN_SYNC_BRANCH`,
-`WEB_TO_OBSIDIAN_LOCK_FILE`, and `WEB_TO_OBSIDIAN_PENDING_ROOT` environment
-variables are accepted when `config.toml` is absent. Values are never forwarded
-to the extractor process.
+`WEB_TO_OBSIDIAN_LOCK_FILE`, `WEB_TO_OBSIDIAN_PENDING_ROOT`, and
+`WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variables are accepted when
+`config.toml` is absent. Values are never forwarded to the extractor process.
 
 ## Safety
 

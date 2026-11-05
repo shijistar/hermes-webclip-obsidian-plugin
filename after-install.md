@@ -22,6 +22,7 @@ forced reinstall (`hermes plugins install --force`) and **preserves your
 `config.toml`** — it is backed up before the reinstall and restored
 afterwards; first-time installs are unchanged. -->
 
-Then review `config.toml`, restart your Hermes gateway service from a separate
-shell, and clip with `/webclip <url>`. You can also run the clip with natural
-language: `clip to obsidian <url>`
+Then review `config.toml` (including `preview_url_params`; see
+`docs/preview-link-params.md`), restart your Hermes gateway service from a
+separate shell, and clip with `/webclip <url>`. You can also run the clip with
+natural language: `clip to obsidian <url>`

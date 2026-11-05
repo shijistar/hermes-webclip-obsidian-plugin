@@ -78,6 +78,10 @@ images = "images"
 sync_branch = "master"
 lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
 pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
+# Query parameters appended to the article preview (GitHub blob) URL.
+# Leave empty to keep the URL unchanged. Feishu/Lark example:
+#   "lk_jump_to_browser=true&lk_mobile_jump_to_browser=true"
+preview_url_params = ""
 ```
 
 - `vault` — the Obsidian vault root.
@@ -87,12 +91,16 @@ pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 - `lock_file` — cross-process lock path; **must be outside the vault**.
 - `pending_root` — where pending image confirmations are stored; only one
   active yes/no confirmation is supported at a time.
+- `preview_url_params` — query parameters appended to the article preview
+  (GitHub blob) URL; empty by default. See
+  [`docs/preview-link-params.md`](docs/preview-link-params.md) for per-platform
+  parameters and examples.
 
 When `config.toml` is absent, the legacy `WEB_TO_OBSIDIAN_VAULT`,
 `WEB_TO_OBSIDIAN_DEST`, `WEB_TO_OBSIDIAN_IMAGES`, `WEB_TO_OBSIDIAN_SYNC_BRANCH`,
-`WEB_TO_OBSIDIAN_LOCK_FILE`, and `WEB_TO_OBSIDIAN_PENDING_ROOT` environment
-variables are accepted as a fallback. These values are never forwarded to the
-untrusted extractor process.
+`WEB_TO_OBSIDIAN_LOCK_FILE`, `WEB_TO_OBSIDIAN_PENDING_ROOT`, and
+`WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variables are accepted as a
+fallback. These values are never forwarded to the untrusted extractor process.
 
 ## Usage
 

@@ -34,6 +34,8 @@ hermes-webclip-obsidian-plugin/
 ├── post-install.sh                  # one-shot installer (ships with hermes plugins install)
 ├── config.toml                 # local non-secret config (tracked; edit per install)
 ├── config.example.toml         # Configuration template
+├── docs/                       # user-facing reference docs
+│   └── preview-link-params.md  # opening preview links in a browser
 ├── after-install.md            # Follow-up steps shown by `hermes plugins install`
 ├── tests/                      # python plugin test suites (pytest)
 ├── extractor/                  # node.js content extraction engine
@@ -85,10 +87,10 @@ The project tracks module versions in **three** places. The CHANGELOG uses
 
 | Place                    | Field                    | Current           |
 | ------------------------ | ------------------------ | ----------------- |
-| `plugin.yaml`            | `version`                | 0.17.0            |
+| `plugin.yaml`            | `version`                | 0.18.0            |
 | `extractor/package.json` | `version`                | 0.4.1             |
-| `skill/SKILL.md`         | frontmatter `version`    | 1.6.0             |
-| `CHANGELOG.md`           | `## YYYY-MM-DD` headings | 2026-11-03 latest |
+| `skill/SKILL.md`         | frontmatter `version`    | 1.7.0             |
+| `CHANGELOG.md`           | `## YYYY-MM-DD` headings | 2026-11-05 latest |
 
 Module versions are independent of each other and of the CHANGELOG; there is
 no requirement that they match a changelog heading.
