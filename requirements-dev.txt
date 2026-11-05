@@ -1,0 +1,5 @@
+# Test and development dependencies for the hermes-webclip-obsidian plugin.
+# CI installs this file when present (see .github/workflows/reusable-test.yml);
+# otherwise it falls back to `pip install pytest pyyaml`.
+-r requirements.txt
+pytest>=8

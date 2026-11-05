@@ -181,7 +181,7 @@ Details: [`PLUGIN.md`](PLUGIN.md#network-and-content-safety),
 ## Development
 
 ```bash
-pip install pytest pyyaml
+pip install -r requirements-dev.txt
 python3 -m pytest tests/ -v
 cd extractor && npm test && npm run check
 ```
