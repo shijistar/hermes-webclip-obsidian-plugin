@@ -243,6 +243,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
         )
 
     def test_append_query_params_round_trips_common_percent_encodings(self):
+        """Percent-encoded input is parsed and re-encoded, not byte-preserved."""
         url = "https://github.com/o/r/blob/master/Inbox/a.md"
         self.assertEqual(
             clip.append_query_params(url, "q=hello+world&r=a%2Fb"),
@@ -256,6 +257,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
         )
 
     def test_append_query_params_preserves_fragment(self):
+        """A URL fragment stays after the query string when params are appended."""
         self.assertEqual(
             clip.append_query_params("https://example.com/a#section", "x=1"),
             "https://example.com/a?x=1#section",
@@ -267,12 +269,17 @@ class PreviewUrlParamsTests(unittest.TestCase):
         )
 
     def test_normalize_counts_limit_after_leading_question_mark(self):
+        """The 1 KiB cap applies after an optional leading "?" is stripped."""
         body = "a=" + ("x" * 1022)  # exactly 1024 bytes
         self.assertEqual(
             clip._normalize_preview_url_params("?" + body), body
         )
         with self.assertRaises(clip.ClipError):
             clip._normalize_preview_url_params("a=" + ("x" * 1023))
+        # Multibyte: 514 characters but 1026 UTF-8 bytes, so a character-based
+        # limit would wrongly accept it.
+        with self.assertRaises(clip.ClipError):
+            clip._normalize_preview_url_params("?a=" + ("\u00e9" * 512))
 
     def test_normalize_rejects_surrounding_whitespace(self):
         for value in (
@@ -380,6 +387,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
             self.assertEqual(configured.github_url, expected + "?a=1&b=2")
 
     def test_result_for_targets_does_not_duplicate_params_on_repeat(self):
+        """Repeated result construction does not append the params twice."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             vault = root / "vault"
