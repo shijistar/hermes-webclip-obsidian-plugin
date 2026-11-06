@@ -380,6 +380,10 @@ class PendingClipState:
         }
 
     def matches_config(self, config: ClipConfig) -> bool:
+        # ``preview_url_params`` is intentionally excluded: it only changes the
+        # preview URL returned to the caller, not where or what is written, so
+        # editing it mid-way through a two-step clip must not invalidate the
+        # pending state.
         return (
             self.vault == str(config.vault)
             and self.destination == str(config.destination)
@@ -1122,10 +1126,10 @@ def _normalize_preview_url_params(value: str) -> str:
     raw = value
     if not raw:
         return ""
-    if len(raw.encode("utf-8")) > MAX_PREVIEW_URL_PARAMS_BYTES:
-        raise ClipError("The configured preview URL parameters are too long.")
     if raw.startswith("?"):
         raw = raw[1:]
+    if len(raw.encode("utf-8")) > MAX_PREVIEW_URL_PARAMS_BYTES:
+        raise ClipError("The configured preview URL parameters are too long.")
     if not raw or any(ch in raw for ch in "?#") or any(
         unicodedata.category(ch) == "Cc" or ch.isspace() for ch in raw
     ):
