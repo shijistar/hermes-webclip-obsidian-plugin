@@ -56,7 +56,8 @@ Review `config.toml` in the plugin directory before the first clip. The
 installer generates it from `config.example.toml` (defaults target
 `~/obsidian/shijistar`, write to `Inbox`, and sync `master`); the
 [Configuration](#configuration) section lists every key. `config.toml` is
-gitignored, so a machine's local values are never published with the plugin.
+gitignored, so this version and later ones do not publish a machine's local
+values (values committed before this change remain visible in git history).
 Restart your Hermes gateway after changing the configuration.
 
 ### Clip your first article
