@@ -84,19 +84,37 @@ fi
 #   3. else PROFILE_DIR = HERMES_HOME (default profile).
 PROFILE_DIR="$HERMES_HOME"
 _derived_profile=""
-if [[ "$SCRIPT_DIR" == *"/profiles/"* ]]; then
-  _profiles_idx="${SCRIPT_DIR%%/plugins/*}"       # strip trailing /plugins/*
-  if [[ "$_profiles_idx" == *"/profiles/"* ]]; then
-    _derived_profile="${_profiles_idx#*"/profiles/"}"
-    _derived_profile="${_derived_profile%%/*}"
+_installed_profile=""
+# Prefer the installed plugin dir this script actually ships in: when the
+# script sits at <profile>/plugins/<key>, that path identifies the profile
+# unambiguously. It must win over the "single named profile" heuristic below,
+# which otherwise hijacks a default-profile install whenever exactly one
+# named profile exists. It must NOT override an explicit --hermes-home that
+# points at a different home, so only adopt it when it belongs to that home.
+if [[ -f "$SCRIPT_DIR/plugin.yaml" && "$(basename "$(dirname "$SCRIPT_DIR")")" == "plugins" ]]; then
+  _installed_profile="$(cd "$(dirname "$(dirname "$SCRIPT_DIR")")" && pwd)"
+  if ! [[ "$_installed_profile" -ef "$HERMES_HOME" ]] && ! [[ "$(dirname "$_installed_profile")" -ef "$HERMES_HOME/profiles" ]]; then
+    _installed_profile=""
   fi
 fi
-if [[ -n "$_derived_profile" && -d "$HERMES_HOME/profiles/$_derived_profile" ]]; then
-  PROFILE_DIR="$HERMES_HOME/profiles/$_derived_profile"
-elif [[ -d "$HERMES_HOME/profiles" ]]; then
-  _profiles_candidates=("$HERMES_HOME"/profiles/*/)
-  if [[ ${#_profiles_candidates[@]} -eq 1 && -d "${_profiles_candidates[0]}" ]]; then
-    PROFILE_DIR="$(cd "${_profiles_candidates[0]}" && pwd)"
+
+if [[ -n "$_installed_profile" ]]; then
+  PROFILE_DIR="$_installed_profile"
+else
+  if [[ "$SCRIPT_DIR" == *"/profiles/"* ]]; then
+    _profiles_idx="${SCRIPT_DIR%%/plugins/*}"       # strip trailing /plugins/*
+    if [[ "$_profiles_idx" == *"/profiles/"* ]]; then
+      _derived_profile="${_profiles_idx#*"/profiles/"}"
+      _derived_profile="${_derived_profile%%/*}"
+    fi
+  fi
+  if [[ -n "$_derived_profile" && -d "$HERMES_HOME/profiles/$_derived_profile" ]]; then
+    PROFILE_DIR="$HERMES_HOME/profiles/$_derived_profile"
+  elif [[ -d "$HERMES_HOME/profiles" ]]; then
+    _profiles_candidates=("$HERMES_HOME"/profiles/*/)
+    if [[ ${#_profiles_candidates[@]} -eq 1 && -d "${_profiles_candidates[0]}" ]]; then
+      PROFILE_DIR="$(cd "${_profiles_candidates[0]}" && pwd)"
+    fi
   fi
 fi
 

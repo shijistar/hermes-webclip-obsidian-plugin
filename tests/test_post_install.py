@@ -8,6 +8,7 @@ the fake payload omits ``extractor/`` so the npm-install step is skipped.
 
 import os
 import re
+import shutil
 import stat
 import subprocess
 import textwrap
@@ -192,3 +193,81 @@ def test_refresh_restore_failure_reports_error_and_keeps_backup(hermes_env):
         assert backup.read_text() == USER_CONFIG
     finally:
         backup.unlink(missing_ok=True)
+
+
+def _install_installer_copy(plugin_dir: Path) -> None:
+    """Lay out an installed plugin dir that carries its own installer copy."""
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(POST_INSTALL, plugin_dir / "post-install.sh")
+    shutil.copy2(REPO_ROOT / "config.example.toml", plugin_dir / "config.example.toml")
+    (plugin_dir / "plugin.yaml").write_text("name: webclip-obsidian\n")
+
+
+def _run_from_plugin_dir(
+    plugin_dir: Path, hermes_home: Path, bin_dir: Path, *args: str
+) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    env["HERMES_HOME"] = str(hermes_home)
+    env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    return subprocess.run(
+        [
+            "bash",
+            str(plugin_dir / "post-install.sh"),
+            "--hermes-home",
+            str(hermes_home),
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(plugin_dir),
+    )
+
+
+def test_default_install_with_single_profile_bootstraps_default_plugin(hermes_env):
+    """A default-profile install must not be hijacked by one named profile.
+
+    Regression for: running the installer from <HERMES_HOME>/plugins/<key>
+    while <HERMES_HOME>/profiles/ holds exactly one profile used to select
+    that profile and write config.toml into it.
+    """
+    hermes_home, bin_dir = hermes_env
+    named_plugin = hermes_home / "profiles" / "coder" / PLUGIN_REL
+    named_plugin.mkdir(parents=True)
+    default_plugin = _plugin_dir(hermes_home)
+    _install_installer_copy(default_plugin)
+
+    result = _run_from_plugin_dir(default_plugin, hermes_home, bin_dir)
+    assert result.returncode == 0, result.stderr
+    assert (default_plugin / "config.toml").is_file()
+    assert not (named_plugin / "config.toml").exists()
+
+
+def test_named_profile_install_keeps_its_own_config(hermes_env):
+    """Running from a named-profile plugin dir still targets that profile."""
+    hermes_home, bin_dir = hermes_env
+    named_plugin = hermes_home / "profiles" / "coder" / PLUGIN_REL
+    _install_installer_copy(named_plugin)
+
+    result = _run_from_plugin_dir(named_plugin, hermes_home, bin_dir)
+    assert result.returncode == 0, result.stderr
+    assert (named_plugin / "config.toml").is_file()
+    assert not (_plugin_dir(hermes_home) / "config.toml").exists()
+
+
+def test_hermes_home_wins_over_plugin_dir_from_another_home(tmp_path):
+    """An explicit --hermes-home is not overridden by the checkout's own home."""
+    source_home = tmp_path / "source_home"
+    source_plugin = source_home / "plugins" / "webclip-obsidian"
+    _install_installer_copy(source_plugin)
+
+    requested_home = tmp_path / "requested_home"
+    requested_plugin = requested_home / PLUGIN_REL
+    requested_plugin.mkdir(parents=True)
+    bin_dir = tmp_path / "bin"
+    _write_shim(bin_dir)
+
+    result = _run_from_plugin_dir(source_plugin, requested_home, bin_dir)
+    assert result.returncode == 0, result.stderr
+    assert (requested_plugin / "config.toml").is_file()
+    assert not (source_plugin / "config.toml").exists()
