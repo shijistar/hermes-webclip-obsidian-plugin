@@ -4,6 +4,18 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-06
+
+### Fixed
+
+- `post-install.sh` now prefers the installed plugin directory it runs from
+  (`<profile>/plugins/<key>`) when deriving the target profile. Previously,
+  running from the default `<HERMES_HOME>/plugins/webclip-obsidian` while
+  exactly one named profile existed selected that profile, so `config.toml`,
+  dependencies and the skill symlink landed in the wrong profile and the
+  default install ended up with no configuration. The single-profile
+  heuristic now only applies to source checkouts.
+
 ## 2026-11-05
 
 ### Added
