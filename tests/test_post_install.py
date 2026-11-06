@@ -253,3 +253,21 @@ def test_named_profile_install_keeps_its_own_config(hermes_env):
     assert result.returncode == 0, result.stderr
     assert (named_plugin / "config.toml").is_file()
     assert not (_plugin_dir(hermes_home) / "config.toml").exists()
+
+
+def test_hermes_home_wins_over_plugin_dir_from_another_home(tmp_path):
+    """An explicit --hermes-home is not overridden by the checkout's own home."""
+    source_home = tmp_path / "source_home"
+    source_plugin = source_home / "plugins" / "webclip-obsidian"
+    _install_installer_copy(source_plugin)
+
+    requested_home = tmp_path / "requested_home"
+    requested_plugin = requested_home / PLUGIN_REL
+    requested_plugin.mkdir(parents=True)
+    bin_dir = tmp_path / "bin"
+    _write_shim(bin_dir)
+
+    result = _run_from_plugin_dir(source_plugin, requested_home, bin_dir)
+    assert result.returncode == 0, result.stderr
+    assert (requested_plugin / "config.toml").is_file()
+    assert not (source_plugin / "config.toml").exists()
