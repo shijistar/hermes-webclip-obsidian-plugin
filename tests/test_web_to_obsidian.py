@@ -242,17 +242,44 @@ class PreviewUrlParamsTests(unittest.TestCase):
             "https://github.com/o/r/blob/master/Inbox/a%20b.md?plain=1&x=2",
         )
 
-    def test_append_query_params_keeps_percent_encoded_values(self):
+    def test_append_query_params_round_trips_common_percent_encodings(self):
+        """Percent-encoded input is parsed and re-encoded, not byte-preserved."""
         url = "https://github.com/o/r/blob/master/Inbox/a.md"
         self.assertEqual(
             clip.append_query_params(url, "q=hello+world&r=a%2Fb"),
             url + "?q=hello+world&r=a%2Fb",
+        )
+        # Values are re-encoded, not byte-preserved: "%41" becomes "A" and
+        # "%20" becomes "+".
+        self.assertEqual(
+            clip.append_query_params(url, "a=%41&b=x%20y"),
+            url + "?a=A&b=x+y",
+        )
+
+    def test_append_query_params_preserves_fragment(self):
+        """A URL fragment stays after the query string when params are appended."""
+        self.assertEqual(
+            clip.append_query_params("https://example.com/a#section", "x=1"),
+            "https://example.com/a?x=1#section",
         )
 
     def test_normalize_accepts_optional_leading_question_mark(self):
         self.assertEqual(
             clip._normalize_preview_url_params("?a=1&b=2"), "a=1&b=2"
         )
+
+    def test_normalize_counts_limit_after_leading_question_mark(self):
+        """The 1 KiB cap applies after an optional leading "?" is stripped."""
+        body = "a=" + ("x" * 1022)  # exactly 1024 bytes
+        self.assertEqual(
+            clip._normalize_preview_url_params("?" + body), body
+        )
+        with self.assertRaises(clip.ClipError):
+            clip._normalize_preview_url_params("a=" + ("x" * 1023))
+        # Multibyte: 514 characters but 1026 UTF-8 bytes, so a character-based
+        # limit would wrongly accept it.
+        with self.assertRaises(clip.ClipError):
+            clip._normalize_preview_url_params("?a=" + ("\u00e9" * 512))
 
     def test_normalize_rejects_surrounding_whitespace(self):
         for value in (
@@ -358,6 +385,38 @@ class PreviewUrlParamsTests(unittest.TestCase):
             expected = "https://github.com/o/r/blob/master/Inbox/note.md"
             self.assertEqual(plain.github_url, expected)
             self.assertEqual(configured.github_url, expected + "?a=1&b=2")
+
+    def test_result_for_targets_does_not_duplicate_params_on_repeat(self):
+        """Repeated result construction does not append the params twice."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            target = vault / "Inbox" / "note.md"
+            target.parent.mkdir(parents=True)
+            target.write_text("---\ntitle: x\n---\n", encoding="utf-8")
+            config = clip.ClipConfig.from_env(
+                {
+                    "WEB_TO_OBSIDIAN_VAULT": str(vault),
+                    "WEB_TO_OBSIDIAN_DEST": "Inbox",
+                    "WEB_TO_OBSIDIAN_IMAGES": "images",
+                    "WEB_TO_OBSIDIAN_SYNC_BRANCH": "master",
+                    "WEB_TO_OBSIDIAN_LOCK_FILE": str(root / "vault.lock"),
+                    "WEB_TO_OBSIDIAN_PENDING_ROOT": str(root / "pending"),
+                    "WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS": "a=1",
+                }
+            )
+            remote = clip.ProcessResult(0, b"https://github.com/o/r.git\n", b"")
+            git_sync = mock.Mock()
+            git_sync.repo_root = vault
+            git_sync.branch = "master"
+            outcome = clip.GitOutcome("committed", "pushed")
+            service = clip.ClipService(root)
+            with mock.patch.object(clip.GitSync, "_git", return_value=remote):
+                first = service._result_for_targets(config, [target], outcome, git_sync)
+                second = service._result_for_targets(config, [target], outcome, git_sync)
+            expected = "https://github.com/o/r/blob/master/Inbox/note.md?a=1"
+            self.assertEqual(first.github_url, expected)
+            self.assertEqual(second.github_url, expected)
 
 
 class RenderingTests(unittest.TestCase):
