@@ -32,11 +32,31 @@ ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill \
       ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
 ```
 
-`config.toml` lives at the plugin package root and is tracked in git. Because the
+`config.toml` lives at the plugin package root but is **gitignored**. Because the
 installed path is a symlink to the repo, editing
-`<profile>/plugins/webclip-obsidian/config.toml` edits the tracked file — there
-is no per-profile copy. Machine-specific values therefore show up in the source
-repo's `git status`, and the pre-clip check requires that worktree to be
-clean, so commit them before clipping. If a value must stay local, hide it
-with `git update-index --skip-worktree config.toml`; `git status` then stays
-clean, at the cost of possible conflicts when the tracked file changes.
+`<profile>/plugins/webclip-obsidian/config.toml` edits that local file — there
+is no per-profile copy and no tracked file to dirty. Machine-specific values
+therefore never appear in the source repo's `git status`, and the pre-clip
+clean-worktree check stays satisfied.
+
+The installer bootstraps `config.toml` from `config.example.toml` when it is
+absent (`post-install.sh`, step 4). A plain symlink deployment that never ran
+the installer needs the same step once:
+`cp config.example.toml config.toml`, then set `vault` and the other local
+values before the first clip.
+
+On upgrade from a version that tracked `config.toml`, pulling the
+tracking-removal commit deletes the file when the worktree is clean. If the
+file has local edits, `git pull` refuses instead, so handle it explicitly:
+
+```bash
+cp config.toml /tmp/config.toml.bak                  # keep local values
+git update-index --no-skip-worktree config.toml 2>/dev/null || true
+git checkout -- config.toml                          # drop tracked modifications
+git pull --ff-only
+[ -f config.toml ] || cp config.example.toml config.toml
+cp /tmp/config.toml.bak config.toml                  # restore local values
+```
+
+To recover the previously tracked version from history instead of the template:
+`git show <commit-before-pull>:config.toml > config.toml`.

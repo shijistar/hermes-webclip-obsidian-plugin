@@ -4,6 +4,18 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-06
+
+### Fixed
+
+- `post-install.sh` now prefers the installed plugin directory it runs from
+  (`<profile>/plugins/<key>`) when deriving the target profile. Previously,
+  running from the default `<HERMES_HOME>/plugins/webclip-obsidian` while
+  exactly one named profile existed selected that profile, so `config.toml`,
+  dependencies and the skill symlink landed in the wrong profile and the
+  default install ended up with no configuration. The single-profile
+  heuristic now only applies to source checkouts.
+
 ## 2026-11-05
 
 ### Added
@@ -24,6 +36,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `ClipConfig` accepts `preview_url_params` and the equivalent
   `WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variable. Both the
   single-clip and batch result URLs honour it.
+- `config.toml` is no longer tracked: it is listed in `.gitignore` and
+  generated from `config.example.toml` on install, so this version and later
+  ones do not publish a user's local paths and preview parameters (values
+  already committed in earlier history remain visible there).
+- **Upgrade note**: pulling this change removes the tracked `config.toml`.
+  Back up local edits first (`cp config.toml config.toml.bak`), then recreate
+  the file only when absent
+  (`[ -f config.toml ] || cp config.example.toml config.toml`, or re-run
+  `post-install.sh`) and re-apply local values. To recover the previously
+  tracked version instead of the template:
+  `git show <commit-before-pull>:config.toml > config.toml`.
 
 ## 2026-11-03
 

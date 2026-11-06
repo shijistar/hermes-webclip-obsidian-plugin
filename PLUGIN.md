@@ -4,9 +4,10 @@ A synchronous Hermes standalone plugin that clips a **public** web article
 into an Obsidian Vault and optionally performs guarded Git synchronization.
 
 This repository **is** the Hermes plugin package: `plugin.yaml`, `__init__.py`
-(registration entry point), `web_to_obsidian.py` (core logic), and the TOML
-config all live at the repo root. The Node.js extraction engine is the
-bundled `extractor/` subdirectory.
+(registration entry point), `web_to_obsidian.py` (core logic), and
+`config.example.toml` all live at the repo root. The installer generates a
+local, gitignored `config.toml` from that template. The Node.js extraction
+engine is the bundled `extractor/` subdirectory.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 

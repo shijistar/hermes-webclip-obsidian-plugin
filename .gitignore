@@ -24,6 +24,8 @@ browser-state/
 .env
 .env.*
 !.env.example
+# Local plugin configuration (per-install; generated from config.example.toml)
+/config.toml
 *.log
 state/
 checkpoints/
