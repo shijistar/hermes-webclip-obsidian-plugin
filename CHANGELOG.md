@@ -16,6 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   default install ended up with no configuration. The single-profile
   heuristic now only applies to source checkouts.
 
+### Changed
+
+- Preview URL parameter validation now counts the 1 KiB limit after the
+  optional leading `?` is stripped. `matches_config()` documents that it
+  intentionally ignores `preview_url_params`, and edge-case tests cover
+  fragment preservation, percent-encoding normalization and call-site
+  idempotency.
+
 ## 2026-11-05
 
 ### Added
