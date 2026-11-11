@@ -53,4 +53,5 @@ distinct cases:
 | Entry older than one hour (`PENDING_TTL_SECONDS`) | cleared automatically, rejected with `The pending image confirmation expired; please run /webclip again.` |
 | Valid entry already outstanding | the next clip raises `Another clipped article ('<title>') is already waiting for yes/no confirmation.` — resolve it by calling `resume_pending` with `yes` or `no`, or delete the whole pending root to abandon it |
 
-Passing `--save-images yes|no` avoids the two-step flow entirely.
+Passing `--save-images yes|no` avoids the two-step flow entirely, and `no` is
+already the skill default, so only `ask` produces pending state in normal use.
