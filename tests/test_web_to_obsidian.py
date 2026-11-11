@@ -107,7 +107,7 @@ class ArgsTests(unittest.TestCase):
 class ConfigAndFilenameTests(unittest.TestCase):
     def test_destination_must_resolve_inside_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
-            vault = Path(tmp) / "vault"
+            vault = Path(tmp).resolve() / "vault"
             vault.mkdir()
             with self.assertRaises(clip.ClipError):
                 clip.ClipConfig.from_env(
@@ -119,7 +119,7 @@ class ConfigAndFilenameTests(unittest.TestCase):
 
     def test_toml_config_loads_and_lock_must_remain_outside_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             vault.mkdir()
             config_path = root / "config.toml"
@@ -146,16 +146,16 @@ class ConfigAndFilenameTests(unittest.TestCase):
 
     def test_default_destination_is_inbox(self):
         with tempfile.TemporaryDirectory() as tmp:
-            vault = Path(tmp) / "vault"
+            vault = Path(tmp).resolve() / "vault"
             vault.mkdir()
             config = clip.ClipConfig.from_env({"WEB_TO_OBSIDIAN_VAULT": str(vault)})
             self.assertEqual(config.destination, vault / "Inbox")
 
     def test_pending_root_reads_from_env(self):
         with tempfile.TemporaryDirectory() as tmp:
-            vault = Path(tmp) / "vault"
+            vault = Path(tmp).resolve() / "vault"
             vault.mkdir()
-            pending_root = Path(tmp) / "state"
+            pending_root = Path(tmp).resolve() / "state"
             config = clip.ClipConfig.from_env(
                 {
                     "WEB_TO_OBSIDIAN_VAULT": str(vault),
@@ -166,7 +166,7 @@ class ConfigAndFilenameTests(unittest.TestCase):
 
     def test_pending_root_defaults_outside_vault(self):
         with tempfile.TemporaryDirectory() as tmp:
-            vault = Path(tmp) / "vault"
+            vault = Path(tmp).resolve() / "vault"
             vault.mkdir()
             config = clip.ClipConfig.from_env({"WEB_TO_OBSIDIAN_VAULT": str(vault)})
             self.assertNotEqual(config.pending_root, vault)
@@ -174,7 +174,7 @@ class ConfigAndFilenameTests(unittest.TestCase):
 
     def test_pending_root_from_toml_config(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             vault.mkdir()
             pending_root = root / "custom-pending-state"
@@ -300,7 +300,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
 
     def test_from_file_loads_preview_url_params(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             vault.mkdir()
             config_path = root / "config.toml"
@@ -319,7 +319,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
 
     def test_from_file_without_new_key_keeps_legacy_behaviour(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             vault.mkdir()
             config_path = root / "config.toml"
@@ -337,7 +337,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
 
     def test_from_env_reads_preview_url_params(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             vault.mkdir()
             config = clip.ClipConfig.from_env(
@@ -351,7 +351,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
 
     def test_result_for_targets_appends_params_and_keeps_url_when_unset(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             target = vault / "Inbox" / "note.md"
             target.parent.mkdir(parents=True)
@@ -389,7 +389,7 @@ class PreviewUrlParamsTests(unittest.TestCase):
     def test_result_for_targets_does_not_duplicate_params_on_repeat(self):
         """Repeated result construction does not append the params twice."""
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             vault = root / "vault"
             target = vault / "Inbox" / "note.md"
             target.parent.mkdir(parents=True)
@@ -603,7 +603,7 @@ class ImageWorkflowHelpersTests(unittest.TestCase):
 
     def test_localize_images_preserves_date_prefix_in_note_identity(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             images_root = root / "images"
             inbox = root / "Inbox"
             inbox.mkdir()
@@ -661,7 +661,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_same_normalized_source_overwrites_same_target(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             target = destination / clip.safe_filename("An Article", SUCCESS["canonicalUrl"])
             target.write_text(self._note("HTTPS://EXAMPLE.COM:443/article#old"), encoding="utf-8")
 
@@ -672,7 +672,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_new_target_uses_capture_date_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             chosen = clip.choose_target(
                 destination,
                 "An Article",
@@ -683,7 +683,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_same_source_on_a_later_date_reuses_existing_note(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             existing = destination / "2026-07-22-An Article.md"
             existing.write_text(
                 self._note("https://example.com/article"), encoding="utf-8"
@@ -699,7 +699,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_choose_target_accepts_existing_notes_with_original_url_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             existing = destination / "2026-07-22-An Article.md"
             existing.write_text(
                 "---\n"
@@ -720,7 +720,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_choose_target_accepts_existing_notes_with_legacy_source_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             existing = destination / "2026-07-22-An Article.md"
             existing.write_text(
                 "---\n"
@@ -741,7 +741,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_multiple_existing_notes_for_same_source_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             for day in ("2026-07-21", "2026-07-22"):
                 (destination / f"{day}-An Article.md").write_text(
                     self._note("https://example.com/article"), encoding="utf-8"
@@ -757,7 +757,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_title_collision_with_different_source_adds_url_hash(self):
         with tempfile.TemporaryDirectory() as tmp:
-            destination = Path(tmp)
+            destination = Path(tmp).resolve()
             base = destination / clip.safe_filename(
                 "2026-07-23-An Article", "https://one.example"
             )
@@ -784,7 +784,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_existing_symlink_escaping_destination_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             destination = root / "dest"
             destination.mkdir()
             outside = root / "outside.md"
@@ -796,7 +796,7 @@ class TargetAndAtomicWriteTests(unittest.TestCase):
 
     def test_atomic_write_replaces_target_and_uses_same_directory_temp(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "note.md"
+            target = Path(tmp).resolve() / "note.md"
             target.write_text("old", encoding="utf-8")
             real_replace = os.replace
             calls = []
@@ -869,7 +869,7 @@ class ExtractorTests(unittest.TestCase):
 
     def test_extractor_dir_prefers_plugin_local_npm_install(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             plugin_root = root / "plugin_root"
             plugin_root.mkdir(parents=True)
             npm_pkg = (
@@ -889,7 +889,7 @@ class ExtractorTests(unittest.TestCase):
 
     def test_extractor_dir_falls_back_to_bundled_subdirectory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             plugin_root = root / "plugin_root"
             plugin_root.mkdir(parents=True)
             direct = plugin_root / "extractor"
@@ -901,7 +901,7 @@ class ExtractorTests(unittest.TestCase):
 
     def test_extractor_dir_falls_back_to_legacy_source_repo_sibling(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             plugin_root = root / "plugin_root"
             plugin_root.mkdir(parents=True)
             sibling = root / "extractor"
@@ -923,7 +923,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_refuses_dirty_worktree_before_extraction(self):
         with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp)
+            repo = Path(tmp).resolve()
             self._git(repo, "init", "-b", "feature/clip")
             (repo / "dirty.txt").write_text("dirty", encoding="utf-8")
             with self.assertRaises(clip.ClipError) as caught:
@@ -932,7 +932,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_allows_master_when_configured_branch_is_master(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -950,7 +950,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_rejects_when_vault_is_not_on_configured_branch(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -969,7 +969,7 @@ class GitSafetyTests(unittest.TestCase):
     def test_refuses_cherry_pick_and_revert_states(self):
         for state_name in ("CHERRY_PICK_HEAD", "REVERT_HEAD"):
             with self.subTest(state=state_name), tempfile.TemporaryDirectory() as tmp:
-                repo = Path(tmp)
+                repo = Path(tmp).resolve()
                 self._git(repo, "init", "-b", "feature/clip")
                 self._git(repo, "config", "user.name", "Clip Test")
                 self._git(repo, "config", "user.email", "clip@example.invalid")
@@ -992,7 +992,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_stages_only_generated_path_commits_and_pushes_head(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -1020,7 +1020,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_post_commit_verification_blocks_hook_added_paths_from_push(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -1065,7 +1065,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_finalize_allows_image_only_changes_within_generated_set(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -1099,7 +1099,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_finalize_uses_custom_commit_message_when_provided(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -1126,7 +1126,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_finalize_falls_back_to_default_commit_message_when_none(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -1152,7 +1152,7 @@ class GitSafetyTests(unittest.TestCase):
 
     def test_finalize_truncates_long_commit_message(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             remote = root / "remote.git"
             repo = root / "vault"
             self._git(root, "init", "--bare", str(remote))
@@ -1190,7 +1190,7 @@ class RemoteAssetDownloadTests(unittest.TestCase):
             with self.assertRaisesRegex(clip.ClipError, "blocked by network policy"):
                 clip.download_remote_image(
                     "http://example.com/image.png",
-                    Path(tmp),
+                    Path(tmp).resolve(),
                     1,
                     resolver=blocked_resolver,
                     request_impl=request_impl,
@@ -1221,7 +1221,7 @@ class RemoteAssetDownloadTests(unittest.TestCase):
             with self.assertRaisesRegex(clip.ClipError, "blocked by network policy"):
                 clip.download_remote_image(
                     "http://public.example/image.png",
-                    Path(tmp),
+                    Path(tmp).resolve(),
                     1,
                     resolver=resolver,
                     request_impl=request_impl,
@@ -1629,11 +1629,11 @@ class FavoriteMarkerTests(unittest.TestCase):
     def test_set_frontmatter_flag_refuses_missing_note(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(clip.ClipError):
-                clip.set_frontmatter_flag(Path(tmp) / "absent.md", favorite=True)
+                clip.set_frontmatter_flag(Path(tmp).resolve() / "absent.md", favorite=True)
 
     def test_favorite_only_change_does_not_require_refresh(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "note.md"
+            target = Path(tmp).resolve() / "note.md"
             target.write_text(self._note(), encoding="utf-8")
             self.assertEqual(
                 clip.write_managed_note(target, self._note(favorite=True), refresh=False),
@@ -1646,7 +1646,7 @@ class FavoriteMarkerTests(unittest.TestCase):
 
     def test_favorite_change_preserves_the_manual_section(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "note.md"
+            target = Path(tmp).resolve() / "note.md"
             note = self._note().replace(
                 "<!-- webclip:manual:start -->\n",
                 "<!-- webclip:manual:start -->\nMY NOTES\n",
@@ -1659,7 +1659,7 @@ class FavoriteMarkerTests(unittest.TestCase):
 
     def test_body_change_still_requires_refresh(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "note.md"
+            target = Path(tmp).resolve() / "note.md"
             target.write_text(self._note(), encoding="utf-8")
             changed = self._note(markdown="# An Article\n\nDifferent body\n")
             with self.assertRaisesRegex(clip.ClipError, "rerun with --refresh"):
@@ -1667,7 +1667,7 @@ class FavoriteMarkerTests(unittest.TestCase):
 
     def test_note_title_prefers_frontmatter(self):
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "fallback.md"
+            target = Path(tmp).resolve() / "fallback.md"
             target.write_text(self._note(), encoding="utf-8")
             self.assertEqual(clip._note_title(target), "An Article")
 
@@ -1696,7 +1696,7 @@ class BatchClipServiceTests(unittest.TestCase):
         )
 
     def _vault(self, tmp):
-        root = Path(tmp)
+        root = Path(tmp).resolve()
         remote = root / "remote.git"
         repo = root / "vault"
         self._git(root, "init", "--bare", str(remote))
