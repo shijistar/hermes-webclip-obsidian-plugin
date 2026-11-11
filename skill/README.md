@@ -1,8 +1,9 @@
 # web-clip-to-obsidian skill
 
 The `skill/` directory is a Hermes agent skill that teaches an agent how to
-use the webclip-obsidian plugin: extract an article, confirm image handling,
-save a dated Markdown note, and commit & push it to the Obsidian vault Git.
+use the webclip-obsidian plugin: extract an article, apply the default image
+policy (remote unless the user asks otherwise), save a dated Markdown note, and
+commit & push it to the Obsidian vault Git.
 
 - `SKILL.md` — frontmatter (name, description, version) plus the full workflow:
   plugin location/config, invocation patterns, pending-state flow, commit

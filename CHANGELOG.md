@@ -4,6 +4,16 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-11
+
+### Changed
+
+- Skill default image mode is now `remote`: the agent passes `--save-images no`
+  unless the user asks for local images or explicitly asks to be prompted, so a
+  plain clip no longer stops for an image confirmation. The plugin's own default
+  is unchanged (`ask`), and `--save-images ask` still returns
+  `PendingClipResult` for callers that want the two-step flow.
+
 ## 2026-11-06
 
 ### Fixed
