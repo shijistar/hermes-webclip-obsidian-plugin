@@ -12,7 +12,6 @@ extractor/node_modules/
 extractor/dist/
 extractor/coverage/
 node_modules/
-package-lock.json
 
 # Playwright / browser state
 playwright-report/
@@ -30,6 +29,7 @@ browser-state/
 state/
 checkpoints/
 data.json
+.codegraph
 
 # Vault and local deployment
 vault/
