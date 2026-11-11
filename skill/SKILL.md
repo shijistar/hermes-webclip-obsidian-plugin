@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.7.1
+version: 1.7.2
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -111,6 +111,23 @@ print(build_handler(Path('.'))('<URL>'))
 Flags: `--no-browser`, `--no-git`, `--refresh`, `--save-images yes|no|ask`,
 `--favorite`, `--unfavorite`
 
+## Default image policy
+
+**Always pass `--save-images no` unless the user asks otherwise.** Do not ask
+the user which image mode to use: remote images keep the note small, keep the
+vault free of binary blobs, and leave the source page's own image CDN in charge.
+
+| User says | Flag |
+| --- | --- |
+| nothing about images, or "远程图片" / "remote images" | `--save-images no` |
+| "本地图片" / "local images" / "download images" / "保存图片" | `--save-images yes` |
+| "问我" / "ask me" / "让我选" | `--save-images ask` |
+
+`--save-images ask` is the only mode that returns `PendingClipResult` and needs
+a `resume_pending('yes'|'no')` follow-up. Use it only when the user explicitly
+asked to be prompted, and never call `resume_pending()` to decide on the user's
+behalf.
+
 ## Favorite Marker
 
 `favorite: true` in the note frontmatter is the single source of truth. It is
@@ -178,10 +195,12 @@ Rules:
 ## Workflow
 
 1. **Extract**: Call `service.run(url)` for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
-2. **PendingClipResult** (has remote images): Prompt user `yes`/`no`
+2. **PendingClipResult** — returned only when the call carried
+   `--save-images ask`: prompt the user `yes`/`no`
    - `yes` → download and localize images into vault `images/` dir
    - `no` → keep remote image URLs
-3. **Resume**: Call `service.resume_pending('yes')` or `service.resume_pending('no')` (requires `ClipService` + pending state)
+3. **Resume** — only after an `ask` run: call `service.resume_pending('yes')` or
+   `service.resume_pending('no')` (requires `ClipService` + pending state)
 4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`, and `action` (`clip` / `favorite` / `unfavorite`)
 5. **Return**: Show the GitHub vault URL to user for preview
 
@@ -249,12 +268,12 @@ live in `references/` and are linked from the rule they belong to.
 - **CWD matters**: run from the plugin root (repo root, or the installed plugin dir).
 - **Node.js required**: the extractor shells out to `node`.
 - **Vault lock**: writes take a file lock; a concurrent clip blocks until it is released.
-- **Image confirmation is two-step**: `service.run(url)` returns `PendingClipResult` and saves nothing; the note is written only by `resume_pending('yes'|'no')`. Pass `--save-images yes|no` to skip the prompt.
+- **Image confirmation is opt-in**: the agent default is `--save-images no`, so a plain clip writes the note immediately with `image_mode: remote` and never returns `PendingClipResult`. Only `--save-images ask` returns `PendingClipResult`, and in that mode nothing is saved until `resume_pending('yes'|'no')` runs.
 - **Always return the GitHub URL**: after a save, report `ClipResult.github_url` so the user can preview the note. The URL may already carry the `preview_url_params` query parameters configured in `config.toml`; do not strip or duplicate them (see `docs/preview-link-params.md`).
 - **Pre-clip repo hygiene (both repos)**: before clipping, confirm the vault (`~/obsidian/shijistar`) and the plugin source repo are both on a clean `master`; a leftover feature branch would take the clip commit. Run `git switch master && git pull --ff-only` and `git status --short` in each repo.
 - **Dry-run preflight**: run `node extractor/src/cli.mjs <url> --no-browser` once and check `ok:true`, a non-empty `author` and a sane markdown length before `service.run()`; this catches 404s and anti-bot walls early.
 - **Hash protection on re-clip**: an existing note whose content changed raises `The saved page changed; rerun with --refresh to update it.` Check whether the note already exists and ask keep-vs-refresh instead of overwriting; `--refresh --save-images yes` refreshes and localizes.
-- **Image policy**: a single URL asks the user unless the call already carries `--save-images yes|no` (never pre-empt `no` from a general preference). In a batch, every spec that extracts a page must state it explicitly — one pending confirmation cannot represent several articles; marker-only specs are exempt. See `references/batch-processing.md`.
+- **Image policy**: always pass `--save-images no` unless the user asked for local images (`yes`) or asked to be prompted (`ask`); never ask the user which mode to use. In a batch, every spec that extracts a page must carry an explicit `yes` or `no` — `ask` is rejected because one pending confirmation cannot represent several articles; marker-only specs are exempt. See `references/batch-processing.md`.
 - **One-step non-interactive clip**: `service.run('<url> --refresh --save-images yes|no --no-browser')` clips in a single call and returns `ClipResult` with no pending step.
 - **Branch semantics**: new clips commit and push straight to the vault's `sync_branch` (the user-approved direct-master exception for the Obsidian vault); manual vault edits and any change to the plugin source repo go through a feature branch and PR. Never force-push.
 - **163 embedded metadata**: author/published come from `window.__INITIAL_STATE__`, not meta tags. See `references/netease-embedded-state-author.md`.

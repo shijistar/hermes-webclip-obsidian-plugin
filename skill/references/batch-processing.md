@@ -206,9 +206,9 @@ Collect all `ClipResult.github_url` values and present as a table:
 
 ## One-Step Non-Interactive Clip
 
-When the image decision is already known (user specified "本地图片"/"local images" or "远程图片"/"remote images"), use flags to skip the PendingClipResult two-step:
+The skill default is already `--save-images no`, so pass the flag explicitly and you get a `ClipResult` directly with no `resume_pending()` step. Switch to `yes` only when the user asks for local images, and to `ask` only when they ask to be prompted:
 ```python
-result = service.run(f'{url} --save-images yes|no --no-browser')
+result = service.run(f'{url} --save-images no --no-browser')
 # Returns ClipResult directly, no resume_pending() needed
 ```
 
@@ -230,7 +230,7 @@ For URLs where the extractor fails (QUALITY_GATE, HTTP_STATUS):
 ## GitHub Gist / Repo Notes
 
 - Gist URLs (e.g., `gist.github.com/user/id`) and GitHub repo URLs extract cleanly
-- Use `--save-images no` — these rarely have downloadable images (the plugin default is `ask`, not `no`)
+- Use `--save-images no` — these rarely have downloadable images. The plugin API default is still `ask`, and the skill default is `no`, so pass the flag explicitly rather than relying on either default
 - Gist content is typically README-style markdown
 
 ## Renaming a Clipped Article
