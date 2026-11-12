@@ -1296,6 +1296,33 @@ def _slugify_image_dir(note_path: Path, url: str) -> str:
     return cleaned or _url_hash(url)[:12]
 
 
+# Canonical extension per image subtype. Unknown subtypes fall back to the URL's own
+# suffix so a server can never make us invent an extension from an arbitrary token.
+_IMAGE_SUFFIX_BY_SUBTYPE = {
+    "jpeg": ".jpg",
+    "pjpeg": ".jpg",
+    "jpg": ".jpg",
+    "png": ".png",
+    "apng": ".png",
+    "gif": ".gif",
+    "webp": ".webp",
+    "avif": ".avif",
+    "bmp": ".bmp",
+    "tiff": ".tiff",
+    "svg": ".svg",
+    "x-icon": ".ico",
+    "vnd.microsoft.icon": ".ico",
+    "heic": ".heic",
+    "heif": ".heif",
+}
+
+
+def _suffix_for_content_type(content_type: str) -> str:
+    """Return the canonical extension for a normalised ``image/<subtype>`` type."""
+    subtype = content_type.removeprefix("image/").split("+", 1)[0].strip()
+    return _IMAGE_SUFFIX_BY_SUBTYPE.get(subtype, "")
+
+
 def download_remote_image(
     url: str,
     destination_dir: Path,
@@ -1309,10 +1336,12 @@ def download_remote_image(
         resolver=resolver,
         request_impl=request_impl,
     )
-    suffix = Path(urlsplit(final_url).path).suffix.lower()
-    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", suffix or ""):
-        subtype = content_type.removeprefix("image/")
-        suffix = ".jpg" if subtype == "jpeg" else f".{subtype or 'img'}"
+    url_suffix = Path(urlsplit(final_url).path).suffix.lower()
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,8}", url_suffix or ""):
+        url_suffix = ""
+    # The served Content-Type wins over the URL: sites routinely return PNG or WebP
+    # payloads from ".jpg" paths, and a wrong extension misleads anything that trusts it.
+    suffix = _suffix_for_content_type(content_type) or url_suffix or ".img"
     base_name = Path(urlsplit(final_url).path).stem or "image"
     base_name = re.sub(r"[^A-Za-z0-9._-]+", "-", base_name).strip("-._") or "image"
     file_name = f"{index:02d}-{base_name}{suffix}"

@@ -1227,6 +1227,49 @@ class RemoteAssetDownloadTests(unittest.TestCase):
                     request_impl=request_impl,
                 )
 
+    def _fetched_name(self, url: str, content_type: str) -> str:
+        def resolver(host, port, *, type=0, proto=0):
+            return [
+                (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", port)),
+            ]
+
+        def request_impl(approved, *, timeout, max_bytes):
+            return clip._PinnedRemoteResponse(
+                status_code=200,
+                headers={"Content-Type": content_type},
+                body=b"payload",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            saved = clip.download_remote_image(
+                url,
+                Path(tmp).resolve(),
+                1,
+                resolver=resolver,
+                request_impl=request_impl,
+            )
+            return saved.name
+
+    def test_image_suffix_follows_content_type_not_url(self):
+        # Sites routinely serve PNG/WebP bytes from .jpg paths; the extension must
+        # describe the payload, not the URL.
+        self.assertTrue(self._fetched_name("http://example.com/photo.jpg", "image/png").endswith(".png"))
+        self.assertTrue(self._fetched_name("http://example.com/photo.png", "image/jpeg").endswith(".jpg"))
+        self.assertTrue(self._fetched_name("http://example.com/photo.gif", "image/webp").endswith(".webp"))
+        self.assertTrue(self._fetched_name("http://example.com/icon", "image/svg+xml").endswith(".svg"))
+        self.assertTrue(self._fetched_name("http://example.com/icon", "image/x-icon").endswith(".ico"))
+
+    def test_image_suffix_ignores_content_type_parameters(self):
+        self.assertTrue(
+            self._fetched_name("http://example.com/a.jpg", "image/png; charset=binary").endswith(".png")
+        )
+
+    def test_image_suffix_falls_back_to_url_for_unknown_subtype(self):
+        self.assertTrue(self._fetched_name("http://example.com/a.bin", "image/x-unknown").endswith(".bin"))
+
+    def test_image_suffix_defaults_to_img_when_nothing_is_known(self):
+        self.assertTrue(self._fetched_name("http://example.com/download", "image/x-unknown").endswith(".img"))
+
 
 class WeChatExtractionTests(unittest.TestCase):
     def test_is_wechat_url(self):
