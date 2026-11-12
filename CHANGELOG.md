@@ -13,8 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `yes` / `no`. The mapping is explicit (A → `resume_pending('no')`,
   B → `resume_pending('yes')`) because the plugin argument is inverted relative
   to the destination. Runtimes without `clarify` fall back to the same A/B
-  question in one text line. The no-argument default stays `--save-images no`,
-  and `--save-images ask` still returns `PendingClipResult`.
+  question in one text line. Option labels follow the conversation language
+  (Chinese for Chinese input, English otherwise) while the A/B mapping stays
+  fixed, and the skill prose is English-only. The no-argument default stays
+  `--save-images no`, and `--save-images ask` still returns `PendingClipResult`.
 
 ## 2026-11-11
 
