@@ -18,6 +18,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   fixed, and the skill prose is English-only. The no-argument default stays
   `--save-images no`, and `--save-images ask` still returns `PendingClipResult`.
 
+### Fixed
+
+- Downloaded images now take their extension from the served `Content-Type` instead
+  of trusting the URL path. Netease (and others) return PNG or WebP payloads from
+  `.jpg` paths, so a localized note could reference a file named `.jpg` that was
+  actually PNG, which misleads anything that reads the extension. Known image
+  subtypes map to a canonical extension (`image/jpeg` → `.jpg`, `image/svg+xml` →
+  `.svg`, `image/x-icon` → `.ico`); an unknown subtype still falls back to the URL
+  suffix, then to `.img`.
+
 ## 2026-11-11
 
 ### Changed
