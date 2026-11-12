@@ -55,3 +55,11 @@ distinct cases:
 
 Passing `--save-images yes|no` avoids the two-step flow entirely, and `no` is
 already the skill default, so only `ask` produces pending state in normal use.
+
+## Collecting the decision from the user
+
+The wrapper takes `decision=yes|no`, but the **user** is never asked to type those
+values. Present the choice as a `clarify` card whose labels start with `A.` (remote,
+which maps to `'no'`) and `B.` (local, which maps to `'yes'`), exactly as `SKILL.md`
+describes, then pass the mapped value into `resume_pending()`. The card hands back the
+text of the selected label rather than a letter, so match on the `A.` / `B.` prefix.

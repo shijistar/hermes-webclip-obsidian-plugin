@@ -9,10 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 
 - In `ask` image mode the agent now collects the choice with a `clarify` card
-  offering **A 远程图片 / B 本地图片** instead of asking the user to type
-  `yes` / `no`. The mapping is explicit (A → `resume_pending('no')`,
-  B → `resume_pending('yes')`) because the plugin argument is inverted relative
-  to the destination. Runtimes without `clarify` fall back to the same A/B
+  whose labels start with `A.` (远程图片, remote) and `B.` (本地图片, local),
+  instead of asking the user to type `yes` / `no`. The mapping is explicit
+  (A → `resume_pending('no')`, B → `resume_pending('yes')`) because the plugin
+  argument is inverted relative to the destination. Runtimes without `clarify` fall back to the same A/B
   question in one text line. Option labels follow the conversation language
   (Chinese for Chinese input, English otherwise) while the A/B mapping stays
   fixed, and the skill prose is English-only. The no-argument default stays
