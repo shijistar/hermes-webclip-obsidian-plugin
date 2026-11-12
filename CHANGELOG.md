@@ -4,6 +4,18 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-12
+
+### Changed
+
+- In `ask` image mode the agent now collects the choice with a `clarify` card
+  offering **A 远程图片 / B 本地图片** instead of asking the user to type
+  `yes` / `no`. The mapping is explicit (A → `resume_pending('no')`,
+  B → `resume_pending('yes')`) because the plugin argument is inverted relative
+  to the destination. Runtimes without `clarify` fall back to the same A/B
+  question in one text line. The no-argument default stays `--save-images no`,
+  and `--save-images ask` still returns `PendingClipResult`.
+
 ## 2026-11-11
 
 ### Changed

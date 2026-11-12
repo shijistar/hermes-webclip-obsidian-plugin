@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.7.2
+version: 1.8.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -128,6 +128,25 @@ a `resume_pending('yes'|'no')` follow-up. Use it only when the user explicitly
 asked to be prompted, and never call `resume_pending()` to decide on the user's
 behalf.
 
+### Asking in `ask` mode: a `clarify` card, never a typed reply
+
+When the mode is `ask`, collect the decision through a **`clarify` card with two
+options** — never a text prompt that makes the user type `yes` / `no`:
+
+| Option | Label shown to the user | Call |
+| --- | --- | --- |
+| **A** | 远程图片（保留原站链接） | `resume_pending('no')` |
+| **B** | 本地图片（下载到 vault 的 images/） | `resume_pending('yes')` |
+
+The labels describe the **destination**, while the plugin argument is the inverted
+`yes` / `no` (`yes` means "save images locally"). Map deliberately: a user picking
+*A 远程* must end in `resume_pending('no')` — never pass the option letter or the
+label straight through.
+
+If the runtime has no `clarify` tool (one-shot CLI, scripted run), ask the same
+A/B question in one text line and still call `resume_pending()` yourself. Either
+way the agent maps the answer; it never picks a mode on the user's behalf.
+
 ## Favorite Marker
 
 `favorite: true` in the note frontmatter is the single source of truth. It is
@@ -196,9 +215,9 @@ Rules:
 
 1. **Extract**: Call `service.run(url)` for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
 2. **PendingClipResult** — returned only when the call carried
-   `--save-images ask`: prompt the user `yes`/`no`
-   - `yes` → download and localize images into vault `images/` dir
-   - `no` → keep remote image URLs
+   `--save-images ask`: ask with a `clarify` card offering two options
+   - **A 远程图片** → `resume_pending('no')` — keep remote image URLs
+   - **B 本地图片** → `resume_pending('yes')` — download and localize into vault `images/`
 3. **Resume** — only after an `ask` run: call `service.resume_pending('yes')` or
    `service.resume_pending('no')` (requires `ClipService` + pending state)
 4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`, and `action` (`clip` / `favorite` / `unfavorite`)
@@ -268,7 +287,7 @@ live in `references/` and are linked from the rule they belong to.
 - **CWD matters**: run from the plugin root (repo root, or the installed plugin dir).
 - **Node.js required**: the extractor shells out to `node`.
 - **Vault lock**: writes take a file lock; a concurrent clip blocks until it is released.
-- **Image confirmation is opt-in**: the agent default is `--save-images no`, so a plain clip writes the note immediately with `image_mode: remote` and never returns `PendingClipResult`. Only `--save-images ask` returns `PendingClipResult`, and in that mode nothing is saved until `resume_pending('yes'|'no')` runs.
+- **Image confirmation is opt-in**: the agent default is `--save-images no`, so a plain clip writes the note immediately with `image_mode: remote` and never returns `PendingClipResult`. Only `--save-images ask` returns `PendingClipResult`, and in that mode nothing is saved until `resume_pending('yes'|'no')` runs — ask via a `clarify` card with **A 远程 / B 本地**, then map A→`'no'` and B→`'yes'`.
 - **Always return the GitHub URL**: after a save, report `ClipResult.github_url` so the user can preview the note. The URL may already carry the `preview_url_params` query parameters configured in `config.toml`; do not strip or duplicate them (see `docs/preview-link-params.md`).
 - **Pre-clip repo hygiene (both repos)**: before clipping, confirm the vault (`~/obsidian/shijistar`) and the plugin source repo are both on a clean `master`; a leftover feature branch would take the clip commit. Run `git switch master && git pull --ff-only` and `git status --short` in each repo.
 - **Dry-run preflight**: run `node extractor/src/cli.mjs <url> --no-browser` once and check `ok:true`, a non-empty `author` and a sane markdown length before `service.run()`; this catches 404s and anti-bot walls early.
