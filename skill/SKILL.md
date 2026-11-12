@@ -134,8 +134,9 @@ When the mode is `ask`, collect the decision through a **`clarify` card carrying
 options** — never a text prompt that makes the user type `yes` / `no`.
 
 Write the two labels in the **language of the current conversation**: Chinese when the
-user writes Chinese, English when they write English. The option letters and their
-mapping never change.
+user writes Chinese, English when they write English. Keep the order fixed — **A first,
+B second** — so the option the card marks as recommended is also the remote default.
+The letters and their mapping never change.
 
 | Option | zh-CN label | en label | Call |
 | --- | --- | --- | --- |
