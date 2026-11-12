@@ -139,12 +139,16 @@ mapping never change.
 
 | Option | zh-CN label | en label | Call |
 | --- | --- | --- | --- |
-| **A** | 远程图片（保留原站链接） | Remote images (keep the source URLs) | `resume_pending('no')` |
-| **B** | 本地图片（下载到 vault 的 images/） | Local images (download into the vault) | `resume_pending('yes')` |
+| **A** | `A. 远程图片（保留原站链接）` | `A. Remote images (keep the source URLs)` | `resume_pending('no')` |
+| **B** | `B. 本地图片（下载到 vault 的 images/）` | `B. Local images (download into the vault)` | `resume_pending('yes')` |
+
+Spell the letter **inside the label** (`A. …` / `B. …`). A `clarify` call returns the
+text of the selected option, not an index and not a bare letter, so the prefix is the
+only thing the agent can match on; never wait for a reply containing just `"A"`.
 
 The labels name the **destination**, while the plugin argument is inverted: `yes`
-means "save the images locally". Map deliberately — a user picking option **A** must
-end in `resume_pending('no')`; never forward the option letter or the raw label.
+means "save the images locally". Map deliberately — a user picking the `A.` option must
+end in `resume_pending('no')`; never forward the raw label or the leading letter.
 
 If the runtime has no `clarify` tool (one-shot CLI, scripted run), ask the same A/B
 question in a single text line, in the user's language, and still call
@@ -219,10 +223,10 @@ Rules:
 
 1. **Extract**: Call `service.run(url)` for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
 2. **PendingClipResult** — returned only when the call carried
-   `--save-images ask`: ask with a `clarify` card offering two lettered options,
-   labelled in the user's language
-   - **A** (remote images) → `resume_pending('no')` — keep the source image URLs
-   - **B** (local images) → `resume_pending('yes')` — download into the vault's `images/`
+   `--save-images ask`: ask with a `clarify` card whose two labels start with `A.` / `B.`
+   and are written in the user's language
+   - **`A.`** (remote images) → `resume_pending('no')` — keep the source image URLs
+   - **`B.`** (local images) → `resume_pending('yes')` — download into the vault's `images/`
 3. **Resume** — only after an `ask` run: call `service.resume_pending('yes')` or
    `service.resume_pending('no')` (requires `ClipService` + pending state)
 4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`, and `action` (`clip` / `favorite` / `unfavorite`)
