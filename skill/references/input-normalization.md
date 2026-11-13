@@ -5,20 +5,45 @@
 **`service.run()` must only ever receive a cleaned URL.**
 
 `webclip_id` is `sha256(normalize_url(source))`, where `source` is the extractor's
-`canonicalUrl`. That value falls back to the requested URL only when the page
-declares no canonical link (`safeCanonical()` returns `sourceUrl.href` in that
-case). Two consequences:
+`canonicalUrl`. `safeCanonical()` (`extractor/src/extractor.mjs`) has three outcomes:
 
-- **Pages with a canonical tag** (Netease, Juejin — both verified): the id is
-  identical whether or not the input carried tracking parameters, because the
-  page's own canonical wins. Cleaning changes nothing about identity here.
-- **Pages without one**: the raw paste *becomes* the identity, so one article
-  looks like several — it gets clipped twice, and `--favorite` against the first
-  note stops matching.
+| Situation | What `source` becomes |
+| --- | --- |
+| canonical link present, same origin, parseable | that canonical URL |
+| no canonical link | the **final fetched URL**, after redirects |
+| canonical link cross-origin or unparseable | the **final fetched URL**, after redirects |
 
-Cleaning removes the second failure mode, and the input is the only place the
-plugin has no say over. Clean first, then call; never pass a raw share-sheet
-paste through.
+All three pass through the extractor's `normalizeUrl()`, which drops `utm_*`,
+`fbclid`, `gclid` and `share_token` and keeps every other query parameter.
+
+Two consequences follow, and neither is absolute:
+
+- **A canonical tag does not by itself guarantee a stable id.** If the canonical URL
+  carries query parameters of its own they survive into the id, so two requests agree
+  only when they resolve to the *same* canonical URL.
+- **When the page has no usable canonical**, the identity comes from the final fetched
+  URL — not necessarily the URL the user pasted, because redirects can rewrite it.
+  Cleaning the paste is a best-effort guarantee, not an absolute one.
+
+### Identity and lookup, precisely
+
+`webclip_id` is `sha256(normalize_url(source))`. `safeCanonical()` picks `source`:
+
+| Situation | `source` |
+| --- | --- |
+| same-origin, parseable canonical link | that canonical URL |
+| no canonical link | the final fetched URL (post-redirect) |
+| cross-origin or unparseable canonical link | the final fetched URL (post-redirect) |
+
+The extractor's `normalizeUrl()` drops `utm_*`, `fbclid`, `gclid` and `share_token`
+and keeps every other query parameter. Lookup (`_scan_source_matches()`) uses the
+plugin's `normalize_url()`, which lowercases the host, drops the fragment, and leaves
+the query untouched.
+
+Redirects and canonicals can replace the pasted URL, and site-specific keys like
+`spss` survive extraction, so cleaning improves the chance that a later `--favorite`
+matches a recorded note — it cannot guarantee it. Clean anyway: the paste is the only
+input nothing else applies the site rules to.
 
 ## Why cleaning lives here and not in the plugin
 

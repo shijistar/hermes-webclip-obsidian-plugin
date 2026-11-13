@@ -10,10 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - `skill/references/input-normalization.md`: per-site rules for turning a share-sheet
   paste into a clean URL before it reaches `service.run()`. Share sheets prepend the
-  article title and append tracking parameters, and `webclip_id` is derived from the
-  extractor's canonical URL (falling back to the request URL only when a page declares
-  none), so on pages without a canonical tag one article looked like several — it was
-  clipped twice, and `--favorite` against the earlier note stopped matching.
+  article title and append tracking parameters. `webclip_id` is derived from the
+  extractor's canonical URL, falling back to the final fetched URL when a page has no
+  usable canonical — and because lookup keeps every query parameter while writing
+  drops the common tracking keys, a parameterised paste fails to find the note its
+  clean equivalent wrote. Cleaning at the input stage closes that gap.
   Rules cover Netease News, Juejin, Zhihu, Bilibili and both WeChat URL forms (the new
   `/s/<id>` form carries no query; the legacy `__biz` form must keep `__biz`, `mid`,
   `idx`, `sn`). A host that is not listed is passed through unchanged, since a wrong
