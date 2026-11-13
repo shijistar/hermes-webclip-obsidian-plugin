@@ -34,7 +34,7 @@ input bug.
 ## The three steps
 
 1. **Drop the title.** Keep the first `http(s)://` URL and discard all other
-   text. Handles `标题 [url](url)`, `标题 url`, and a lone URL.
+   text. Handles `title [url](url)`, `title url`, and a lone URL.
 2. **Strip that site's tracking keys** from the table below. Remove only the
    listed keys. Leave every other parameter untouched, including ones you do not
    recognise — they may be load-bearing.
@@ -45,12 +45,12 @@ input bug.
 
 | Site | Host | Paste shape | Strip | Must keep | Verified |
 | --- | --- | --- | --- | --- | --- |
-| Netease News | `c.m.163.com`, `*.163.com/news/` | `标题 [url](url)` | `spss` `spsnuid` `spsdevid` `spsvid` `spsshare` `spsts` `spstoken` | — | ✅ 2026-11-12, 2501 chars, identical after strip |
+| Netease News | `c.m.163.com`, `*.163.com/news/` | `title + [url](url)` | `spss` `spsnuid` `spsdevid` `spsvid` `spsshare` `spsts` `spstoken` | — | ✅ 2026-11-12, 2501 chars, identical after strip |
 | Juejin | `juejin.cn` | URL only, no title | `share_token` | — | ✅ 2026-11-12, 2702 chars, identical after strip |
-| Zhihu | `zhihu.com`, `zhuanlan.zhihu.com` | `标题 url` | `utm_*` `share_code` `utm_psn` | — | ✅ rule confirmed by user |
-| Bilibili | `bilibili.com`, `b23.tv` | `标题 url` | `spm_id_from` `vd_source` `share_source` `share_medium` `share_plat` `share_tag` `share_times` `bbdown` | `bvid`, `p` | ✅ 2026-11-12, identical after strip |
-| WeChat (new) | `mp.weixin.qq.com/s/<id>` | `标题 url` | nothing — the form carries no query | entire path | ✅ shape confirmed 2026-11-12 (no parameters exist) |
-| WeChat (legacy) | `mp.weixin.qq.com/s?__biz=…` | `标题 url` | `chksm` `scene` `subscene` `srcid` `sharer_sharetime` `sharer_shareid` `isappinstalled` `clicktime` `enterid` | **`__biz` `mid` `idx` `sn`** | ⚠️ unverified — needs a live legacy URL |
+| Zhihu | `zhihu.com`, `zhuanlan.zhihu.com` | `title + url` | `utm_*` `share_code` `utm_psn` | — | ✅ rule confirmed by user |
+| Bilibili | `bilibili.com`, `b23.tv` | `title + url` | `spm_id_from` `vd_source` `share_source` `share_medium` `share_plat` `share_tag` `share_times` `bbdown` | `bvid`, `p` | ✅ 2026-11-12, identical after strip |
+| WeChat (new) | `mp.weixin.qq.com/s/<id>` | `title + url` | nothing — the form carries no query | entire path | ✅ shape confirmed 2026-11-12 (no parameters exist) |
+| WeChat (legacy) | `mp.weixin.qq.com/s?__biz=…` | `title + url` | `chksm` `scene` `subscene` `srcid` `sharer_sharetime` `sharer_shareid` `isappinstalled` `clicktime` `enterid` | **`__biz` `mid` `idx` `sn`** | ⚠️ unverified — needs a live legacy URL |
 | *anything else* | — | — | **nothing** | everything | pass through unchanged |
 
 ### Netease News
