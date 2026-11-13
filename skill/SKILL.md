@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.8.0
+version: 1.9.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -220,9 +220,22 @@ Rules:
   `LIST FROM "Inbox" WHERE favorite = true` (Dataview) or search
   `favorite: true`; `#favorite` will not match.
 
+## Normalize the input before anything else
+
+Share sheets prepend a title and append tracking parameters, and some apps put
+the article identity in the query string. Because `webclip_id` is derived from
+whatever URL reaches the service, passing the raw paste makes one article look
+like two — it gets clipped twice, and `--favorite` against the existing note
+stops matching.
+
+Drop the title, apply that site's rule from `references/input-normalization.md`,
+then pass only the cleaned URL to `service.run()`. A host that is not in the
+rule table is passed through **unchanged** — guessing is worse than doing
+nothing, because a wrong strip can make an article unreachable.
+
 ## Workflow
 
-1. **Extract**: Call `service.run(url)` for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
+1. **Extract**: Call `service.run(url)` with the cleaned URL for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
 2. **PendingClipResult** — returned only when the call carried
    `--save-images ask`: ask with a `clarify` card whose two labels start with `A.` / `B.`
    and are written in the user's language

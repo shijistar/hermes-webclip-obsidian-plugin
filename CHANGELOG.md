@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## 2026-11-12
 
+### Added
+
+- `skill/references/input-normalization.md`: per-site rules for turning a share-sheet
+  paste into a clean URL before it reaches `service.run()`. Share sheets prepend the
+  article title and append tracking parameters, and because `webclip_id` is derived
+  from whatever URL the service receives, the raw paste made one article look like two
+  — it was clipped twice, and `--favorite` against the earlier note stopped matching.
+  Rules cover Netease News, Juejin, Zhihu, Bilibili and both WeChat URL forms (the new
+  `/s/<id>` form carries no query; the legacy `__biz` form must keep `__biz`, `mid`,
+  `idx`, `sn`). A host that is not listed is passed through unchanged, since a wrong
+  strip can make an article unreachable. Skill 1.8.0 → 1.9.0.
+
 ### Changed
 
 - In `ask` image mode the agent now collects the choice with a `clarify` card
