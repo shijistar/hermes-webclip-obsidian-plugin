@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.8.0
+version: 1.9.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -220,9 +220,28 @@ Rules:
   `LIST FROM "Inbox" WHERE favorite = true` (Dataview) or search
   `favorite: true`; `#favorite` will not match.
 
+## Normalize the input before anything else
+
+Share sheets prepend a title and append tracking parameters, and some apps put
+the article identity in the query string. Because `webclip_id` is derived from
+whatever URL reaches the service, passing the raw paste makes one article look
+like two — it gets clipped twice, and `--favorite` against the existing note
+stops matching.
+
+Drop the title, apply that site's rule from `references/input-normalization.md`,
+then pass only the cleaned URL to `service.run()`. A host that is not in the
+rule table is passed through **unchanged** — guessing is worse than doing
+nothing, because a wrong strip can make an article unreachable.
+
+This applies to **URL-shaped input**: `clip`, `--refresh`, and the
+`--favorite` / `--unfavorite` calls that address a note by URL. A `webclip_id`
+selector (`sha256:…`) is an exact hash and is never rewritten, and in a batch
+every spec's URL is cleaned before the list is built
+(`references/batch-processing.md`).
+
 ## Workflow
 
-1. **Extract**: Call `service.run(url)` for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
+1. **Extract**: Call `service.run(url)` with the cleaned URL for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
 2. **PendingClipResult** — returned only when the call carried
    `--save-images ask`: ask with a `clarify` card whose two labels start with `A.` / `B.`
    and are written in the user's language
@@ -308,7 +327,7 @@ live in `references/` and are linked from the rule they belong to.
 - **163 embedded metadata**: author/published come from `window.__INITIAL_STATE__`, not meta tags. See `references/netease-embedded-state-author.md`.
 - **163 video short links** (`/news/v/<id>.html`): the curl fallback extracts title, author, cover, date and the stream URL. See `references/netease-placeholder-and-video-links.md`.
 - **163 `empty.png`**: a 1x1 lazy-load placeholder; the current extractor resolves the real `data-echo` URL. See `references/netease-placeholder-and-video-links.md`.
-- **163 tracking params**: `spss`/`spsnuid`/`spsvid`/`spstoken` are not stripped, so dedup depends on the page's canonical tag. See `references/netease-placeholder-and-video-links.md`.
+- **163 tracking params**: `spss`/`spsnuid`/`spsdevid`/`spsvid`/`spsshare`/`spsts`/`spstoken` are removed at the input stage by `references/input-normalization.md`; duplicate detection still depends on the page's canonical tag, which is why cleaning never changes an existing note's identity. See `references/netease-placeholder-and-video-links.md`.
 - **Stale `pending-state`**: four distinct states (no `active.json`, dangling pointer, older than one hour, already outstanding) raise different errors; an empty directory is normal. See `references/pending-resume-fallback.md`.
 - **Favorite marker**: `## Favorite Marker` above is the only place its semantics are defined.
 - **Profile vs source-repo drift**: the loaded profile skill and the repo file may be different files, so patching one leaves no diff in the other. See `references/profile-skill-vs-source-repo-sync.md`.

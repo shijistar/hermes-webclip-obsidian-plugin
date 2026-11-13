@@ -4,6 +4,22 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-13
+
+### Added
+
+- `skill/references/input-normalization.md`: per-site rules for turning a share-sheet
+  paste into a clean URL before it reaches `service.run()`. Share sheets prepend the
+  article title and append tracking parameters. `webclip_id` is derived from the
+  extractor's canonical URL, falling back to the final fetched URL when a page has no
+  usable canonical — and because lookup keeps every query parameter while writing
+  drops the common tracking keys, a parameterised paste fails to find the note its
+  clean equivalent wrote. Cleaning at the input stage closes that gap.
+  Rules cover Netease News, Juejin, Zhihu, Bilibili and both WeChat URL forms (the new
+  `/s/<id>` form carries no query; the legacy `__biz` form must keep `__biz`, `mid`,
+  `idx`, `sn`). A host that is not listed is passed through unchanged, since a wrong
+  strip can make an article unreachable. Skill 1.8.0 → 1.9.0.
+
 ## 2026-11-12
 
 ### Changed

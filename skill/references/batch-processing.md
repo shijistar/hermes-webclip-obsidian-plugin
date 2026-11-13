@@ -2,6 +2,14 @@
 
 When clipping multiple articles (10+) in a single session, specific pitfalls and patterns apply.
 
+## Normalize every URL first
+
+`run_batch` does not clean anything: each spec's URL reaches `service.run()`
+verbatim. Build the spec list from URLs already cleaned with the per-site rules
+in `input-normalization.md`, otherwise every article in the batch carries its
+share-sheet title and tracking parameters. Hosts that are not in the rule table
+pass through unchanged.
+
 ## Pitfall: `execute_code` 300s Timeout
 
 The `execute_code` tool has a hard 300-second timeout. Processing 10+ articles sequentially (each taking 10-30s extraction + 2s delay) will exceed this limit.
