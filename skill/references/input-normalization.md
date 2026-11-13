@@ -4,13 +4,21 @@
 
 **`service.run()` must only ever receive a cleaned URL.**
 
-The `webclip_id` is derived from whatever URL reaches the service. A
-parameterised URL therefore makes the same article look like a different one:
-it gets clipped a second time, and `--favorite` against the existing note stops
-matching. Cleaning before the call is what removes that ambiguity — the service
-never sees the raw paste.
+`webclip_id` is `sha256(normalize_url(source))`, where `source` is the extractor's
+`canonicalUrl`. That value falls back to the requested URL only when the page
+declares no canonical link (`safeCanonical()` returns `sourceUrl.href` in that
+case). Two consequences:
 
-Clean first, then call. Never pass a raw share-sheet paste through.
+- **Pages with a canonical tag** (Netease, Juejin — both verified): the id is
+  identical whether or not the input carried tracking parameters, because the
+  page's own canonical wins. Cleaning changes nothing about identity here.
+- **Pages without one**: the raw paste *becomes* the identity, so one article
+  looks like several — it gets clipped twice, and `--favorite` against the first
+  note stops matching.
+
+Cleaning removes the second failure mode, and the input is the only place the
+plugin has no say over. Clean first, then call; never pass a raw share-sheet
+paste through.
 
 ## Why cleaning lives here and not in the plugin
 
@@ -45,11 +53,11 @@ input bug.
 
 | Site | Host | Paste shape | Strip | Must keep | Verified |
 | --- | --- | --- | --- | --- | --- |
-| Netease News | `c.m.163.com`, `*.163.com/news/` | `title + [url](url)` | `spss` `spsnuid` `spsdevid` `spsvid` `spsshare` `spsts` `spstoken` | — | ✅ 2026-11-12, 2501 chars, identical after strip |
-| Juejin | `juejin.cn` | URL only, no title | `share_token` | — | ✅ 2026-11-12, 2702 chars, identical after strip |
-| Zhihu | `zhihu.com`, `zhuanlan.zhihu.com` | `title + url` | `utm_*` `share_code` `utm_psn` | — | ✅ rule confirmed by user |
-| Bilibili | `bilibili.com`, `b23.tv` | `title + url` | `spm_id_from` `vd_source` `share_source` `share_medium` `share_plat` `share_tag` `share_times` `bbdown` | `bvid`, `p` | ✅ 2026-11-12, identical after strip |
-| WeChat (new) | `mp.weixin.qq.com/s/<id>` | `title + url` | nothing — the form carries no query | entire path | ✅ shape confirmed 2026-11-12 (no parameters exist) |
+| Netease News | `c.m.163.com`, `*.163.com/news/` | `title + [url](url)` | `spss` `spsnuid` `spsdevid` `spsvid` `spsshare` `spsts` `spstoken` | — | ✅ 2026-11-13, 2501 chars, identical after strip |
+| Juejin | `juejin.cn` | URL only, no title | `share_token` | — | ✅ 2026-11-13, 2702 chars, identical after strip |
+| Zhihu | `zhihu.com`, `www.zhihu.com`, `zhuanlan.zhihu.com` | `title + url` | `utm_*` `share_code` `utm_psn` | — | ✅ rule confirmed by user |
+| Bilibili | `bilibili.com`, `www.bilibili.com`, `b23.tv` | `title + url` | `spm_id_from` `vd_source` `share_source` `share_medium` `share_plat` `share_tag` `share_times` `bbdown` | `bvid`, `p` | ✅ 2026-11-13, identical after strip |
+| WeChat (new) | `mp.weixin.qq.com/s/<id>` | `title + url` | nothing — the form carries no query | entire path | ✅ shape confirmed 2026-11-13 (no parameters exist) |
 | WeChat (legacy) | `mp.weixin.qq.com/s?__biz=…` | `title + url` | `chksm` `scene` `subscene` `srcid` `sharer_sharetime` `sharer_shareid` `isappinstalled` `clicktime` `enterid` | **`__biz` `mid` `idx` `sn`** | ⚠️ unverified — needs a live legacy URL |
 | *anything else* | — | — | **nothing** | everything | pass through unchanged |
 
@@ -141,6 +149,14 @@ signal to add a row to the table — not to loosen the rule for everyone.
 - [ ] No trailing sentence punctuation (`,` `。` `）` `】`) stuck to the URL.
 - [ ] `%3D` / `%2F` sequences were left encoded, not decoded.
 - [ ] If the paste held the URL twice, only one URL is passed.
+
+## If a lookup finds nothing
+
+Clean first, then look. If the cleaned URL matches no note and the paste carried
+parameters, retry once with the original URL before reporting failure: notes
+written before this rule record the request URL under `fetched_url`, and
+`_sources_from_note()` compares all four recorded URL fields (`url`,
+`original_url`, `source`, `fetched_url`).
 
 ## Verification log
 
