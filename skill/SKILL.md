@@ -29,20 +29,20 @@ the durable rule is in `references/repo-linked-maintenance.md`.
 
 ```
 Source repo:     ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/
-Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/ → source repo (root)
-Skill symlink:   ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/ → source repo/skill/
+Installed copy:  ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/  (a symlink while developing)
+Skill:           <plugin>/skill/SKILL.md, resolved as `webclip-obsidian:web-clip-to-obsidian`
 Config:          <source repo>/config.toml
 ```
 
-The symlink directory name matches the plugin's registration key
-(`webclip-obsidian`, from `plugin.yaml`'s `name`). Hermes keys plugins by that
-manifest name, and the install directory is expected to carry the same name, so
-`plugins.enabled` in `config.yaml` must list `webclip-obsidian`. A different name
-there silently leaves the plugin disabled — confirm with
+The plugin registers its skill from `__init__.py` with `ctx.register_skill()`, so no
+profile-level `skills/` symlink or copy exists. Call the skill by its qualified name —
+the bare `web-clip-to-obsidian` does not resolve. The plugin directory name matches
+`plugin.yaml`'s `name` (`webclip-obsidian`), and `plugins.enabled` in `config.yaml`
+must list that same name; a mismatch leaves the plugin silently disabled. Confirm with
 `hermes plugins info webclip-obsidian` (`Status: enabled`).
 
-Install and config layout (symlinks, no per-profile copy, tracked
-`config.toml`): `references/repo-linked-maintenance.md`.
+Install and config layout (no profile-level skill link; `config.toml` is local and
+gitignored): `references/repo-linked-maintenance.md`.
 
 Default config:
 
