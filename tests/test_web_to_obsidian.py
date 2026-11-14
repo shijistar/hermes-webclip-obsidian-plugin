@@ -2442,6 +2442,14 @@ class SkillFrontmatterTests(unittest.TestCase):
     def test_missing_file_yields_an_empty_mapping(self):
         self.assertEqual(clip.read_skill_frontmatter(Path("/nonexistent/SKILL.md")), {})
 
+    def test_undecodable_file_yields_an_empty_mapping(self):
+        # UnicodeDecodeError is not an OSError; it must not escape the reader either.
+        handle = tempfile.NamedTemporaryFile("wb", suffix=".md", delete=False)
+        handle.write(b"---\nname: \xff\xfe\n---\n")
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        self.assertEqual(clip.read_skill_frontmatter(Path(handle.name)), {})
+
     def test_file_without_frontmatter_yields_an_empty_mapping(self):
         path = self._skill_file("# Just a heading\n\nNo frontmatter here.\n")
         self.assertEqual(clip.read_skill_frontmatter(path), {})

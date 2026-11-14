@@ -40,11 +40,12 @@ def register(ctx) -> None:
         args_hint="<url|webclip_id> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask] [--favorite|--unfavorite]",
     )
     # The skill ships inside the plugin package and is registered here, so the package
-    # holds the only copy. A missing skill/ directory must not take the /webclip command
+    # holds the only copy. Anything that goes wrong with it (missing file, damaged
+    # encoding, an older ctx without register_skill) must not take the /webclip command
     # down with it, so this degrades to "no skill" instead of raising.
     skill_md = plugin_root / "skill" / "SKILL.md"
-    frontmatter = read_skill_frontmatter(skill_md)
     try:
+        frontmatter = read_skill_frontmatter(skill_md)
         ctx.register_skill(
             "web-clip-to-obsidian",
             skill_md,

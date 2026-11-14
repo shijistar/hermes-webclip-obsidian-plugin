@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -31,11 +33,11 @@ class FakeContext:
 
 
 class PluginRegistrationTests(unittest.TestCase):
-    def _load_plugin(self):
+    def _load_plugin(self, root: Path = ROOT):
         spec = importlib.util.spec_from_file_location(
             "web_to_obsidian_plugin",
-            ROOT / "__init__.py",
-            submodule_search_locations=[str(ROOT)],
+            root / "__init__.py",
+            submodule_search_locations=[str(root)],
         )
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
@@ -98,6 +100,25 @@ class PluginRegistrationTests(unittest.TestCase):
         self.assertEqual(len(context.command_calls), 1)   # /webclip still there
         self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
         self.assertEqual(context.skill_calls, [])         # skill dropped, not fatal
+
+    def test_a_damaged_skill_file_does_not_take_the_command_down(self):
+        # Invalid UTF-8 raises UnicodeDecodeError, which is not an OSError: reading
+        # the frontmatter must not escape register() and drop /webclip with it.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copy(ROOT / "__init__.py", root / "__init__.py")
+            shutil.copy(ROOT / "web_to_obsidian.py", root / "web_to_obsidian.py")
+            (root / "skill").mkdir()
+            (root / "skill" / "SKILL.md").write_bytes(b"---\nname: \xff\xfe\n---\n")
+            plugin = self._load_plugin(root)
+            context = FakeContext()
+            plugin.register(context)
+
+        self.assertEqual(len(context.command_calls), 1)   # /webclip still there
+        self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
+        self.assertEqual(len(context.skill_calls), 1)     # and the skill
+        self.assertEqual(context.skill_calls[0][1]["frontmatter"], {})
+        self.assertEqual(context.skill_calls[0][1]["description"], "")
 
     def test_handler_never_propagates_and_does_not_expose_exception_details(self):
         with mock.patch.object(clip.ClipService, "run", side_effect=RuntimeError("SECRET stack")):

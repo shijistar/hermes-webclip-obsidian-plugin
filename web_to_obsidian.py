@@ -1471,7 +1471,7 @@ def _frontmatter_from_text(text: str) -> dict[str, object] | None:
 
 
 def read_skill_frontmatter(skill_md: Path) -> dict[str, object]:
-    """Parsed frontmatter of a SKILL.md; ``{}`` when the file or block is missing.
+    """Parsed frontmatter of a SKILL.md; ``{}`` when it is missing, unreadable, or empty.
 
     register() hands this to ``ctx.register_skill()`` so the registry sees the same
     metadata the file declares — description, and the platform/condition gates Hermes
@@ -1479,7 +1479,7 @@ def read_skill_frontmatter(skill_md: Path) -> dict[str, object]:
     """
     try:
         text = skill_md.read_text(encoding="utf-8-sig")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return {}
     return _frontmatter_from_text(text) or {}
 
