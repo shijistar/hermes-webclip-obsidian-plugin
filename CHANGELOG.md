@@ -4,6 +4,36 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-14
+
+### Changed
+
+- The plugin registers its skill with `ctx.register_skill()`, so the skill lives inside
+  the plugin package and resolves as `webclip-obsidian:web-clip-to-obsidian`. Nothing is
+  copied into a profile's `skills/` directory. Editing `skill/SKILL.md` or its references
+  takes effect immediately; only the description shown in the skills list refreshes on the
+  next gateway restart. Plugin 0.19.3 → 0.20.0, skill 1.9.0 → 1.10.0.
+- Browser-extraction docs are split by platform. `references/browser-extraction-ladder.md`
+  states which path to take (bundled Playwright extractor first, CDP only for a logged-in
+  session); `references/platforms/linux-macos.md` covers local Chrome, and
+  `references/platforms/wsl.md` keeps the existing PowerShell flow for borrowing a Windows
+  Chrome session.
+- `plugin.yaml` now declares `linux` **and** `macos`, and the README requirement says
+  "Linux, macOS, or WSL". Nothing branched on the platform at runtime — the manifest and
+  the README were simply wrong about it.
+- `plugin.yaml` declares `python_dependencies: PyYAML>=6.0,<7` (and `requirements.txt`
+  matches). Hermes never auto-installs declared dependencies, but the declaration lets
+  `hermes pm repair` / `hermes plugins doctor` name the missing package instead of the
+  plugin failing to load with a bare `No module named 'yaml'`. `post-install.sh` no longer
+  installs PyYAML itself: it picked `command -v python3`, which is a different interpreter
+  from the Hermes runtime that loads the plugin, so a successful run proved nothing.
+
+### Removed
+
+- `skill/references/profile-skill-vs-source-repo-sync.md` — it documented a drift
+  problem that can no longer occur. `skill/references/repo-linked-maintenance.md` and
+  `skill/README.md` were rewritten to match.
+
 ## 2026-11-13
 
 ### Added

@@ -23,9 +23,11 @@ agent skill in the same tree.
 
 ## Requirements
 
-- Linux or WSL (the implementation uses `fcntl` locks and POSIX process groups).
+- Linux, macOS, or WSL (the implementation uses `fcntl` locks and POSIX process groups;
+  Windows is not supported).
 - Hermes Agent with standalone plugin support.
-- Python 3.11+ and PyYAML.
+- Python 3.11+ and PyYAML (declared in `plugin.yaml`; `hermes plugins install` installs it
+  into the Hermes runtime environment).
 - Node.js 18+ with the bundled extractor; Playwright Chromium is installed by
   its `prepare` hook.
 - Git for the default synchronization flow.
@@ -37,8 +39,8 @@ integration.
 
 ### Install
 
-The bundled installer wires up the Python and Node dependencies, Playwright
-Chromium, the skill symlink, and `config.toml`:
+The bundled installer wires up the Node dependencies (Playwright Chromium) and
+`config.toml`:
 
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin

@@ -30,14 +30,13 @@ path with `quote(relative_path, safe='/')`, so slashes stay literal
 `safe='/'` to `safe=''` in `web_to_obsidian.py`; until then the `%2F` link must be
 produced by the caller, not by the plugin.
 
-## 2) Profile skill file vs source-repo skill file
+## 2) Skill file location
 
-Do not assume the loaded profile skill file is always the same file as the source-repo skill under:
+- Skill source (single copy): `<plugin_root>/skill/SKILL.md`, resolved as
+  `webclip-obsidian:web-clip-to-obsidian`.
 
-- Profile skill: `~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/SKILL.md`
-- Source repo skill: `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/skill/SKILL.md`
-
-Before creating a repository commit or PR for documentation updates, verify whether they are the same file or symlink target. If they are different files, patching the loaded profile skill alone will not create a diff in the `hermes-webclip-obsidian-plugin` repository. Sync the source-repo file explicitly first.
+There is no separate profile copy to keep in sync: the plugin package holds the only
+copy of the skill, and edits to it are read on the next `skill_view`.
 
 ## 3) `image_mode` semantics
 

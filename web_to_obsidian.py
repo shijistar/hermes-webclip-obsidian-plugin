@@ -1470,6 +1470,20 @@ def _frontmatter_from_text(text: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def read_skill_frontmatter(skill_md: Path) -> dict[str, object]:
+    """Parsed frontmatter of a SKILL.md; ``{}`` when the file or block is missing.
+
+    register() hands this to ``ctx.register_skill()`` so the registry sees the same
+    metadata the file declares — description, and the platform/condition gates Hermes
+    evaluates for plugin skills — instead of a second hardcoded copy in ``__init__.py``.
+    """
+    try:
+        text = skill_md.read_text(encoding="utf-8-sig")
+    except OSError:
+        return {}
+    return _frontmatter_from_text(text) or {}
+
+
 def _note_prefix(path: Path, limit: int = 64 * 1024) -> str | None:
     """Read a bounded note prefix for frontmatter lookups.
 
