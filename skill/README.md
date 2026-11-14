@@ -19,18 +19,11 @@ The plugin version is tracked separately in `../plugin.yaml` and
 
 ## Deploy to a Hermes profile
 
-Symlink (not copy) the skill into the profile's skills directory so the repo
-stays the single source of truth:
-
-```bash
-ln -s /path/to/hermes-webclip-obsidian-plugin/skill \
-      ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian
-```
-
-The skill is designed to be used together with the plugin symlink
-(`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`). The directory
-name matches the plugin registration key (`webclip-obsidian`), which is what
-`plugins.enabled` in `config.yaml` must list.
+Nothing to symlink or copy: the plugin registers the skill from its own `register()`,
+so the skill resolves as `webclip-obsidian:web-clip-to-obsidian` as soon as the plugin
+is enabled. The plugin directory itself is still symlinked from the repo during
+development (`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`), and
+its name must match `plugins.enabled` in `config.yaml`.
 
 ## Reference index
 
@@ -43,8 +36,7 @@ name matches the plugin registration key (`webclip-obsidian`), which is what
 | `references/netease-embedded-state-author.md`          | Netease author/published extraction from embedded JSON state                                          |
 | `references/netease-placeholder-and-video-links.md`    | Netease `empty.png` placeholder images and anti-scrape video short links                              |
 | `references/pending-resume-fallback.md`                | Outstanding/stale pending-state entries and fallbacks                                                 |
-| `references/profile-skill-vs-source-repo-sync.md`      | Keeping the profile skill in sync with the source repo                                                |
-| `references/repo-linked-maintenance.md`                | Maintenance implications of symlinking the skill/plugin from a Git repo                               |
+| `references/repo-linked-maintenance.md`                | Maintenance implications of symlinking the plugin from a Git repo                                     |
 | `references/wsl-chrome-cdp-extraction.md`              | WSL Chrome CDP extraction path                                                                        |
 | `references/zhihu-cookie-and-scraper-diagnostics.md`   | Layered Zhihu cookie/fetch/browser diagnostics                                                        |
 

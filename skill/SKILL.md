@@ -330,7 +330,6 @@ live in `references/` and are linked from the rule they belong to.
 - **163 tracking params**: `spss`/`spsnuid`/`spsdevid`/`spsvid`/`spsshare`/`spsts`/`spstoken` are removed at the input stage by `references/input-normalization.md`; duplicate detection still depends on the page's canonical tag, which is why cleaning never changes an existing note's identity. See `references/netease-placeholder-and-video-links.md`.
 - **Stale `pending-state`**: four distinct states (no `active.json`, dangling pointer, older than one hour, already outstanding) raise different errors; an empty directory is normal. See `references/pending-resume-fallback.md`.
 - **Favorite marker**: `## Favorite Marker` above is the only place its semantics are defined.
-- **Profile vs source-repo drift**: the loaded profile skill and the repo file may be different files, so patching one leaves no diff in the other. See `references/profile-skill-vs-source-repo-sync.md`.
 - **`image_mode` semantics** and private GitHub blob URLs: see `references/github-private-blob-url-and-image-mode.md`.
 - **HTML `<img>` tags** do not trigger the `image_mode` confirmation flow.
 - **WeChat**: curl fallback, author field format and the CAPTCHA wall. See `references/wechat-curl-extraction.md`.
