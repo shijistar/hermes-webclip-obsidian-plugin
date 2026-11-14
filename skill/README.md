@@ -19,11 +19,11 @@ The plugin version is tracked separately in `../plugin.yaml` and
 
 ## Deploy to a Hermes profile
 
-Nothing to symlink or copy: the plugin registers the skill from its own `register()`,
-so the skill resolves as `webclip-obsidian:web-clip-to-obsidian` as soon as the plugin
-is enabled. The plugin directory itself is still symlinked from the repo during
-development (`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`), and
-its name must match `plugins.enabled` in `config.yaml`.
+The plugin registers the skill from its own `register()`, so it resolves as
+`webclip-obsidian:web-clip-to-obsidian` as soon as the plugin is enabled. The plugin
+directory itself is still linked from the repo during development
+(`~/.hermes/profiles/<profile>/plugins/webclip-obsidian -> <repo>`), and its name must
+match `plugins.enabled` in `config.yaml`.
 
 ## Reference index
 
@@ -31,15 +31,17 @@ its name must match `plugins.enabled` in `config.yaml`.
 | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `references/anti-bot-fallback-web-extract.md`          | When the Node extractor is blocked (Zhihu, Doubao), fall back to `web_extract` + `_persist_article()` |
 | `references/batch-processing.md`                       | Proven workflow for clipping 10+ articles sequentially                                                |
+| `references/browser-extraction-ladder.md`              | Which extraction path to take, and the platform split for CDP                                          |
 | `references/git-sync-testing-pattern.md`               | Git safety tests require an upstream branch                                                           |
 | `references/github-private-blob-url-and-image-mode.md` | GitHub blob preview URLs and `image_mode` metadata semantics                                          |
+| `references/input-normalization.md`                    | Share-sheet pastes to clean URLs, per site; `webclip_id` canonicalization rules                        |
 | `references/netease-embedded-state-author.md`          | Netease author/published extraction from embedded JSON state                                          |
 | `references/netease-placeholder-and-video-links.md`    | Netease `empty.png` placeholder images and anti-scrape video short links                              |
 | `references/pending-resume-fallback.md`                | Outstanding/stale pending-state entries and fallbacks                                                 |
-| `references/repo-linked-maintenance.md`                | Maintenance implications of symlinking the plugin from a Git repo                                     |
-| `references/browser-extraction-ladder.md`              | Which extraction path to take, and the platform split for CDP                                          |
 | `references/platforms/linux-macos.md`                  | Local Chrome + CDP on Linux and macOS                                                                  |
 | `references/platforms/wsl.md`                          | Borrowing a Windows Chrome session from WSL                                                            |
+| `references/repo-linked-maintenance.md`                | Maintenance rules for working on this plugin from its source repo                                      |
+| `references/wechat-curl-extraction.md`                 | WeChat curl fallback, author field format and the CAPTCHA wall                                        |
 | `references/zhihu-cookie-and-scraper-diagnostics.md`   | Layered Zhihu cookie/fetch/browser diagnostics                                                        |
 
 ## Trigger phrases

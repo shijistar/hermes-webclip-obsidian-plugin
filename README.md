@@ -39,7 +39,7 @@ integration.
 ### Install
 
 The bundled installer wires up the Python and Node dependencies, Playwright
-Chromium, and `config.toml`, and retires any legacy skill symlink:
+Chromium, and `config.toml`:
 
 ```bash
 cd /path/to/hermes-webclip-obsidian-plugin

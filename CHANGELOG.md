@@ -8,12 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- The plugin registers its skill with `ctx.register_skill()` instead of relying on a
-  profile-level symlink. The skill resolves as `webclip-obsidian:web-clip-to-obsidian`,
-  and `post-install.sh` removes any legacy symlink that points at this plugin. Editing
-  `skill/SKILL.md` or its references still takes effect immediately; only the
-  description shown in the skills list refreshes on the next gateway restart.
-  Plugin 0.19.3 → 0.20.0, skill 1.9.0 → 1.10.0.
+- The plugin registers its skill with `ctx.register_skill()`, so the skill lives inside
+  the plugin package and resolves as `webclip-obsidian:web-clip-to-obsidian`. Nothing is
+  copied into a profile's `skills/` directory. Editing `skill/SKILL.md` or its references
+  takes effect immediately; only the description shown in the skills list refreshes on the
+  next gateway restart. Plugin 0.19.3 → 0.20.0, skill 1.9.0 → 1.10.0.
 - Browser-extraction docs are split by platform. `references/browser-extraction-ladder.md`
   states which path to take (bundled Playwright extractor first, CDP only for a logged-in
   session); `references/platforms/linux-macos.md` covers local Chrome, and
@@ -32,11 +31,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `skill/references/profile-skill-vs-source-repo-sync.md` — it documented a drift
   problem that can no longer occur. `skill/references/repo-linked-maintenance.md` and
   `skill/README.md` were rewritten to match.
-
-### Breaking
-
-- Existing installs: the bare name `web-clip-to-obsidian` no longer resolves. Use
-  `webclip-obsidian:web-clip-to-obsidian`.
 
 ## 2026-11-13
 

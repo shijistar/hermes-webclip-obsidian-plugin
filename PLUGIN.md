@@ -25,7 +25,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 
 The recommended way is the one-shot installer bundled in this repository
 (it wires up the extractor npm dependencies + Playwright Chromium and
-`config.toml`, and retires any legacy skill symlink; the plugin itself is assumed
+`config.toml`; the plugin itself is assumed
 to be already installed via `hermes plugins install` — pass `--install-plugin` to
 have the script run that step too; on an existing install this refreshes it with
 `hermes plugins install --force` and preserves your `config.toml`). It
@@ -52,10 +52,9 @@ npm install                     # installs Node deps; the prepare hook installs 
 cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/webclip-obsidian/config.toml"
 ```
 
-The plugin registers its skill in `register()`, so nothing has to be symlinked or
-copied into a profile. It resolves as `webclip-obsidian:web-clip-to-obsidian`, and
-`post-install.sh` removes a legacy
-`skills/productivity/web-clip-to-obsidian` symlink if one exists.
+The plugin registers its skill in `register()`, so it lives inside the package and
+nothing is copied into a profile. It resolves as
+`webclip-obsidian:web-clip-to-obsidian`.
 
 For a named profile, set `HERMES_HOME` to that profile before the commands.
 Review `config.toml` before restarting the Gateway. `after-install.md` in the

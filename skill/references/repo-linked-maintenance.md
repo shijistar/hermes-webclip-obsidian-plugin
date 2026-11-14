@@ -9,8 +9,7 @@ The source repo is the only copy of both the plugin and its skill:
 - source repo: `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin`
 - plugin: symlinked into `<profile>/plugins/webclip-obsidian` while developing, or copied
   by `hermes plugins install` on a normal install
-- skill: `<repo>/skill/`, registered by the plugin's `register()` — there is **no**
-  profile-level `skills/` symlink or copy
+- skill: `<repo>/skill/`, registered by the plugin's `register()`
 
 Therefore, do **not** treat the installed plugin directory as an isolated place for
 ad-hoc fixes after a one-off failure.
@@ -25,20 +24,20 @@ ad-hoc fixes after a one-off failure.
 
 ## Why this matters
 
-A local edit to the plugin (its bundled `skill/` included) changes the source repo
-immediately. If that change is not reviewed and pushed upstream, the local Hermes
-behavior diverges from the remote repo and becomes hard to reason about later.
+With the symlink deployment, a local edit to the plugin (its bundled `skill/` included)
+changes the source repo immediately. After `hermes plugins install`, the installed tree
+is an independent copy, so editing that copy leaves the repo untouched — which is why
+fixes belong in the source repo either way. A change that is never reviewed and pushed
+upstream makes local Hermes behavior diverge from the remote repo and become hard to
+reason about later.
 
 ## Install and deploy
 
 ```bash
-# plugin only — the skill needs no separate link
+# plugin only — the skill ships inside the package
 ln -s ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin \
       ~/.hermes/profiles/<profile>/plugins/webclip-obsidian
 ```
-
-`post-install.sh` also removes a legacy
-`<profile>/skills/productivity/web-clip-to-obsidian` symlink if it finds one.
 
 `config.toml` lives at the plugin package root but is **gitignored**. Because the
 installed path is a symlink to the repo, editing
