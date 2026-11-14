@@ -232,7 +232,9 @@ fi
 # "web-clip-to-obsidian" and once as "webclip-obsidian:web-clip-to-obsidian".
 SKILL_LINK="$SKILLS_DIR/web-clip-to-obsidian"
 if [[ -L "$SKILL_LINK" ]]; then
-  if [[ -d "$SKILL_SRC" && "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
+  if [[ ! -d "$SKILL_SRC" ]]; then
+    warn "skill/ not found at $SKILL_SRC — legacy link $SKILL_LINK left untouched"
+  elif [[ "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
     rm -f "$SKILL_LINK"
     ok "Removed legacy skill symlink $SKILL_LINK"
   else

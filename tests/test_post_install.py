@@ -297,3 +297,24 @@ def test_post_install_removes_a_legacy_skill_symlink(hermes_env, tmp_path):
     assert not legacy.is_symlink() and not legacy.exists()
     assert foreign.is_symlink()          # a foreign symlink must survive
     assert "Removed legacy skill symlink" in result.stdout
+
+
+def test_post_install_keeps_the_link_when_its_own_skill_dir_is_missing(tmp_path):
+    """Without skill/ beside the installer, the legacy link is kept and the reason is named."""
+    hermes_home = tmp_path / "hermes_home"
+    plugin_dir = hermes_home / PLUGIN_REL
+    _install_installer_copy(plugin_dir)          # installer copy, deliberately no skill/
+    bin_dir = tmp_path / "bin"
+    _write_shim(bin_dir)
+
+    skills = hermes_home / "skills" / "productivity"
+    skills.mkdir(parents=True)
+    legacy = skills / "web-clip-to-obsidian"
+    legacy.symlink_to(plugin_dir / "skill", target_is_directory=True)
+
+    result = _run_from_plugin_dir(plugin_dir, hermes_home, bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert legacy.is_symlink()                   # dangling target, kept on purpose
+    assert "skill/ not found" in result.stdout
+    assert "points elsewhere" not in result.stdout
