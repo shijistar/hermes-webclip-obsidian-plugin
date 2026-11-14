@@ -23,7 +23,8 @@ agent skill in the same tree.
 
 ## Requirements
 
-- Linux or WSL (the implementation uses `fcntl` locks and POSIX process groups).
+- Linux, macOS, or WSL (the implementation uses `fcntl` locks and POSIX process groups;
+  Windows is not supported).
 - Hermes Agent with standalone plugin support.
 - Python 3.11+ and PyYAML.
 - Node.js 18+ with the bundled extractor; Playwright Chromium is installed by

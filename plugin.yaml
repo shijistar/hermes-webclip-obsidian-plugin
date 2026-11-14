@@ -5,3 +5,4 @@ provides_tools:
   - web_to_obsidian_resume_pending
 platforms:
   - linux
+  - macos
