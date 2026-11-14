@@ -271,3 +271,29 @@ def test_hermes_home_wins_over_plugin_dir_from_another_home(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (requested_plugin / "config.toml").is_file()
     assert not (source_plugin / "config.toml").exists()
+
+
+def test_post_install_removes_a_legacy_skill_symlink(hermes_env, tmp_path):
+    """A symlink pointing at this plugin's skill/ is removed; anything else is left alone."""
+    hermes_home, bin_dir = hermes_env
+    # Without --install-plugin the script assumes the plugin is installed already;
+    # an empty installed dir is enough for this test.
+    _plugin_dir(hermes_home).mkdir(parents=True)
+
+    skills = hermes_home / "skills" / "productivity"
+    skills.mkdir(parents=True)
+
+    legacy = skills / "web-clip-to-obsidian"
+    legacy.symlink_to(REPO_ROOT / "skill", target_is_directory=True)
+
+    foreign_target = tmp_path / "elsewhere"
+    foreign_target.mkdir()
+    foreign = skills / "someone-elses-skill"
+    foreign.symlink_to(foreign_target, target_is_directory=True)
+
+    result = _run_install(hermes_home, bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert not legacy.is_symlink() and not legacy.exists()
+    assert foreign.is_symlink()          # a foreign symlink must survive
+    assert "Removed legacy skill symlink" in result.stdout

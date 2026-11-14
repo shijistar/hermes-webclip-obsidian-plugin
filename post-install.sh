@@ -11,7 +11,7 @@
 #   3. `npm install` in the bundled `extractor/` directory — the package's
 #      `prepare` hook (`npx playwright install chromium`) installs the 
 #      Playwright browser automatically.
-#   4. Symlink `skill/` into the target profile's skills dir (auto-discovery)
+#   4. Retire the legacy skill symlink (registration happens in __init__.py)
 #   5. Copy `config.example.toml` → `config.toml` if absent
 #   6. Print restart instructions
 #
@@ -226,25 +226,20 @@ else
   warn "No package.json in $EXTRACTOR_DIR — extractor npm install skipped"
 fi
 
-# ------------------------------------------------------- 3. skill symlink
+# -------------------------------------- 3. retire the legacy skill symlink
+# The plugin registers its skill in __init__.py, so a profile-level symlink is
+# obsolete. Leaving it in place would list the same skill twice: once as
+# "web-clip-to-obsidian" and once as "webclip-obsidian:web-clip-to-obsidian".
 SKILL_LINK="$SKILLS_DIR/web-clip-to-obsidian"
-if [[ ! -d "$SKILL_SRC" ]]; then
-  warn "Skill dir not found at $SKILL_SRC; skipping skill symlink."
-else
-  mkdir -p "$SKILLS_DIR"
-  if [[ -L "$SKILL_LINK" ]]; then
-    if [[ "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
-      ok "Skill already linked at $SKILL_LINK"
-    else
-      info "Replacing stale skill symlink $SKILL_LINK → $SKILL_SRC"
-      ln -sfn "$SKILL_SRC" "$SKILL_LINK"
-    fi
-  elif [[ -e "$SKILL_LINK" ]]; then
-    warn "$SKILL_LINK exists as a regular file or directory — remove it manually for the installer to manage the skill symlink"
+if [[ -L "$SKILL_LINK" ]]; then
+  if [[ -d "$SKILL_SRC" && "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
+    rm -f "$SKILL_LINK"
+    ok "Removed legacy skill symlink $SKILL_LINK"
   else
-    info "Symlinking skill $SKILL_SRC → $SKILL_LINK"
-    ln -s "$SKILL_SRC" "$SKILL_LINK"
+    warn "$SKILL_LINK points elsewhere — left untouched"
   fi
+elif [[ -e "$SKILL_LINK" ]]; then
+  warn "$SKILL_LINK is a real file or directory, not a symlink — left untouched; remove it by hand if it is a stale copy"
 fi
 
 # ------------------------------------------------ 4. config.toml bootstrap
@@ -264,7 +259,7 @@ fi
 printf '\033[1;32m\nInstall summary\033[0m\n'
 printf '  Plugin:     %s\n' "$INSTALLED_PLUGIN_DIR"
 printf '  Extractor:  %s\n' "$INSTALLED_PLUGIN_DIR/extractor"
-printf '  Skill:      %s\n' "$SKILLS_DIR/web-clip-to-obsidian"
+printf '  Skill:      %s\n' "$SCRIPT_DIR/skill (registered by the plugin — no profile link)"
 printf '  Config:     %s\n' "$INSTALLED_PLUGIN_DIR/config.toml"
 printf '\033[1;32m\nNext steps:\033[0m\n'
 printf '  1. Review config.toml (vault, destination, sync_branch).\n'
