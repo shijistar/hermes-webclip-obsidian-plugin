@@ -83,6 +83,11 @@ class PluginRegistrationTests(unittest.TestCase):
         head = skill_md.read_text(encoding="utf-8-sig")
         self.assertIn(kwargs["description"], head)
         self.assertIn("Obsidian", kwargs["description"])
+        # frontmatter travels with the registration so Hermes can apply the file's
+        # platform/condition gates instead of seeing an empty mapping.
+        self.assertEqual(kwargs["frontmatter"]["name"], "web-clip-to-obsidian")
+        self.assertEqual(kwargs["frontmatter"]["description"], kwargs["description"])
+        self.assertIn("version", kwargs["frontmatter"])
 
     def test_failed_skill_registration_keeps_the_command_registered(self):
         plugin = self._load_plugin()

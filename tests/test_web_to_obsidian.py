@@ -2416,3 +2416,42 @@ class BatchClipServiceTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class SkillFrontmatterTests(unittest.TestCase):
+    """read_skill_frontmatter is what register() feeds to the plugin registry."""
+
+    def _skill_file(self, text: str, *, encoding: str = "utf-8") -> Path:
+        handle = tempfile.NamedTemporaryFile(
+            "w", suffix=".md", delete=False, encoding=encoding
+        )
+        handle.write(text)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return Path(handle.name)
+
+    def test_reads_fields_through_a_bom_and_crlf(self):
+        path = self._skill_file(
+            "---\r\nname: web-clip-to-obsidian\r\ndescription: Clip pages\r\nversion: 1.2.3\r\n---\r\n\r\nBody\r\n",
+            encoding="utf-8-sig",
+        )
+        meta = clip.read_skill_frontmatter(path)
+        self.assertEqual(meta["description"], "Clip pages")
+        self.assertEqual(meta["version"], "1.2.3")
+
+    def test_missing_file_yields_an_empty_mapping(self):
+        self.assertEqual(clip.read_skill_frontmatter(Path("/nonexistent/SKILL.md")), {})
+
+    def test_file_without_frontmatter_yields_an_empty_mapping(self):
+        path = self._skill_file("# Just a heading\n\nNo frontmatter here.\n")
+        self.assertEqual(clip.read_skill_frontmatter(path), {})
+
+    def test_malformed_yaml_yields_an_empty_mapping(self):
+        path = self._skill_file("---\nname: [unclosed\n---\n")
+        self.assertEqual(clip.read_skill_frontmatter(path), {})
+
+    def test_frontmatter_without_description_still_returns_the_rest(self):
+        path = self._skill_file("---\nname: bare\nversion: 0.1.0\n---\n")
+        meta = clip.read_skill_frontmatter(path)
+        self.assertEqual(meta["name"], "bare")
+        self.assertNotIn("description", meta)

@@ -28,7 +28,7 @@ def register(ctx) -> None:
     from .web_to_obsidian import (
         build_handler,
         build_resume_tool,
-        read_skill_description,
+        read_skill_frontmatter,
     )
 
     plugin_root = Path(__file__).resolve().parent
@@ -39,16 +39,17 @@ def register(ctx) -> None:
         description="Clip a public web article into an Obsidian vault with guarded Git sync.",
         args_hint="<url|webclip_id> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask] [--favorite|--unfavorite]",
     )
-    # The skill ships inside the plugin package and is registered here rather than
-    # through a profile-level symlink: one copy, no drift between a profile path and
-    # the source repo. A missing skill/ directory must not take the /webclip command
+    # The skill ships inside the plugin package and is registered here, so the package
+    # holds the only copy. A missing skill/ directory must not take the /webclip command
     # down with it, so this degrades to "no skill" instead of raising.
     skill_md = plugin_root / "skill" / "SKILL.md"
+    frontmatter = read_skill_frontmatter(skill_md)
     try:
         ctx.register_skill(
             "web-clip-to-obsidian",
             skill_md,
-            description=read_skill_description(skill_md),
+            description=str(frontmatter.get("description") or "").strip(),
+            frontmatter=frontmatter,
         )
     except Exception as exc:  # FileNotFoundError, or an older ctx without register_skill
         # Keep the traceback: a bare message cannot distinguish "skill/ is missing"

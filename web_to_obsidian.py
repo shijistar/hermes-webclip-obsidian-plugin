@@ -1470,20 +1470,18 @@ def _frontmatter_from_text(text: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def read_skill_description(skill_md: Path) -> str:
-    """Description from a SKILL.md frontmatter; "" when the file or field is absent.
+def read_skill_frontmatter(skill_md: Path) -> dict[str, object]:
+    """Parsed frontmatter of a SKILL.md; ``{}`` when the file or block is missing.
 
-    register() uses this so the skills-list description has one source of truth
-    (the file) instead of a second hardcoded string in __init__.py.
+    register() hands this to ``ctx.register_skill()`` so the registry sees the same
+    metadata the file declares — description, and the platform/condition gates Hermes
+    evaluates for plugin skills — instead of a second hardcoded copy in ``__init__.py``.
     """
     try:
         text = skill_md.read_text(encoding="utf-8-sig")
     except OSError:
-        return ""
-    meta = _frontmatter_from_text(text)
-    if not meta:
-        return ""
-    return str(meta.get("description") or "").strip()
+        return {}
+    return _frontmatter_from_text(text) or {}
 
 
 def _note_prefix(path: Path, limit: int = 64 * 1024) -> str | None:
