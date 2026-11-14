@@ -24,10 +24,10 @@ See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 ## Install
 
 The recommended way is the one-shot installer bundled in this repository
-(it wires up the extractor npm dependencies + Playwright Chromium, the skill
-symlink, and `config.toml`; the plugin itself is assumed to be already
-installed via `hermes plugins install` — pass `--install-plugin` to have the
-script run that step too; on an existing install this refreshes it with
+(it wires up the extractor npm dependencies + Playwright Chromium and
+`config.toml`, and retires any legacy skill symlink; the plugin itself is assumed
+to be already installed via `hermes plugins install` — pass `--install-plugin` to
+have the script run that step too; on an existing install this refreshes it with
 `hermes plugins install --force` and preserves your `config.toml`). It
 auto-detects `HERMES_HOME` and the profile by
 walking up from its own location to the nearest `.hermes` directory:
@@ -50,9 +50,12 @@ hermes plugins install "file://$REPO" --enable
 cd "$HERMES_HOME/plugins/webclip-obsidian/extractor"
 npm install                     # installs Node deps; the prepare hook installs Playwright Chromium
 cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/webclip-obsidian/config.toml"
-# symlink the skill so the agent auto-discovers the workflow:
-ln -s "$REPO/skill" "$HERMES_HOME/skills/productivity/web-clip-to-obsidian"
 ```
+
+The plugin registers its skill in `register()`, so nothing has to be symlinked or
+copied into a profile. It resolves as `webclip-obsidian:web-clip-to-obsidian`, and
+`post-install.sh` removes a legacy
+`skills/productivity/web-clip-to-obsidian` symlink if one exists.
 
 For a named profile, set `HERMES_HOME` to that profile before the commands.
 Review `config.toml` before restarting the Gateway. `after-install.md` in the
