@@ -15,12 +15,19 @@ class FakeContext:
     def __init__(self):
         self.command_calls = []
         self.tool_calls = []
+        self.skill_calls = []
+        self.skill_error = None      # inject a registration failure
 
     def register_command(self, *args, **kwargs):
         self.command_calls.append((args, kwargs))
 
     def register_tool(self, **kwargs):
         self.tool_calls.append(kwargs)
+
+    def register_skill(self, *args, **kwargs):
+        if self.skill_error is not None:
+            raise self.skill_error
+        self.skill_calls.append((args, kwargs))
 
 
 class PluginRegistrationTests(unittest.TestCase):
@@ -59,6 +66,23 @@ class PluginRegistrationTests(unittest.TestCase):
         self.assertEqual(
             context.tool_calls[0]["name"], "web_to_obsidian_resume_pending"
         )
+
+    def test_registers_the_skill_under_the_plugin_namespace(self):
+        plugin = self._load_plugin()
+        context = FakeContext()
+        plugin.register(context)
+
+        self.assertEqual(len(context.skill_calls), 1)
+        args, kwargs = context.skill_calls[0]
+        self.assertEqual(args[0], "web-clip-to-obsidian")
+        skill_md = args[1]                      # path is the second positional arg
+        self.assertEqual(skill_md.name, "SKILL.md")
+        self.assertEqual(skill_md.parent.name, "skill")
+        self.assertTrue(skill_md.is_file())
+        # The description must come from the file, not a second hardcoded string.
+        head = skill_md.read_text(encoding="utf-8-sig")
+        self.assertIn(kwargs["description"], head)
+        self.assertIn("Obsidian", kwargs["description"])
 
     def test_handler_never_propagates_and_does_not_expose_exception_details(self):
         with mock.patch.object(clip.ClipService, "run", side_effect=RuntimeError("SECRET stack")):
