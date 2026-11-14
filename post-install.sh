@@ -4,16 +4,14 @@
 # This script installs the necessary dependencies for the webclip-obsidian plugin.
 #
 # Steps performed:
-#   1. Optionally `hermes plugins install <this-repo> --enable` — only when 
-#      `--install-plugin` is passed.
-#   2. `pip install` Python dependencies (PyYAML) — required by the plugin's
-#      frontmatter generation/parsing.
-#   3. `npm install` in the bundled `extractor/` directory — the package's
-#      `prepare` hook (`npx playwright install chromium`) installs the 
+#   1. Optionally `hermes plugins install <this-repo> --enable` — only when
+#      `--install-plugin` is passed. Hermes installs the Python dependencies
+#      declared in plugin.yaml (PyYAML) into its own runtime environment.
+#   2. `npm install` in the bundled `extractor/` directory — the package's
+#      `prepare` hook (`npx playwright install chromium`) installs the
 #      Playwright browser automatically.
-#   4. Symlink `skill/` into the target profile's skills dir (auto-discovery)
-#   5. Copy `config.example.toml` → `config.toml` if absent
-#   6. Print restart instructions
+#   3. Copy `config.example.toml` → `config.toml` if absent
+#   4. Print restart instructions
 #
 # Usage:
 #   ./post-install.sh [--hermes-home DIR] [--install-plugin]
@@ -78,39 +76,31 @@ elif ! HERMES_HOME="$(_find_hermes_home "$SCRIPT_DIR")"; then
 fi
 
 # PROFILE_DIR rules:
-#   1. if the script lives under <HERMES_HOME>/profiles/<name>/ and that
-#      directory exists → PROFILE_DIR = <HERMES_HOME>/profiles/<name>;
-#   2. else if <HERMES_HOME>/profiles/ contains exactly one profile → use it;
-#   3. else PROFILE_DIR = HERMES_HOME (default profile).
-PROFILE_DIR="$HERMES_HOME"
-_derived_profile=""
-_installed_profile=""
-# Prefer the installed plugin dir this script actually ships in: when the
-# script sits at <profile>/plugins/<key>, that path identifies the profile
-# unambiguously. It must win over the "single named profile" heuristic below,
-# which otherwise hijacks a default-profile install whenever exactly one
-# named profile exists. It must NOT override an explicit --hermes-home that
-# points at a different home, so only adopt it when it belongs to that home.
-if [[ -f "$SCRIPT_DIR/plugin.yaml" && "$(basename "$(dirname "$SCRIPT_DIR")")" == "plugins" ]]; then
-  _installed_profile="$(cd "$(dirname "$(dirname "$SCRIPT_DIR")")" && pwd)"
-  if ! [[ "$_installed_profile" -ef "$HERMES_HOME" ]] && ! [[ "$(dirname "$_installed_profile")" -ef "$HERMES_HOME/profiles" ]]; then
-    _installed_profile=""
+#   1. the script sits at <home>/plugins/<key>          → default profile (home);
+#      or at <home>/profiles/<name>/plugins/<key>      → that named profile.
+#      This path evidence is checked first because the "single named profile"
+#      heuristic below would otherwise hijack a default-profile install.
+#   2. else, exactly one directory under <home>/profiles → that profile;
+#   3. else                                             → default profile (home).
+_profile_dir_from_path() {
+  local dir="$1" home="$2" candidate
+  [[ "$(basename "$(dirname "$dir")")" == "plugins" ]] || return 1
+  candidate="$(cd "$(dirname "$(dirname "$dir")")" 2>/dev/null && pwd)" || return 1
+  if [[ "$candidate" -ef "$home" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
   fi
-fi
+  if [[ "$(dirname "$candidate")" -ef "$home/profiles" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
 
-if [[ -n "$_installed_profile" ]]; then
-  PROFILE_DIR="$_installed_profile"
-else
-  if [[ "$SCRIPT_DIR" == *"/profiles/"* ]]; then
-    _profiles_idx="${SCRIPT_DIR%%/plugins/*}"       # strip trailing /plugins/*
-    if [[ "$_profiles_idx" == *"/profiles/"* ]]; then
-      _derived_profile="${_profiles_idx#*"/profiles/"}"
-      _derived_profile="${_derived_profile%%/*}"
-    fi
-  fi
-  if [[ -n "$_derived_profile" && -d "$HERMES_HOME/profiles/$_derived_profile" ]]; then
-    PROFILE_DIR="$HERMES_HOME/profiles/$_derived_profile"
-  elif [[ -d "$HERMES_HOME/profiles" ]]; then
+PROFILE_DIR="$HERMES_HOME"
+if ! PROFILE_DIR="$(_profile_dir_from_path "$SCRIPT_DIR" "$HERMES_HOME")"; then
+  PROFILE_DIR="$HERMES_HOME"
+  if [[ -d "$HERMES_HOME/profiles" ]]; then
     _profiles_candidates=("$HERMES_HOME"/profiles/*/)
     if [[ ${#_profiles_candidates[@]} -eq 1 && -d "${_profiles_candidates[0]}" ]]; then
       PROFILE_DIR="$(cd "${_profiles_candidates[0]}" && pwd)"
@@ -119,13 +109,9 @@ else
 fi
 
 PLUGIN_DIR="$PROFILE_DIR/plugins/webclip-obsidian"
-SKILLS_DIR="$PROFILE_DIR/skills/productivity"
 
 # The plugin package this script ships with is SCRIPT_DIR itself (repo root).
 PLUGIN_SRC="$SCRIPT_DIR"
-
-# The skill ships inside the plugin package (repo root / installed copy).
-SKILL_SRC="$SCRIPT_DIR/skill"
 
 info()  { printf '\033[1;34m[install]\033[0m %s\n' "$*"; }
 ok()    { printf '\033[1;32m[ok]\033[0m %s\n' "$*"; }
@@ -194,25 +180,7 @@ if [[ "$(cd "$SCRIPT_DIR" && pwd)" != "$(cd "$INSTALLED_PLUGIN_DIR" && pwd)" ]];
   info "Script runs from $SCRIPT_DIR; installing dependencies into $INSTALLED_PLUGIN_DIR"
 fi
 
-# ----------------------------------------- 2. python dependencies
-# The plugin's frontmatter generation/parsing uses PyYAML. Hermes upgrades may
-# switch the Python interpreter (e.g. 3.14.x) without site-packages carried
-# over, so we install Python deps here to make the installer self-contained.
-PYTHON_BIN="$(command -v python3 || command -v python || true)"
-if [[ -n "$PYTHON_BIN" ]]; then
-  if "$PYTHON_BIN" -c "import yaml" 2>/dev/null; then
-    ok "PyYAML already available in $PYTHON_BIN"
-  else
-    info "Installing PyYAML for $PYTHON_BIN ..."
-    "$PYTHON_BIN" -m pip install --quiet pyyaml || \
-      die "Failed to install PyYAML for $PYTHON_BIN"
-    ok "PyYAML installed"
-  fi
-else
-  warn "python3 not found — skipping PyYAML install"
-fi
-
-# ----------------------------------------- 3. extractor npm install
+# ----------------------------------------- 2. extractor npm install
 # The extractor is the bundled `extractor/` subdirectory (the repo root IS the
 # plugin package). `npm install` inside it installs the Node dependencies and
 # runs the package's `prepare` hook (`npx playwright install chromium`), which
@@ -226,28 +194,7 @@ else
   warn "No package.json in $EXTRACTOR_DIR — extractor npm install skipped"
 fi
 
-# ------------------------------------------------------- 3. skill symlink
-SKILL_LINK="$SKILLS_DIR/web-clip-to-obsidian"
-if [[ ! -d "$SKILL_SRC" ]]; then
-  warn "Skill dir not found at $SKILL_SRC; skipping skill symlink."
-else
-  mkdir -p "$SKILLS_DIR"
-  if [[ -L "$SKILL_LINK" ]]; then
-    if [[ "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
-      ok "Skill already linked at $SKILL_LINK"
-    else
-      info "Replacing stale skill symlink $SKILL_LINK → $SKILL_SRC"
-      ln -sfn "$SKILL_SRC" "$SKILL_LINK"
-    fi
-  elif [[ -e "$SKILL_LINK" ]]; then
-    warn "$SKILL_LINK exists as a regular file or directory — remove it manually for the installer to manage the skill symlink"
-  else
-    info "Symlinking skill $SKILL_SRC → $SKILL_LINK"
-    ln -s "$SKILL_SRC" "$SKILL_LINK"
-  fi
-fi
-
-# ------------------------------------------------ 4. config.toml bootstrap
+# ------------------------------------------------ 3. config.toml bootstrap
 if [[ ! -f "$INSTALLED_PLUGIN_DIR/config.toml" ]]; then
   if [[ -f "$SCRIPT_DIR/config.example.toml" ]]; then
     info "Bootstrapping config.toml from config.example.toml"
@@ -260,13 +207,14 @@ else
   warn "No config.toml present; create it manually"
 fi
 
-# ------------------------------------------------------------ 5. summary
+# ------------------------------------------------------------ 4. summary
 printf '\033[1;32m\nInstall summary\033[0m\n'
 printf '  Plugin:     %s\n' "$INSTALLED_PLUGIN_DIR"
 printf '  Extractor:  %s\n' "$INSTALLED_PLUGIN_DIR/extractor"
-printf '  Skill:      %s\n' "$SKILLS_DIR/web-clip-to-obsidian"
+printf '  Skill:      %s\n' "$INSTALLED_PLUGIN_DIR/skill (registered by the plugin)"
 printf '  Config:     %s\n' "$INSTALLED_PLUGIN_DIR/config.toml"
 printf '\033[1;32m\nNext steps:\033[0m\n'
 printf '  1. Review config.toml (vault, destination, sync_branch).\n'
 printf '  2. Restart your Hermes gateway service from a separate shell ...\n'
-printf '  3. Clip:  /webclip https://example.com/article\n'
+printf '  3. If the plugin reports a missing Python module, run: hermes pm repair\n'
+printf '  4. Clip:  /webclip https://example.com/article\n'

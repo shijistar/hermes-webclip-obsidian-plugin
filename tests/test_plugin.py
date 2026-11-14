@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -15,6 +17,8 @@ class FakeContext:
     def __init__(self):
         self.command_calls = []
         self.tool_calls = []
+        self.skill_calls = []
+        self.skill_error: BaseException | None = None   # inject a registration failure
 
     def register_command(self, *args, **kwargs):
         self.command_calls.append((args, kwargs))
@@ -22,13 +26,18 @@ class FakeContext:
     def register_tool(self, **kwargs):
         self.tool_calls.append(kwargs)
 
+    def register_skill(self, *args, **kwargs):
+        if self.skill_error is not None:
+            raise self.skill_error
+        self.skill_calls.append((args, kwargs))
+
 
 class PluginRegistrationTests(unittest.TestCase):
-    def _load_plugin(self):
+    def _load_plugin(self, root: Path = ROOT):
         spec = importlib.util.spec_from_file_location(
             "web_to_obsidian_plugin",
-            ROOT / "__init__.py",
-            submodule_search_locations=[str(ROOT)],
+            root / "__init__.py",
+            submodule_search_locations=[str(root)],
         )
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
@@ -59,6 +68,57 @@ class PluginRegistrationTests(unittest.TestCase):
         self.assertEqual(
             context.tool_calls[0]["name"], "web_to_obsidian_resume_pending"
         )
+
+    def test_registers_the_skill_under_the_plugin_namespace(self):
+        plugin = self._load_plugin()
+        context = FakeContext()
+        plugin.register(context)
+
+        self.assertEqual(len(context.skill_calls), 1)
+        args, kwargs = context.skill_calls[0]
+        self.assertEqual(args[0], "web-clip-to-obsidian")
+        skill_md = args[1]                      # path is the second positional arg
+        self.assertEqual(skill_md.name, "SKILL.md")
+        self.assertEqual(skill_md.parent.name, "skill")
+        self.assertTrue(skill_md.is_file())
+        # The description must come from the file, not a second hardcoded string.
+        head = skill_md.read_text(encoding="utf-8-sig")
+        self.assertIn(kwargs["description"], head)
+        self.assertIn("Obsidian", kwargs["description"])
+        # frontmatter travels with the registration so Hermes can apply the file's
+        # platform/condition gates instead of seeing an empty mapping.
+        self.assertEqual(kwargs["frontmatter"]["name"], "web-clip-to-obsidian")
+        self.assertEqual(kwargs["frontmatter"]["description"], kwargs["description"])
+        self.assertIn("version", kwargs["frontmatter"])
+
+    def test_failed_skill_registration_keeps_the_command_registered(self):
+        plugin = self._load_plugin()
+        context = FakeContext()
+        context.skill_error = FileNotFoundError("no SKILL.md")
+        plugin.register(context)
+
+        self.assertEqual(len(context.command_calls), 1)   # /webclip still there
+        self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
+        self.assertEqual(context.skill_calls, [])         # skill dropped, not fatal
+
+    def test_a_damaged_skill_file_does_not_take_the_command_down(self):
+        # Invalid UTF-8 raises UnicodeDecodeError, which is not an OSError: reading
+        # the frontmatter must not escape register() and drop /webclip with it.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copy(ROOT / "__init__.py", root / "__init__.py")
+            shutil.copy(ROOT / "web_to_obsidian.py", root / "web_to_obsidian.py")
+            (root / "skill").mkdir()
+            (root / "skill" / "SKILL.md").write_bytes(b"---\nname: \xff\xfe\n---\n")
+            plugin = self._load_plugin(root)
+            context = FakeContext()
+            plugin.register(context)
+
+        self.assertEqual(len(context.command_calls), 1)   # /webclip still there
+        self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
+        self.assertEqual(len(context.skill_calls), 1)     # and the skill
+        self.assertEqual(context.skill_calls[0][1]["frontmatter"], {})
+        self.assertEqual(context.skill_calls[0][1]["description"], "")
 
     def test_handler_never_propagates_and_does_not_expose_exception_details(self):
         with mock.patch.object(clip.ClipService, "run", side_effect=RuntimeError("SECRET stack")):

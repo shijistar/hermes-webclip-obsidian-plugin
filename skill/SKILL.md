@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.9.0
+version: 1.10.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -29,20 +29,20 @@ the durable rule is in `references/repo-linked-maintenance.md`.
 
 ```
 Source repo:     ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/
-Plugin symlink:  ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/ → source repo (root)
-Skill symlink:   ~/.hermes/profiles/<profile>/skills/productivity/web-clip-to-obsidian/ → source repo/skill/
-Config:          <source repo>/config.toml
+Plugin path:     ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/  (the repo is linked here while developing)
+Skill:           <plugin>/skill/SKILL.md, registered as `webclip-obsidian:web-clip-to-obsidian`
+Config:          <plugin>/config.toml
 ```
 
-The symlink directory name matches the plugin's registration key
-(`webclip-obsidian`, from `plugin.yaml`'s `name`). Hermes keys plugins by that
-manifest name, and the install directory is expected to carry the same name, so
-`plugins.enabled` in `config.yaml` must list `webclip-obsidian`. A different name
-there silently leaves the plugin disabled — confirm with
+The plugin registers its skill from `__init__.py` with `ctx.register_skill()`, and the
+package holds the only copy. Call it by its qualified name —
+the bare `web-clip-to-obsidian` does not resolve. The plugin directory name matches
+`plugin.yaml`'s `name` (`webclip-obsidian`), and `plugins.enabled` in `config.yaml`
+must list that same name; a mismatch leaves the plugin silently disabled. Confirm with
 `hermes plugins info webclip-obsidian` (`Status: enabled`).
 
-Install and config layout (symlinks, no per-profile copy, tracked
-`config.toml`): `references/repo-linked-maintenance.md`.
+Install and config layout (`config.toml` is local and gitignored):
+`references/repo-linked-maintenance.md`.
 
 Default config:
 
@@ -330,14 +330,15 @@ live in `references/` and are linked from the rule they belong to.
 - **163 tracking params**: `spss`/`spsnuid`/`spsdevid`/`spsvid`/`spsshare`/`spsts`/`spstoken` are removed at the input stage by `references/input-normalization.md`; duplicate detection still depends on the page's canonical tag, which is why cleaning never changes an existing note's identity. See `references/netease-placeholder-and-video-links.md`.
 - **Stale `pending-state`**: four distinct states (no `active.json`, dangling pointer, older than one hour, already outstanding) raise different errors; an empty directory is normal. See `references/pending-resume-fallback.md`.
 - **Favorite marker**: `## Favorite Marker` above is the only place its semantics are defined.
-- **Profile vs source-repo drift**: the loaded profile skill and the repo file may be different files, so patching one leaves no diff in the other. See `references/profile-skill-vs-source-repo-sync.md`.
 - **`image_mode` semantics** and private GitHub blob URLs: see `references/github-private-blob-url-and-image-mode.md`.
 - **HTML `<img>` tags** do not trigger the `image_mode` confirmation flow.
 - **WeChat**: curl fallback, author field format and the CAPTCHA wall. See `references/wechat-curl-extraction.md`.
 - **Zhihu**: cookie completeness, login validity and fetch success are three separate checks. See `references/zhihu-cookie-and-scraper-diagnostics.md`.
 - **Anti-bot fallback**: when the extractor fails but `web_extract` succeeds, build the article dict and call `_persist_article()`; it must carry both `content_markdown` and `markdown`. See `references/anti-bot-fallback-web-extract.md`.
 - **SPA pages**: JS-only pages cannot be extracted by the extractor, `web_extract` or curl; report them instead of saving an empty shell. See `references/anti-bot-fallback-web-extract.md`.
-- **Real-browser extraction**: when a page needs a logged-in or JS-executing browser, drive Windows Chrome over CDP from WSL. See `references/wsl-chrome-cdp-extraction.md`.
+- **Real-browser extraction**: when a page needs a logged-in session, drive a real browser
+  over CDP. Start from `references/browser-extraction-ladder.md`; platform details live in
+  `references/platforms/`.
 - **Git sync tests**: `GitSync.preflight()` needs a branch with an upstream. See `references/git-sync-testing-pattern.md`.
 - **Dirty vault between batch clips**: never `git checkout -- .`; clean only generated residue under `Inbox/`/`images/` and keep a 2-second delay between 163 requests. See `references/batch-processing.md`.
 
