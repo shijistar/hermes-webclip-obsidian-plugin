@@ -14,7 +14,8 @@ See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 ## Requirements
 
 - Hermes Agent with standalone plugin support.
-- Python 3.11+ and PyYAML (installed automatically by `post-install.sh`).
+- Python 3.11+ and PyYAML (declared in `plugin.yaml`; `hermes plugins install` installs it
+  into the Hermes runtime environment).
 - Node.js 18+ (the bundled `extractor/` has its dependencies installed via
   `npm install`).
 - Git for default synchronization.

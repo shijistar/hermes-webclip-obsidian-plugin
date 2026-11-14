@@ -24,7 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `plugin.yaml` declares `python_dependencies: PyYAML>=6.0,<7` (and `requirements.txt`
   matches). Hermes never auto-installs declared dependencies, but the declaration lets
   `hermes pm repair` / `hermes plugins doctor` name the missing package instead of the
-  plugin failing to load with a bare `No module named 'yaml'`.
+  plugin failing to load with a bare `No module named 'yaml'`. `post-install.sh` no longer
+  installs PyYAML itself: it picked `command -v python3`, which is a different interpreter
+  from the Hermes runtime that loads the plugin, so a successful run proved nothing.
 
 ### Removed
 
