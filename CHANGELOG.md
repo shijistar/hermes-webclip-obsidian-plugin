@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - `plugin.yaml` now declares `linux` **and** `macos`, and the README requirement says
   "Linux, macOS, or WSL". Nothing branched on the platform at runtime — the manifest and
   the README were simply wrong about it.
+- `plugin.yaml` declares `python_dependencies: PyYAML>=6.0,<7` (and `requirements.txt`
+  matches). Hermes never auto-installs declared dependencies, but the declaration lets
+  `hermes pm repair` / `hermes plugins doctor` name the missing package instead of the
+  plugin failing to load with a bare `No module named 'yaml'`.
 
 ### Removed
 
