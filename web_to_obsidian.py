@@ -232,6 +232,47 @@ class GitOutcome:
     commit_state: str
     push_state: str
     detail: str = ""
+    # Short sha of the commit this outcome created; empty when no commit exists.
+    commit_sha: str = ""
+
+
+_SUMMARY_LABELS: dict[str, dict[str, str]] = {
+    "zh": {
+        "item": "项",
+        "value": "内容",
+        "author": "作者",
+        "published": "发布时间",
+        "source": "来源",
+        "images": "图片",
+        "size": "大小",
+        "commit": "提交",
+        "preview": "文章预览",
+        "none": "—",
+        "image_remote": "{n} 张，**全部远程链接**（image_mode: remote）",
+        "image_local": "{n} 张，**已本地化到 vault**（image_mode: local）",
+        "size_fmt": "{lines} 行 / {kb} KB",
+    },
+    "en": {
+        "item": "Item",
+        "value": "Value",
+        "author": "Author",
+        "published": "Published",
+        "source": "Source",
+        "images": "Images",
+        "size": "Size",
+        "commit": "Commit",
+        "preview": "Article preview",
+        "none": "—",
+        "image_remote": "{n}, **all remote** (image_mode: remote)",
+        "image_local": "{n}, **localized into the vault** (image_mode: local)",
+        "size_fmt": "{lines} lines / {kb} KB",
+    },
+}
+
+
+def _summary_cell(value: object) -> str:
+    """Escape a value so it cannot break out of a Markdown table cell."""
+    return str(value).replace("\r", " ").replace("\n", " ").replace("|", "\\|")
 
 
 @dataclass(frozen=True)
@@ -245,6 +286,18 @@ class ClipResult:
     paths: tuple[str, ...] = ()
     # Which frontmatter field resolved a hash selector, when applicable.
     matched_by: str | None = None
+    # Report metadata. All defaulted so the public structured API stays compatible.
+    title: str = ""
+    author: str = ""
+    published: str = ""
+    source_host: str = ""
+    image_mode: str = ""
+    image_count: int = 0
+    size_bytes: int = 0
+    line_count: int = 0
+    # The commit message subject that actually landed, verbatim from the commit.
+    commit_subject: str = ""
+    commit_sha: str = ""
 
     def _git_detail(self) -> str:
         if self.commit_state == "disabled":
@@ -287,6 +340,59 @@ class ClipResult:
         if self.github_url:
             message += f" GitHub: {self.github_url}"
         return message
+
+    def summary_markdown(self, lang: str = "zh") -> str:
+        """Markdown report for a finished clip.
+
+        The agent prints this verbatim instead of recomputing figures, so the
+        numbers come from the plugin rather than from the model. Favorite marker
+        operations keep the short ``user_message()`` form: a table of author,
+        images and note size says nothing useful about them.
+        """
+        if self.action in {"favorite", "unfavorite"}:
+            return self.user_message()
+        labels = _SUMMARY_LABELS.get(lang, _SUMMARY_LABELS["zh"])
+        rows = (
+            (labels["author"], self.author or labels["none"]),
+            (labels["published"], self.published or labels["none"]),
+            (labels["source"], self.source_host or labels["none"]),
+            (labels["images"], self._summary_images(labels)),
+            (labels["size"], self._summary_size(labels)),
+            (labels["commit"], self._summary_commit(labels)),
+        )
+        lines = [
+            f"| {labels['item']} | {labels['value']} |",
+            "| --- | --- |",
+            *(
+                f"| {_summary_cell(name)} | {_summary_cell(value)} |"
+                for name, value in rows
+            ),
+        ]
+        if self.github_url:
+            lines.extend(("", f"[{labels['preview']}]({self.github_url})"))
+        return "\n".join(lines)
+
+    def _summary_images(self, labels: Mapping[str, str]) -> str:
+        if self.image_count <= 0:
+            return labels["none"]
+        template = (
+            labels["image_local"] if self.image_mode == "local" else labels["image_remote"]
+        )
+        return template.format(n=self.image_count)
+
+    def _summary_size(self, labels: Mapping[str, str]) -> str:
+        if self.line_count <= 0:
+            return labels["none"]
+        return labels["size_fmt"].format(
+            lines=self.line_count, kb=f"{self.size_bytes / 1024:.1f}"
+        )
+
+    def _summary_commit(self, labels: Mapping[str, str]) -> str:
+        if not self.commit_sha:
+            return labels["none"]
+        if self.commit_subject:
+            return f"{self.commit_sha} {self.commit_subject}"
+        return self.commit_sha
 
 
 @dataclass(frozen=True)
@@ -2733,6 +2839,8 @@ class GitSync:
         )
         if commit.returncode != 0:
             return GitOutcome("commit_failed", "not_attempted")
+        head = self._git(self.repo_root, "rev-parse", "--short", "HEAD")
+        commit_sha = _decode_output(head).strip() if head.returncode == 0 else ""
         committed = self._git(
             self.repo_root,
             "diff-tree",
@@ -2750,16 +2858,53 @@ class GitSync:
             "--untracked-files=all",
         )
         if committed.returncode != 0 or post_status.returncode != 0:
-            return GitOutcome("committed_unverified", "not_attempted")
+            return GitOutcome("committed_unverified", "not_attempted", commit_sha=commit_sha)
         committed_paths = {
             part for part in _decode_output(committed).split("\0") if part
         }
         if committed_paths != changed or post_status.stdout:
-            return GitOutcome("committed_unverified", "not_attempted")
+            return GitOutcome("committed_unverified", "not_attempted", commit_sha=commit_sha)
         push = self._git(self.repo_root, "push", "-u", "origin", "HEAD")
         if push.returncode != 0:
-            return GitOutcome("committed", "push_failed")
-        return GitOutcome("committed", "pushed")
+            return GitOutcome("committed", "push_failed", commit_sha=commit_sha)
+        return GitOutcome("committed", "pushed", commit_sha=commit_sha)
+
+
+def _format_published(value: object) -> str:
+    """``2026-11-14 03:07:09`` / ISO → ``2026-11-14 03:07``; other text passes through."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    match = re.match(r"^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?", text)
+    if match:
+        date, clock = match.group(1), match.group(2)
+        return f"{date} {clock}" if clock else date
+    return text
+
+
+def _article_report_fields(
+    article: Mapping[str, object] | None,
+) -> tuple[str, str, str, str]:
+    """(title, author, published, host) for the clip summary."""
+    if not article:
+        return "", "", "", ""
+    title = str(article.get("title") or "").strip()
+    author = str(article.get("author") or "").strip()
+    published = _format_published(article.get("published"))
+    source = str(article.get("canonicalUrl") or article.get("url") or "").strip()
+    host = urlsplit(source).netloc.lower() if source else ""
+    return title, author, published, host
+
+
+def _note_size(path: Path) -> tuple[int, int]:
+    """(bytes, lines) of the written note; (0, 0) when it cannot be read."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return 0, 0
+    if not data:
+        return 0, 0
+    return len(data), data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
 
 
 _SECRET_PATTERNS = (
@@ -3029,6 +3174,10 @@ class ClipService:
         git_sync: GitSync | None,
         action: str = "clip",
         matched_by: str | None = None,
+        article: Mapping[str, object] | None = None,
+        image_mode: str = "",
+        image_count: int = 0,
+        commit_subject: str = "",
     ) -> ClipResult:
         if not targets:
             raise ClipError("No target notes were supplied.")
@@ -3048,6 +3197,8 @@ class ClipService:
                     github_url = append_query_params(
                         github_url, config.preview_url_params
                     )
+        title, author, published, source_host = _article_report_fields(article)
+        size_bytes, line_count = _note_size(targets[0])
         return ClipResult(
             relative_paths[0],
             outcome.commit_state,
@@ -3056,6 +3207,16 @@ class ClipService:
             action,
             relative_paths,
             matched_by,
+            title=title,
+            author=author,
+            published=published,
+            source_host=source_host,
+            image_mode=image_mode,
+            image_count=image_count,
+            size_bytes=size_bytes,
+            line_count=line_count,
+            commit_subject=commit_subject,
+            commit_sha=outcome.commit_sha,
         )
 
     def _result_with_github_url(
@@ -3065,9 +3226,22 @@ class ClipService:
         outcome: GitOutcome,
         git_sync: GitSync | None,
         action: str = "clip",
+        *,
+        article: Mapping[str, object] | None = None,
+        image_mode: str = "",
+        image_count: int = 0,
+        commit_subject: str = "",
     ) -> ClipResult:
         return self._result_for_targets(
-            config, [target], outcome, git_sync, action
+            config,
+            [target],
+            outcome,
+            git_sync,
+            action,
+            article=article,
+            image_mode=image_mode,
+            image_count=image_count,
+            commit_subject=commit_subject,
         )
 
     def _marker_destination(self, config: ClipConfig) -> Path | None:
@@ -3175,6 +3349,7 @@ class ClipService:
         git_sync: GitSync | None,
         content_markdown: str,
         image_mode: str | None,
+        image_count: int = 0,
         favorite: bool | None = None,
         generated_paths: Sequence[Path] = (),
         defer_git: bool = False,
@@ -3212,7 +3387,16 @@ class ClipService:
                     [target, *generated_paths], commit_message=commit_msg
                 )
             )
-        return self._result_with_github_url(config, target, outcome, git_sync)
+        return self._result_with_github_url(
+            config,
+            target,
+            outcome,
+            git_sync,
+            article=article,
+            image_mode=image_mode or "",
+            image_count=image_count,
+            commit_subject=commit_msg,
+        )
 
     def _run_locked(
         self,
@@ -3279,6 +3463,9 @@ class ClipService:
                 git_sync=git_sync,
                 content_markdown=content_markdown,
                 image_mode=image_mode,
+                image_count=(
+                    len(generated_paths) if image_mode == "local" else len(remote_images)
+                ),
                 favorite=options.favorite,
                 generated_paths=generated_paths,
                 defer_git=defer_git,
@@ -3322,6 +3509,11 @@ class ClipService:
                 git_sync=git_sync,
                 content_markdown=content_markdown,
                 image_mode=image_mode,
+                image_count=(
+                    len(generated_paths)
+                    if image_mode == "local"
+                    else len(find_remote_images(source_markdown))
+                ),
                 favorite=state.favorite,
                 generated_paths=generated_paths,
             )
