@@ -16,7 +16,7 @@ class FakeContext:
         self.command_calls = []
         self.tool_calls = []
         self.skill_calls = []
-        self.skill_error = None      # inject a registration failure
+        self.skill_error: BaseException | None = None   # inject a registration failure
 
     def register_command(self, *args, **kwargs):
         self.command_calls.append((args, kwargs))
@@ -83,6 +83,16 @@ class PluginRegistrationTests(unittest.TestCase):
         head = skill_md.read_text(encoding="utf-8-sig")
         self.assertIn(kwargs["description"], head)
         self.assertIn("Obsidian", kwargs["description"])
+
+    def test_failed_skill_registration_keeps_the_command_registered(self):
+        plugin = self._load_plugin()
+        context = FakeContext()
+        context.skill_error = FileNotFoundError("no SKILL.md")
+        plugin.register(context)
+
+        self.assertEqual(len(context.command_calls), 1)   # /webclip still there
+        self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
+        self.assertEqual(context.skill_calls, [])         # skill dropped, not fatal
 
     def test_handler_never_propagates_and_does_not_expose_exception_details(self):
         with mock.patch.object(clip.ClipService, "run", side_effect=RuntimeError("SECRET stack")):
