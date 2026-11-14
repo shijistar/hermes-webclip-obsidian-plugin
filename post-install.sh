@@ -11,9 +11,8 @@
 #   3. `npm install` in the bundled `extractor/` directory — the package's
 #      `prepare` hook (`npx playwright install chromium`) installs the 
 #      Playwright browser automatically.
-#   4. Retire the legacy skill symlink (registration happens in __init__.py)
-#   5. Copy `config.example.toml` → `config.toml` if absent
-#   6. Print restart instructions
+#   4. Copy `config.example.toml` → `config.toml` if absent
+#   5. Print restart instructions
 #
 # Usage:
 #   ./post-install.sh [--hermes-home DIR] [--install-plugin]
@@ -119,13 +118,9 @@ else
 fi
 
 PLUGIN_DIR="$PROFILE_DIR/plugins/webclip-obsidian"
-SKILLS_DIR="$PROFILE_DIR/skills/productivity"
 
 # The plugin package this script ships with is SCRIPT_DIR itself (repo root).
 PLUGIN_SRC="$SCRIPT_DIR"
-
-# The skill ships inside the plugin package (repo root / installed copy).
-SKILL_SRC="$SCRIPT_DIR/skill"
 
 info()  { printf '\033[1;34m[install]\033[0m %s\n' "$*"; }
 ok()    { printf '\033[1;32m[ok]\033[0m %s\n' "$*"; }
@@ -226,24 +221,6 @@ else
   warn "No package.json in $EXTRACTOR_DIR — extractor npm install skipped"
 fi
 
-# -------------------------------------- 3. retire the legacy skill symlink
-# The plugin registers its skill in __init__.py, so a profile-level symlink is
-# obsolete. Leaving it in place would list the same skill twice: once as
-# "web-clip-to-obsidian" and once as "webclip-obsidian:web-clip-to-obsidian".
-SKILL_LINK="$SKILLS_DIR/web-clip-to-obsidian"
-if [[ -L "$SKILL_LINK" ]]; then
-  if [[ ! -d "$SKILL_SRC" ]]; then
-    warn "skill/ not found at $SKILL_SRC — legacy link $SKILL_LINK left untouched"
-  elif [[ "$SKILL_LINK" -ef "$SKILL_SRC" ]]; then
-    rm -f "$SKILL_LINK"
-    ok "Removed legacy skill symlink $SKILL_LINK"
-  else
-    warn "$SKILL_LINK points elsewhere — left untouched"
-  fi
-elif [[ -e "$SKILL_LINK" ]]; then
-  warn "$SKILL_LINK is a real file or directory, not a symlink — left untouched; remove it by hand if it is a stale copy"
-fi
-
 # ------------------------------------------------ 4. config.toml bootstrap
 if [[ ! -f "$INSTALLED_PLUGIN_DIR/config.toml" ]]; then
   if [[ -f "$SCRIPT_DIR/config.example.toml" ]]; then
@@ -261,7 +238,7 @@ fi
 printf '\033[1;32m\nInstall summary\033[0m\n'
 printf '  Plugin:     %s\n' "$INSTALLED_PLUGIN_DIR"
 printf '  Extractor:  %s\n' "$INSTALLED_PLUGIN_DIR/extractor"
-printf '  Skill:      %s\n' "$SCRIPT_DIR/skill (registered by the plugin — no profile link)"
+printf '  Skill:      %s\n' "$INSTALLED_PLUGIN_DIR/skill (registered by the plugin)"
 printf '  Config:     %s\n' "$INSTALLED_PLUGIN_DIR/config.toml"
 printf '\033[1;32m\nNext steps:\033[0m\n'
 printf '  1. Review config.toml (vault, destination, sync_branch).\n'

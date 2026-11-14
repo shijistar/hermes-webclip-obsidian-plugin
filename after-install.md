@@ -13,9 +13,7 @@ cd "$HERMES_HOME/plugins/webclip-obsidian"
 What it does:
 
 1. `npm install` in the bundled `extractor/` directory — installs the Node dependencies
-2. Removes the legacy `web-clip-to-obsidian` skill symlink (the plugin registers the
-   skill itself, so it is not listed twice)
-3. Bootstraps `config.toml` from `config.example.toml` if absent.
+2. Bootstraps `config.toml` from `config.example.toml` if absent.
 
 <!-- If the plugin is _not_ installed yet (or you want to refresh an existing
 install), pass `--install-plugin`. On an existing install this performs a
