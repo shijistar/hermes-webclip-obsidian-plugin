@@ -43,50 +43,28 @@ for tab in tabs:
 PY
 ```
 
-`Runtime.evaluate` exists only on the DevTools WebSocket. The HTTP endpoints
-(`/json`, `/json/version`) list targets and cannot run JavaScript.
+Evaluate inside the target tab with Playwright, which the plugin already installs in
+`extractor/node_modules`. `connectOverCDP` attaches to the browser launched above, so no
+extra package is needed — run this from the plugin root:
 
 ```bash
-python3 - <<'PY'
-import json, urllib.request
-from websocket import create_connection   # pip install websocket-client
-
-tabs = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json"))
-tab = next(t for t in tabs if t.get("type") == "page")
-ws = create_connection(tab["webSocketDebuggerUrl"], timeout=30)
-ws.send(json.dumps({
-    "id": 1, "method": "Runtime.evaluate",
-    "params": {"expression": "document.body.innerText", "returnByValue": True},
-}))
-while True:
-    msg = json.loads(ws.recv())
-    if msg.get("id") == 1:
-        print(msg["result"]["result"]["value"])
-        break
-ws.close()
-PY
+node --input-type=module -e "
+import { chromium } from 'playwright';
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+const page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes('<URL_FRAGMENT>'));
+if (!page) { console.error('no tab matching <URL_FRAGMENT>'); process.exit(1); }
+console.log(await page.evaluate(() => document.body.innerText));
+process.exit(0);
+"
 ```
 
-If `websocket-client` is unavailable, the `websockets` library (`pip install websockets`)
-is the drop-in alternative — the command still travels over the WebSocket:
+`process.exit(0)` detaches without touching the browser. Do **not** call `browser.close()`:
+with `connectOverCDP` that shuts down the Chrome instance you are borrowing — including the
+login session you need.
 
-```python
-import asyncio, json
-import websockets
-
-async def evaluate(url: str, expression: str) -> str:
-    async with websockets.connect(url) as ws:
-        await ws.send(json.dumps({
-            "id": 1, "method": "Runtime.evaluate",
-            "params": {"expression": expression, "returnByValue": True},
-        }))
-        while True:
-            msg = json.loads(await ws.recv())
-            if msg.get("id") == 1:
-                return msg["result"]["result"]["value"]
-
-asyncio.run(evaluate(tab["webSocketDebuggerUrl"], "document.body.innerText"))
-```
+`Runtime.evaluate` exists only on the DevTools WebSocket; the HTTP endpoints (`/json`,
+`/json/version`) list targets and cannot run JavaScript. If you need the full DOM instead of
+the text, use `await page.content()` and hand the HTML to the extractor.
 
 ## Shut down only your instance
 
