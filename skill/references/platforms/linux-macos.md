@@ -30,21 +30,30 @@ attach to the already-running instance instead of opening a debug port.
 
 ## List tabs, then evaluate in the target tab
 
-```bash
-curl -s http://127.0.0.1:9222/json | python3 -c '
-import json,sys
-for t in json.load(sys.stdin):
-    print(t["id"], t["url"], t["title"], sep=" | ")
-'
-```
+Discover the target over plain HTTP — from Python, not `curl | python` (the plugin's
+install scan flags a shell pipeline into an interpreter as a supply-chain risk):
 
 ```bash
 python3 - <<'PY'
-import json
+import json, urllib.request
+
+tabs = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json"))
+for tab in tabs:
+    print(tab["id"], tab["url"], tab["title"], sep=" | ")
+PY
+```
+
+`Runtime.evaluate` exists only on the DevTools WebSocket. The HTTP endpoints
+(`/json`, `/json/version`) list targets and cannot run JavaScript.
+
+```bash
+python3 - <<'PY'
+import json, urllib.request
 from websocket import create_connection   # pip install websocket-client
 
-tab = "<TAB_ID>"
-ws = create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab}", timeout=30)
+tabs = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json"))
+tab = next(t for t in tabs if t.get("type") == "page")
+ws = create_connection(tab["webSocketDebuggerUrl"], timeout=30)
 ws.send(json.dumps({
     "id": 1, "method": "Runtime.evaluate",
     "params": {"expression": "document.body.innerText", "returnByValue": True},
@@ -58,9 +67,26 @@ ws.close()
 PY
 ```
 
-If `websocket-client` is unavailable, `websockets` or a raw `curl` against the HTTP
-endpoint works for short responses; prefer saving the value to a file and decoding it in
-Python, the same rule the WSL document follows.
+If `websocket-client` is unavailable, the `websockets` library (`pip install websockets`)
+is the drop-in alternative — the command still travels over the WebSocket:
+
+```python
+import asyncio, json
+import websockets
+
+async def evaluate(url: str, expression: str) -> str:
+    async with websockets.connect(url) as ws:
+        await ws.send(json.dumps({
+            "id": 1, "method": "Runtime.evaluate",
+            "params": {"expression": expression, "returnByValue": True},
+        }))
+        while True:
+            msg = json.loads(await ws.recv())
+            if msg.get("id") == 1:
+                return msg["result"]["result"]["value"]
+
+asyncio.run(evaluate(tab["webSocketDebuggerUrl"], "document.body.innerText"))
+```
 
 ## Shut down only your instance
 
