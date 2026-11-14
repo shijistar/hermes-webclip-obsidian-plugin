@@ -51,7 +51,11 @@ def register(ctx) -> None:
             description=read_skill_description(skill_md),
         )
     except Exception as exc:  # FileNotFoundError, or an older ctx without register_skill
-        logger.warning("web-clip-to-obsidian skill registration skipped: %s", exc)
+        # Keep the traceback: a bare message cannot distinguish "skill/ is missing"
+        # from a real API mismatch (TypeError) that needs fixing.
+        logger.warning(
+            "web-clip-to-obsidian skill registration skipped: %s", exc, exc_info=True
+        )
 
     ctx.register_tool(
         name="web_to_obsidian_resume_pending",
