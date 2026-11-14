@@ -37,7 +37,9 @@ its name must match `plugins.enabled` in `config.yaml`.
 | `references/netease-placeholder-and-video-links.md`    | Netease `empty.png` placeholder images and anti-scrape video short links                              |
 | `references/pending-resume-fallback.md`                | Outstanding/stale pending-state entries and fallbacks                                                 |
 | `references/repo-linked-maintenance.md`                | Maintenance implications of symlinking the plugin from a Git repo                                     |
-| `references/wsl-chrome-cdp-extraction.md`              | WSL Chrome CDP extraction path                                                                        |
+| `references/browser-extraction-ladder.md`              | Which extraction path to take, and the platform split for CDP                                          |
+| `references/platforms/linux-macos.md`                  | Local Chrome + CDP on Linux and macOS                                                                  |
+| `references/platforms/wsl.md`                          | Borrowing a Windows Chrome session from WSL                                                            |
 | `references/zhihu-cookie-and-scraper-diagnostics.md`   | Layered Zhihu cookie/fetch/browser diagnostics                                                        |
 
 ## Trigger phrases

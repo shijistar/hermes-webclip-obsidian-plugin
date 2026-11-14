@@ -336,7 +336,9 @@ live in `references/` and are linked from the rule they belong to.
 - **Zhihu**: cookie completeness, login validity and fetch success are three separate checks. See `references/zhihu-cookie-and-scraper-diagnostics.md`.
 - **Anti-bot fallback**: when the extractor fails but `web_extract` succeeds, build the article dict and call `_persist_article()`; it must carry both `content_markdown` and `markdown`. See `references/anti-bot-fallback-web-extract.md`.
 - **SPA pages**: JS-only pages cannot be extracted by the extractor, `web_extract` or curl; report them instead of saving an empty shell. See `references/anti-bot-fallback-web-extract.md`.
-- **Real-browser extraction**: when a page needs a logged-in or JS-executing browser, drive Windows Chrome over CDP from WSL. See `references/wsl-chrome-cdp-extraction.md`.
+- **Real-browser extraction**: when a page needs a logged-in session, drive a real browser
+  over CDP. Start from `references/browser-extraction-ladder.md`; platform details live in
+  `references/platforms/`.
 - **Git sync tests**: `GitSync.preflight()` needs a branch with an upstream. See `references/git-sync-testing-pattern.md`.
 - **Dirty vault between batch clips**: never `git checkout -- .`; clean only generated residue under `Inbox/`/`images/` and keep a 2-second delay between 163 requests. See `references/batch-processing.md`.
 

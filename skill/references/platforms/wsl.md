@@ -1,6 +1,14 @@
-# Windows Chrome CDP Extraction from WSL
+# Borrowing Windows Chrome's session from WSL
 
-When SPA (Single Page Application) content can't be extracted via Node.js extractor, `web_extract`, or curl because the page requires JavaScript rendering, use Chrome on the Windows host via CDP (Chrome DevTools Protocol).
+Use this when a page needs a **logged-in** browser and the only browser with that session
+is Chrome on the Windows host. WSL2's NAT means `localhost:9222` from inside WSL does not
+reach Windows Chrome, so every CDP step goes through `powershell.exe`.
+
+Normal SPA rendering does **not** need any of this: the bundled extractor launches
+Playwright Chromium by default (`extractor/src/extractor.mjs`), and `--no-browser` is what
+disables it. Reach for CDP only when a login wall blocks the headless path.
+
+For Linux and macOS, see `linux-macos.md`.
 
 ## Prerequisites
 
