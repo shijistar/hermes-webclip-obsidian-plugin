@@ -53,14 +53,16 @@ import { chromium } from 'playwright';
 const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
 const page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes('<URL_FRAGMENT>'));
 if (!page) { console.error('no tab matching <URL_FRAGMENT>'); process.exit(1); }
-console.log(await page.evaluate(() => document.body.innerText));
-process.exit(0);
+const text = await page.evaluate(() => document.body.innerText);
+process.stdout.write(text + '\n', () => process.exit(0));
 "
 ```
 
-`process.exit(0)` detaches without touching the browser. Do **not** call `browser.close()`:
-with `connectOverCDP` that shuts down the Chrome instance you are borrowing — including the
-login session you need.
+The `process.stdout.write` callback runs after the text is flushed, then exits without touching
+the browser. Exiting straight from `console.log` truncates large pages: a 4 MiB text arrives as
+64 KiB through a pipe and still exits 0. Do **not** call `browser.close()`: with
+`connectOverCDP` that shuts down the Chrome instance you are borrowing — including the login
+session you need.
 
 `Runtime.evaluate` exists only on the DevTools WebSocket; the HTTP endpoints (`/json`,
 `/json/version`) list targets and cannot run JavaScript. If you need the full DOM instead of
