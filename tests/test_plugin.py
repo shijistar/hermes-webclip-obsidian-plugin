@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 
 import web_to_obsidian as clip
+from _webclip import sites as sites_module
 
 
 # Tests live next to the plugin package: tests/ → repo root
@@ -144,7 +145,7 @@ class PluginRegistrationTests(unittest.TestCase):
                 side_effect=lambda vault, branch: order.append("preflight") or mock.Mock(),
             ),
             mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=lambda *a, **k: order.append("extractor") or {},
             ),

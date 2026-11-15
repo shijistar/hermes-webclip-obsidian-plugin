@@ -8,6 +8,7 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import sites as sites_module
 
 
 ARTICLE = {
@@ -98,7 +99,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
             }
             service = clip.ClipService(Path(__file__).parents[1], env=env)
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 first = service.run("https://example.com/article --save-images no")
 
             self.assertEqual(first.commit_state, "committed")
@@ -133,7 +134,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
             ).stdout.decode("utf-8")
             self.assertEqual(remote_content, content)
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 second = service.run("https://example.com/article --save-images no")
 
             self.assertEqual(second.path, first.path)
@@ -160,7 +161,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
             )
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 result = cast(
                     clip.ClipResult,
@@ -188,7 +189,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 env=self._env(vault, lock_file, pending_root),
             )
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 pending = cast(
                     clip.PendingClipResult,
                     service.run("https://example.com/article --no-git"),
@@ -212,7 +213,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
             )
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_HTML_IMAGE)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_HTML_IMAGE)
             ):
                 result = cast(
                     clip.ClipResult,
@@ -238,7 +239,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 env=self._env(vault, lock_file, pending_root),
             )
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 service.run("https://example.com/article --no-git")
 
             result = service.resume_pending("no")
@@ -266,7 +267,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 env=self._env(vault, lock_file, pending_root),
             )
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 service.run("https://example.com/article --no-git")
 
             def fake_download(url: str, destination_dir: Path, index: int) -> Path:
@@ -309,7 +310,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 env=self._env(vault_b, lock_b, pending_root),
             )
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 service_a.run("https://example.com/article --no-git")
 
             with self.assertRaisesRegex(clip.ClipError, "different vault or clip configuration"):
@@ -349,7 +350,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 target.write_bytes(b"png")
                 return target
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
                     result = cast(
                         clip.ClipResult,
@@ -386,7 +387,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 env=self._env(vault, lock_file, pending_root),
             )
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 first = cast(
                     clip.ClipResult,
                     service.run("https://example.com/article --save-images no --no-git"),
@@ -399,7 +400,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 target.write_bytes(b"png")
                 return target
 
-            with mock.patch.object(clip, "run_extractor", return_value=dict(ARTICLE)):
+            with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
                 with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
                     with self.assertRaisesRegex(clip.ClipError, "rerun with --refresh"):
                         service.run("https://example.com/article --save-images yes --no-git")
@@ -467,7 +468,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -477,7 +478,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertIs(self._metadata(note).get("favorite"), True)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 second = cast(
                     clip.ClipResult, service.run("https://example.com/article")
@@ -490,7 +491,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
                 markdown="# An Article\n\nRefreshed body.\n",
                 wordCount=5,
             )
-            with mock.patch.object(clip, "run_extractor", return_value=refreshed):
+            with mock.patch.object(sites_module, "run_extractor", return_value=refreshed):
                 third = cast(
                     clip.ClipResult,
                     service.run("https://example.com/article --refresh"),
@@ -499,7 +500,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertIs(self._metadata(note).get("favorite"), True)
             self.assertIn("Refreshed body.", note.read_text(encoding="utf-8"))
 
-            with mock.patch.object(clip, "run_extractor", return_value=refreshed):
+            with mock.patch.object(sites_module, "run_extractor", return_value=refreshed):
                 fourth = cast(
                     clip.ClipResult,
                     service.run("https://example.com/article --refresh --unfavorite"),
@@ -531,7 +532,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
                     if persisted == "true":
                         seed += " --favorite"
                     with mock.patch.object(
-                        clip, "run_extractor", return_value=dict(article)
+                        sites_module, "run_extractor", return_value=dict(article)
                     ):
                         first = cast(clip.ClipResult, service.run(seed))
                     note = vault / first.path
@@ -553,7 +554,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
                     elif requested is False:
                         act += " --unfavorite"
                     with mock.patch.object(
-                        clip, "run_extractor", return_value=dict(article)
+                        sites_module, "run_extractor", return_value=dict(article)
                     ):
                         service.run(act)
 
@@ -570,7 +571,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -582,7 +583,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             head_before = self._git(vault, "rev-parse", "HEAD").stdout
 
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -607,7 +608,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
 
             head_after = self._git(vault, "rev-parse", "HEAD").stdout
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -638,7 +639,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -648,7 +649,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertNotIn("favorite", self._metadata(note))
 
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -665,7 +666,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -675,7 +676,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             digest = str(self._metadata(note)["webclip_id"]).removeprefix("sha256:")
 
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -692,7 +693,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -717,7 +718,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -752,7 +753,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -776,7 +777,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=oversized
+                sites_module, "run_extractor", return_value=oversized
             ):
                 first = cast(
                     clip.ClipResult,
@@ -788,7 +789,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             # URL and webclip_id lookups must resolve a note whose body pushed
             # the file past the bounded read; neither path may extract.
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -807,7 +808,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
 
             # A plain re-clip converges on the same oversized note instead of
             # writing a duplicate.
-            with mock.patch.object(clip, "run_extractor", return_value=oversized):
+            with mock.patch.object(sites_module, "run_extractor", return_value=oversized):
                 reclipped = cast(
                     clip.ClipResult,
                     service.run("https://example.com/article --save-images no"),
@@ -826,7 +827,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=redirected
+                sites_module, "run_extractor", return_value=redirected
             ):
                 first = cast(
                     clip.ClipResult,
@@ -838,7 +839,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             # Both the entry URL the user requested and the canonical URL the
             # note records must reach the marker path without extraction.
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -869,7 +870,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
                 "canonicalUrl": canonical,
             }
             with mock.patch.object(
-                clip, "run_extractor", return_value=original_payload
+                sites_module, "run_extractor", return_value=original_payload
             ):
                 first = cast(
                     clip.ClipResult,
@@ -888,7 +889,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
                 "markdown": "# Another Article\n\nDifferent content.\n",
             }
             with mock.patch.object(
-                clip, "run_extractor", return_value=other_payload
+                sites_module, "run_extractor", return_value=other_payload
             ):
                 second = cast(
                     clip.ClipResult,
@@ -906,7 +907,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             # Re-clipping the original article via its entry URL still
             # converges on the original note.
             with mock.patch.object(
-                clip, "run_extractor", return_value=original_payload
+                sites_module, "run_extractor", return_value=original_payload
             ):
                 third = cast(
                     clip.ClipResult,
@@ -922,7 +923,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             url = "https://example.com/article"
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -935,7 +936,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertFalse(note.exists())
 
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -953,7 +954,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             url = "https://example.com/article"
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -967,7 +968,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             self.assertFalse(note.exists())
 
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -984,7 +985,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -1055,7 +1056,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
+                sites_module, "run_extractor", return_value=dict(ARTICLE_NO_IMAGES)
             ):
                 first = cast(
                     clip.ClipResult,
@@ -1065,7 +1066,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             head_before = self._git(vault, "rev-parse", "HEAD").stdout
 
             with mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=AssertionError("the extractor must not run"),
             ):
@@ -1096,7 +1097,7 @@ class FavoriteMarkerIntegrationTests(unittest.TestCase):
             service = self._service(env)
 
             with mock.patch.object(
-                clip, "run_extractor", return_value=dict(ARTICLE)
+                sites_module, "run_extractor", return_value=dict(ARTICLE)
             ):
                 pending = service.run(
                     "https://example.com/article --no-git --favorite"

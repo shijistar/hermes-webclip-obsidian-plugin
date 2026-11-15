@@ -11,6 +11,7 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import sites as sites_module
 
 
 SUCCESS = {
@@ -1355,8 +1356,8 @@ class WeChatExtractionTests(unittest.TestCase):
             '<div id="js_content"><p>Fallback content</p></div>'
             '</html>'
         )
-        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
-            with mock.patch.object(clip, "_fetch_wechat_html", return_value=mock_html):
+        with mock.patch.object(sites_module, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
+            with mock.patch.object(sites_module, "_fetch_wechat_html", return_value=mock_html):
                 result = clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://mp.weixin.qq.com/s/test"
                 )
@@ -1366,7 +1367,7 @@ class WeChatExtractionTests(unittest.TestCase):
 
     def test_run_extractor_with_fallback_raises_for_non_wechat(self):
         """When Node.js fails and URL is not WeChat, the error propagates."""
-        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
+        with mock.patch.object(sites_module, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://example.com/article"
@@ -1380,8 +1381,8 @@ class WeChatExtractionTests(unittest.TestCase):
             "url": "https://x", "keywords": [], "markdown": "body " * 50,
             "wordCount": 50, "method": "static",
         }
-        with mock.patch.object(clip, "run_extractor", return_value=fake_result):
-            with mock.patch.object(clip, "_fetch_wechat_html") as mock_fetch:
+        with mock.patch.object(sites_module, "run_extractor", return_value=fake_result):
+            with mock.patch.object(sites_module, "_fetch_wechat_html") as mock_fetch:
                 result = clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://mp.weixin.qq.com/s/test"
                 )
@@ -1524,8 +1525,8 @@ class NeteaseVideoExtractionTests(unittest.TestCase):
             '<video src="http://flv0.bn.netease.com/v.m3u8"></video>'
             "</body></html>"
         )
-        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("QUALITY_GATE")):
-            with mock.patch.object(clip, "_fetch_netease_video_html", return_value=mock_html):
+        with mock.patch.object(sites_module, "run_extractor", side_effect=clip.ClipError("QUALITY_GATE")):
+            with mock.patch.object(sites_module, "_fetch_netease_video_html", return_value=mock_html):
                 result = clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://c.m.163.com/news/sv/X.html"
                 )
