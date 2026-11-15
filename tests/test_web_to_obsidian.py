@@ -11,6 +11,10 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import extract as extract_module
+from _webclip import images as images_module
+from _webclip import service as service_module
+from _webclip import sites as sites_module
 
 
 SUCCESS = {
@@ -619,7 +623,7 @@ class ImageWorkflowHelpersTests(unittest.TestCase):
                 return target
 
             markdown = "![x](https://cdn.example/image.png)\n"
-            with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
+            with mock.patch.object(images_module, "download_remote_image", side_effect=fake_download):
                 rewritten_one, paths_one = clip._localize_images(
                     markdown,
                     "Same Title",
@@ -847,25 +851,34 @@ class ExtractorTests(unittest.TestCase):
 
     def test_malformed_or_oversized_extractor_json_is_rejected_without_stderr(self):
         malformed = clip.ProcessResult(0, b"not json", b"SECRET traceback")
-        with mock.patch.object(clip, "_run_bounded", return_value=malformed):
+        with mock.patch.object(
+            extract_module, "_run_bounded", return_value=malformed
+        ) as run_bounded:
             with self.assertRaises(clip.ClipError) as caught:
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+        run_bounded.assert_called_once()
         self.assertNotIn("SECRET", str(caught.exception))
         self.assertNotIn("traceback", str(caught.exception).lower())
 
     def test_extractor_success_payload_requires_all_typed_fields(self):
         bad = dict(SUCCESS, wordCount="three")
         result = clip.ProcessResult(0, json.dumps(bad).encode(), b"")
-        with mock.patch.object(clip, "_run_bounded", return_value=result):
+        with mock.patch.object(
+            extract_module, "_run_bounded", return_value=result
+        ) as run_bounded:
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+        run_bounded.assert_called_once()
 
     def test_extractor_success_payload_requires_keywords_to_be_a_string_list(self):
         bad = dict(SUCCESS, keywords=["ok", 1])
         result = clip.ProcessResult(0, json.dumps(bad).encode(), b"")
-        with mock.patch.object(clip, "_run_bounded", return_value=result):
+        with mock.patch.object(
+            extract_module, "_run_bounded", return_value=result
+        ) as run_bounded:
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+        run_bounded.assert_called_once()
 
     def test_extractor_dir_prefers_plugin_local_npm_install(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1355,8 +1368,8 @@ class WeChatExtractionTests(unittest.TestCase):
             '<div id="js_content"><p>Fallback content</p></div>'
             '</html>'
         )
-        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
-            with mock.patch.object(clip, "_fetch_wechat_html", return_value=mock_html):
+        with mock.patch.object(sites_module, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
+            with mock.patch.object(sites_module, "_fetch_wechat_html", return_value=mock_html):
                 result = clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://mp.weixin.qq.com/s/test"
                 )
@@ -1366,7 +1379,7 @@ class WeChatExtractionTests(unittest.TestCase):
 
     def test_run_extractor_with_fallback_raises_for_non_wechat(self):
         """When Node.js fails and URL is not WeChat, the error propagates."""
-        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
+        with mock.patch.object(sites_module, "run_extractor", side_effect=clip.ClipError("BROWSER_FAILED")):
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://example.com/article"
@@ -1380,8 +1393,8 @@ class WeChatExtractionTests(unittest.TestCase):
             "url": "https://x", "keywords": [], "markdown": "body " * 50,
             "wordCount": 50, "method": "static",
         }
-        with mock.patch.object(clip, "run_extractor", return_value=fake_result):
-            with mock.patch.object(clip, "_fetch_wechat_html") as mock_fetch:
+        with mock.patch.object(sites_module, "run_extractor", return_value=fake_result):
+            with mock.patch.object(sites_module, "_fetch_wechat_html") as mock_fetch:
                 result = clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://mp.weixin.qq.com/s/test"
                 )
@@ -1524,8 +1537,8 @@ class NeteaseVideoExtractionTests(unittest.TestCase):
             '<video src="http://flv0.bn.netease.com/v.m3u8"></video>'
             "</body></html>"
         )
-        with mock.patch.object(clip, "run_extractor", side_effect=clip.ClipError("QUALITY_GATE")):
-            with mock.patch.object(clip, "_fetch_netease_video_html", return_value=mock_html):
+        with mock.patch.object(sites_module, "run_extractor", side_effect=clip.ClipError("QUALITY_GATE")):
+            with mock.patch.object(sites_module, "_fetch_netease_video_html", return_value=mock_html):
                 result = clip.run_extractor_with_fallback(
                     Path("/plugin"), "https://c.m.163.com/news/sv/X.html"
                 )
@@ -1822,7 +1835,7 @@ class BatchClipServiceTests(unittest.TestCase):
         payload = self._payload(url, title)
         spec = f"{url} --save-images no {extra}".strip()
         with mock.patch.object(
-            clip,
+            service_module,
             "run_extractor_with_fallback",
             side_effect=lambda plugin_root, u, no_browser=False: payload,
         ):
@@ -1847,7 +1860,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 return payloads[url]
 
             with mock.patch.object(
-                clip, "run_extractor_with_fallback", side_effect=fake_extract
+                service_module, "run_extractor_with_fallback", side_effect=fake_extract
             ):
                 result = service.run_batch(
                     [
@@ -1886,7 +1899,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 return self._payload(url, "Good")
 
             with mock.patch.object(
-                clip, "run_extractor_with_fallback", side_effect=fake_extract
+                service_module, "run_extractor_with_fallback", side_effect=fake_extract
             ):
                 result = service.run_batch(
                     [
@@ -1941,7 +1954,7 @@ class BatchClipServiceTests(unittest.TestCase):
             self._prepopulate(service, unfav, "Unfav", extra="--favorite")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -1976,7 +1989,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(new, "New")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2007,7 +2020,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(new, "New")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2028,7 +2041,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(new, "New")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2052,11 +2065,11 @@ class BatchClipServiceTests(unittest.TestCase):
             }
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ), mock.patch.object(
-                clip, "download_remote_image", side_effect=self._fake_download
+                images_module, "download_remote_image", side_effect=self._fake_download
             ):
                 result = service.run_batch(
                     [f"{local} --save-images yes", f"{remote} --save-images no"]
@@ -2091,7 +2104,7 @@ class BatchClipServiceTests(unittest.TestCase):
             before = self._commit_count(repo)
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2121,7 +2134,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 return self._payload(url, url.rsplit("/", 1)[-1].title())
 
             with mock.patch.object(
-                clip, "run_extractor_with_fallback", side_effect=fake_extract
+                service_module, "run_extractor_with_fallback", side_effect=fake_extract
             ):
                 service.run_batch(
                     [
@@ -2145,7 +2158,7 @@ class BatchClipServiceTests(unittest.TestCase):
             }
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2175,7 +2188,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payloads = {changed: updated, added: self._payload(added, "Added")}
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2188,7 +2201,7 @@ class BatchClipServiceTests(unittest.TestCase):
             self.assertEqual(self._commit_paths(repo), {blocked.items[1].path})
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2295,7 +2308,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(fresh, "Fresh")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2332,12 +2345,12 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload("https://example.com/a", "Alpha")
             with (
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "run_extractor_with_fallback",
                     side_effect=lambda plugin_root, u, no_browser=False: payload,
                 ),
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "github_blob_url",
                     return_value="https://github.com/o/r/blob/master/Inbox/Alpha.md",
                 ),
@@ -2358,12 +2371,12 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload("https://example.com/b", "Beta")
             with (
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "run_extractor_with_fallback",
                     side_effect=lambda plugin_root, u, no_browser=False: payload,
                 ),
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "github_blob_url",
                     return_value="https://github.com/o/r/blob/master/Inbox/Beta.md",
                 ),
@@ -2393,9 +2406,9 @@ class BatchClipServiceTests(unittest.TestCase):
 
             with (
                 mock.patch.object(
-                    clip, "run_extractor_with_fallback", side_effect=fake_extract
+                    service_module, "run_extractor_with_fallback", side_effect=fake_extract
                 ),
-                mock.patch.object(clip, "github_blob_url", side_effect=fake_blob),
+                mock.patch.object(service_module, "github_blob_url", side_effect=fake_blob),
             ):
                 result = service.run_batch(
                     [
@@ -2724,6 +2737,75 @@ class GitFinalizeIdentityTests(unittest.TestCase):
             self.assertEqual(outcome.commit_subject, "")
             # The push still happened, which is the point of swallowing the error.
             self.assertEqual(self._subject(repo, "origin/master"), "clip: timed")
+
+    def test_a_push_timeout_keeps_the_commit_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("push",):
+                    raise clip.ClipError("The local command timed out.")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: push timed")
+
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "push_failed")
+            self.assertNotEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "clip: push timed")
+            # The commit exists locally even though the push never completed.
+            self.assertEqual(self._subject(repo), "clip: push timed")
+
+    def test_a_verification_timeout_keeps_the_commit_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("diff-tree",):
+                    raise clip.ClipError("The local command timed out.")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: verify timed")
+
+            self.assertEqual(outcome.commit_state, "committed_unverified")
+            self.assertEqual(outcome.push_state, "not_attempted")
+            self.assertNotEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "clip: verify timed")
+
+    def test_a_non_utf8_commit_message_still_pushes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("log",):
+                    # A commit subject that is not valid UTF-8, as a repository
+                    # with a GBK or latin-1 message would produce.
+                    return clip.ProcessResult(0, b"abc1234\x00\xff\xfe caf\xe9", b"")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: latin-1")
+
+            # The identity is lost, but the commit must still be verified and pushed.
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "pushed")
+            self.assertEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "")
+            self.assertEqual(self._subject(repo, "origin/master"), "clip: latin-1")
 
 
 

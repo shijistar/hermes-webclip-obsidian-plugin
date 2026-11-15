@@ -7,6 +7,8 @@ import unittest
 from unittest import mock
 
 import web_to_obsidian as clip
+from _webclip import service as service_module
+from _webclip import sites as sites_module
 
 
 # Tests live next to the plugin package: tests/ → repo root
@@ -135,20 +137,20 @@ class PluginRegistrationTests(unittest.TestCase):
         config.lock_file = Path("/tmp/test-webclip-obsidian.lock")
         order = []
         with (
-            mock.patch.object(clip, "parse_clip_args", return_value=options),
+            mock.patch.object(service_module, "parse_clip_args", return_value=options),
             mock.patch.object(clip.ClipConfig, "from_file", return_value=config),
-            mock.patch.object(clip, "VaultLock", return_value=mock.MagicMock()),
+            mock.patch.object(service_module, "VaultLock", return_value=mock.MagicMock()),
             mock.patch.object(
                 clip.GitSync,
                 "preflight",
                 side_effect=lambda vault, branch: order.append("preflight") or mock.Mock(),
             ),
             mock.patch.object(
-                clip,
+                sites_module,
                 "run_extractor",
                 side_effect=lambda *a, **k: order.append("extractor") or {},
             ),
-            mock.patch.object(clip, "render_note", side_effect=clip.ClipError("stop")),
+            mock.patch.object(service_module, "render_note", side_effect=clip.ClipError("stop")),
         ):
             with self.assertRaises(clip.ClipError):
                 clip.ClipService(ROOT).run("https://example.com")
