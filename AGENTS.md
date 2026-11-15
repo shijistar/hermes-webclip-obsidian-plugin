@@ -29,7 +29,24 @@ hermes-webclip-obsidian-plugin/
 ├── README.md                   # project overview
 ├── PLUGIN.md                   # plugin install / config / usage / safety
 ├── __init__.py                 # entry point: /webclip + resume tool
-├── web_to_obsidian.py          # core logic
+├── web_to_obsidian.py          # façade: registers `_webclip` and re-exports the public surface
+├── _webclip/                   # implementation modules, layered (no import cycles)
+│   ├── core.py                 # errors, limits, shared constants, text helpers
+│   ├── proc.py                 # bounded subprocess execution
+│   ├── urls.py                 # URL validation, normalisation, preview links
+│   ├── report.py               # ClipResult family and the summary receipt
+│   ├── article.py              # extractor payload validation
+│   ├── paths.py                # path containment guards, filename sanitising
+│   ├── fsutil.py               # atomic file replacement
+│   ├── config.py               # options, config loading, argument parsing
+│   ├── extract.py              # Node extractor wrapper
+│   ├── git_sync.py             # VaultLock and GitSync
+│   ├── markdown.py             # markdown sanitation and note rendering
+│   ├── images.py               # SSRF guards, image downloads, localisation
+│   ├── notes.py                # note discovery, frontmatter, favourite markers
+│   ├── pending.py              # image-confirmation state
+│   ├── sites.py                # WeChat / Netease fallbacks
+│   └── service.py              # ClipService, build_handler, build_resume_tool
 ├── plugin.yaml                 # plugin metadata + version
 ├── post-install.sh                  # one-shot installer (ships with hermes plugins install)
 ├── config.toml                 # local config (gitignored; generated from config.example.toml)

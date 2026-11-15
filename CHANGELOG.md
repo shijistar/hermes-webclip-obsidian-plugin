@@ -4,6 +4,19 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-15
+
+### Changed
+
+- `web_to_obsidian.py` is now a 72-line façade: the 3629-line module is split into
+  sixteen layered modules under `_webclip/` (core → proc / urls / report →
+  article / paths → config / extract / fsutil / git_sync / markdown →
+  images / notes / pending / sites → service). Symbol names, signatures and
+  behaviour are unchanged, and `dir(web_to_obsidian)` still exposes the same 199
+  names, so callers and tests that reach for `clip.os` or `clip.subprocess` are
+  unaffected. Both loading modes (top-level module for tests, package submodule
+  for Hermes) share one `_webclip` instance. No version bump: pure refactor.
+
 ## 2026-11-14
 
 ### Added
