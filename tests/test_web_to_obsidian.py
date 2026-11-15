@@ -12,6 +12,7 @@ import yaml
 
 import web_to_obsidian as clip
 from _webclip import images as images_module
+from _webclip import service as service_module
 from _webclip import sites as sites_module
 
 
@@ -1824,7 +1825,7 @@ class BatchClipServiceTests(unittest.TestCase):
         payload = self._payload(url, title)
         spec = f"{url} --save-images no {extra}".strip()
         with mock.patch.object(
-            clip,
+            service_module,
             "run_extractor_with_fallback",
             side_effect=lambda plugin_root, u, no_browser=False: payload,
         ):
@@ -1849,7 +1850,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 return payloads[url]
 
             with mock.patch.object(
-                clip, "run_extractor_with_fallback", side_effect=fake_extract
+                service_module, "run_extractor_with_fallback", side_effect=fake_extract
             ):
                 result = service.run_batch(
                     [
@@ -1888,7 +1889,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 return self._payload(url, "Good")
 
             with mock.patch.object(
-                clip, "run_extractor_with_fallback", side_effect=fake_extract
+                service_module, "run_extractor_with_fallback", side_effect=fake_extract
             ):
                 result = service.run_batch(
                     [
@@ -1943,7 +1944,7 @@ class BatchClipServiceTests(unittest.TestCase):
             self._prepopulate(service, unfav, "Unfav", extra="--favorite")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -1978,7 +1979,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(new, "New")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2009,7 +2010,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(new, "New")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2030,7 +2031,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(new, "New")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2054,7 +2055,7 @@ class BatchClipServiceTests(unittest.TestCase):
             }
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ), mock.patch.object(
@@ -2093,7 +2094,7 @@ class BatchClipServiceTests(unittest.TestCase):
             before = self._commit_count(repo)
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2123,7 +2124,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 return self._payload(url, url.rsplit("/", 1)[-1].title())
 
             with mock.patch.object(
-                clip, "run_extractor_with_fallback", side_effect=fake_extract
+                service_module, "run_extractor_with_fallback", side_effect=fake_extract
             ):
                 service.run_batch(
                     [
@@ -2147,7 +2148,7 @@ class BatchClipServiceTests(unittest.TestCase):
             }
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2177,7 +2178,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payloads = {changed: updated, added: self._payload(added, "Added")}
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2190,7 +2191,7 @@ class BatchClipServiceTests(unittest.TestCase):
             self.assertEqual(self._commit_paths(repo), {blocked.items[1].path})
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ):
@@ -2297,7 +2298,7 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload(fresh, "Fresh")
 
             with mock.patch.object(
-                clip,
+                service_module,
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payload,
             ):
@@ -2334,12 +2335,12 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload("https://example.com/a", "Alpha")
             with (
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "run_extractor_with_fallback",
                     side_effect=lambda plugin_root, u, no_browser=False: payload,
                 ),
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "github_blob_url",
                     return_value="https://github.com/o/r/blob/master/Inbox/Alpha.md",
                 ),
@@ -2360,12 +2361,12 @@ class BatchClipServiceTests(unittest.TestCase):
             payload = self._payload("https://example.com/b", "Beta")
             with (
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "run_extractor_with_fallback",
                     side_effect=lambda plugin_root, u, no_browser=False: payload,
                 ),
                 mock.patch.object(
-                    clip,
+                    service_module,
                     "github_blob_url",
                     return_value="https://github.com/o/r/blob/master/Inbox/Beta.md",
                 ),
@@ -2395,9 +2396,9 @@ class BatchClipServiceTests(unittest.TestCase):
 
             with (
                 mock.patch.object(
-                    clip, "run_extractor_with_fallback", side_effect=fake_extract
+                    service_module, "run_extractor_with_fallback", side_effect=fake_extract
                 ),
-                mock.patch.object(clip, "github_blob_url", side_effect=fake_blob),
+                mock.patch.object(service_module, "github_blob_url", side_effect=fake_blob),
             ):
                 result = service.run_batch(
                     [
