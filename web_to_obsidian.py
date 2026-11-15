@@ -2,6 +2,27 @@
 
 from __future__ import annotations
 
+import sys as _sys
+import types as _types
+from pathlib import Path as _Path
+
+# One `_webclip` instance for both loading modes: tests import this file as a
+# top-level module, Hermes loads the package via spec_from_file_location.
+# Registering it once keeps ClipError and the frozen dataclasses identical when
+# both modes are used in one process.
+_pkg = None
+if "_webclip" not in _sys.modules:
+    _pkg = _types.ModuleType("_webclip")
+    _pkg.__path__ = [str(_Path(__file__).resolve().parent / "_webclip")]
+    _sys.modules["_webclip"] = _pkg
+del _sys, _types, _Path, _pkg
+
+from _webclip.core import ClipError, EXTRACTOR_TIMEOUT, GIT_TIMEOUT, MAX_DESTINATION_SCAN_ENTRIES, MAX_GIT_OUTPUT_BYTES, MAX_IMAGE_BYTES, MAX_PREVIEW_URL_PARAMS_BYTES, MAX_STDERR_BYTES, MAX_STDOUT_BYTES, PENDING_TTL_SECONDS, _GITHUB_REMOTE_HTTPS, _GITHUB_REMOTE_SSH, _SAFE_BRANCH_NAME, _SAFE_ERROR_CODE, _SECRET_PATTERNS, _normalize_text
+from _webclip.proc import ProcessResult, _decode_output, _run_bounded
+from _webclip.urls import _SHA256_SELECTOR_RE, _normalize_preview_url_params, _parse_target_selector, _url_hash, _validate_http_url, append_query_params, github_blob_url, normalize_url
+from _webclip.paths import DOS_RESERVED, MAX_FILENAME_BYTES, _FORBIDDEN_FILENAME, _filename_with_suffix, _require_within, _resolve_vault_path, _truncate_utf8, safe_filename
+from _webclip.fsutil import atomic_write, atomic_write_bytes
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import fcntl
@@ -34,29 +55,7 @@ from typing import Mapping, Sequence
 import yaml
 
 
-EXTRACTOR_TIMEOUT = 90
-GIT_TIMEOUT = 120
-MAX_STDOUT_BYTES = 12 * 1024 * 1024
-MAX_STDERR_BYTES = 64 * 1024
-MAX_GIT_OUTPUT_BYTES = 2 * 1024 * 1024
-MAX_FILENAME_BYTES = 180
-MAX_DESTINATION_SCAN_ENTRIES = 10_000
-MAX_IMAGE_BYTES = 15 * 1024 * 1024
-PENDING_TTL_SECONDS = 60 * 60
-DOS_RESERVED = {
-    "CON",
-    "PRN",
-    "AUX",
-    "NUL",
-    *(f"COM{i}" for i in range(1, 10)),
-    *(f"LPT{i}" for i in range(1, 10)),
-}
-_FORBIDDEN_FILENAME = set('<>:"/\\|?*')
-_SAFE_ERROR_CODE = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
-_SAFE_BRANCH_NAME = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 _REMOTE_MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\((https?://[^\s)]+)(?:\s+\"[^\"]*\")?\)", re.IGNORECASE)
-_GITHUB_REMOTE_HTTPS = re.compile(r"^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$")
-_GITHUB_REMOTE_SSH = re.compile(r"^git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$")
 _REMOTE_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _REMOTE_FETCH_POLICY_MESSAGE = "The remote image URL is blocked by network policy."
 _BLOCKED_IMAGE_IPV4_NETWORKS = tuple(
@@ -102,10 +101,6 @@ _BLOCKED_IMAGE_IPV6_NETWORKS = tuple(
         "ff00::/8",
     )
 )
-
-
-class ClipError(Exception):
-    """An expected error whose message is safe to show to the user."""
 
 
 @dataclass(frozen=True)
@@ -218,13 +213,6 @@ class ClipConfig:
                 "preview_url_params"
             ]
         return cls.from_env(mapping)
-
-
-@dataclass(frozen=True)
-class ProcessResult:
-    returncode: int
-    stdout: bytes
-    stderr: bytes
 
 
 @dataclass(frozen=True)
@@ -551,56 +539,6 @@ class _PinnedRemoteResponse:
     body: bytes
 
 
-def _resolve_vault_path(vault: Path, configured: str) -> Path:
-    raw = Path(configured).expanduser()
-    candidate = raw if raw.is_absolute() else vault / raw
-    resolved = candidate.resolve()
-    _require_within(resolved, vault, "Configured path must remain inside the vault.")
-    return resolved
-
-
-def _require_within(path: Path, parent: Path, message: str) -> None:
-    try:
-        path.relative_to(parent)
-    except ValueError as exc:
-        raise ClipError(message) from exc
-
-
-def _validate_http_url(value: str) -> None:
-    if len(value) > 8192:
-        raise ClipError("The URL is too long.")
-    try:
-        parsed = urlsplit(value)
-        port = parsed.port
-    except ValueError as exc:
-        raise ClipError("A valid HTTP or HTTPS URL is required.") from exc
-    if (
-        parsed.scheme.lower() not in {"http", "https"}
-        or not parsed.hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or port is not None and not 0 < port < 65536
-    ):
-        raise ClipError("A valid HTTP or HTTPS URL is required.")
-
-
-_SHA256_SELECTOR_RE = re.compile(r"^(?:sha256:)?([0-9a-fA-F]{64})$", re.IGNORECASE)
-
-
-def _parse_target_selector(value: str) -> tuple[str, str, str | None]:
-    """Classify the positional as a URL or a sha256 selector.
-
-    Returns ``(target_kind, selector, digest)`` where *digest* is the bare
-    lowercase hex string for a ``webclip_id`` target and ``None`` for a URL.
-    """
-    match = _SHA256_SELECTOR_RE.match(value.strip())
-    if match:
-        digest = match.group(1).lower()
-        return "webclip_id", f"sha256:{digest}", digest
-    _validate_http_url(value)
-    return "url", value, None
-
-
 def parse_clip_args(raw_args: str) -> ClipOptions:
     """Parse one URL or webclip_id and the supported flags without invoking a shell."""
     try:
@@ -667,25 +605,6 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
         target_kind=target_kind,
         target_hash=target_hash,
     )
-
-
-def normalize_url(value: str) -> str:
-    """Return a stable URL form used only for source identity comparisons."""
-    _validate_http_url(value)
-    parsed = urlsplit(value)
-    scheme = parsed.scheme.lower()
-    hostname = (parsed.hostname or "").lower()
-    try:
-        hostname = hostname.encode("idna").decode("ascii")
-    except UnicodeError as exc:
-        raise ClipError("The page returned an invalid source URL.") from exc
-    port = parsed.port
-    default_port = (scheme == "http" and port == 80) or (
-        scheme == "https" and port == 443
-    )
-    netloc = hostname if port is None or default_port else f"{hostname}:{port}"
-    path = parsed.path or "/"
-    return urlunsplit((scheme, netloc, path, parsed.query, ""))
 
 
 def _is_blocked_remote_ip(address: str) -> bool:
@@ -902,10 +821,6 @@ def _fetch_remote_image(
             raise ClipError("A remote image URL returned non-image content.")
         return approved.url, content_type, response.body
     raise ClipError("Downloading a remote image failed.")
-
-
-def _normalize_text(value: str) -> str:
-    return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _content_hash(markdown: str) -> str:
@@ -1199,10 +1114,6 @@ def render_note(
     )
 
 
-def _url_hash(url: str) -> str:
-    return hashlib.sha256(normalize_url(url).encode("utf-8")).hexdigest()
-
-
 def find_remote_images(markdown: str) -> list[str]:
     normalized = _normalize_text(markdown)
     found: list[str] = []
@@ -1249,70 +1160,6 @@ def find_remote_images(markdown: str) -> list[str]:
     if plain:
         _scan_remote_images_in_plain_text("".join(plain), seen, found)
     return found
-
-
-MAX_PREVIEW_URL_PARAMS_BYTES = 1024
-
-
-def _normalize_preview_url_params(value: str) -> str:
-    """Validate and canonicalize the configured preview query parameters.
-
-    Only plain ``k=v&k2=v2`` pairs are accepted, with at most one optional
-    leading ``?``. Surrounding whitespace is rejected rather than trimmed, and
-    control characters (C0, DEL and C1) are refused. The value becomes part of a
-    Markdown link, so anything that could alter the URL structure or inject
-    markup is rejected here.
-    """
-    raw = value
-    if not raw:
-        return ""
-    if raw.startswith("?"):
-        raw = raw[1:]
-    if len(raw.encode("utf-8")) > MAX_PREVIEW_URL_PARAMS_BYTES:
-        raise ClipError("The configured preview URL parameters are too long.")
-    if not raw or any(ch in raw for ch in "?#") or any(
-        unicodedata.category(ch) == "Cc" or ch.isspace() for ch in raw
-    ):
-        raise ClipError(
-            "The configured preview URL parameters contain unsafe characters."
-        )
-    try:
-        pairs = parse_qsl(raw, keep_blank_values=True, strict_parsing=True)
-    except ValueError as exc:
-        raise ClipError(
-            "The configured preview URL parameters must be k=v pairs."
-        ) from exc
-    if not pairs or any(not key for key, _ in pairs):
-        raise ClipError("The configured preview URL parameters must be k=v pairs.")
-    return urlencode(pairs, doseq=True)
-
-
-def append_query_params(url: str, params: str) -> str:
-    """Append pre-validated query parameters to *url*.
-
-    The path is preserved verbatim, but an existing query string is parsed and
-    re-encoded together with *params*, so its byte representation may change
-    (for example ``%20`` becomes ``+``). *params* must already be normalized by
-    ``_normalize_preview_url_params``; a malformed value raises ``ValueError``.
-    """
-    if not params:
-        return url
-    pairs = parse_qsl(params, keep_blank_values=True, strict_parsing=True)
-    parts = urlsplit(url)
-    merged = parse_qsl(parts.query, keep_blank_values=True) + pairs
-    return urlunsplit(parts._replace(query=urlencode(merged, doseq=True)))
-
-
-def github_blob_url(origin_url: str, branch: str, relative_path: str) -> str | None:
-    remote = origin_url.strip()
-    match = _GITHUB_REMOTE_HTTPS.fullmatch(remote) or _GITHUB_REMOTE_SSH.fullmatch(remote)
-    if match is None:
-        return None
-    owner, repo = match.groups()
-    return (
-        f"https://github.com/{owner}/{repo}/blob/{quote(branch, safe='')}/"
-        f"{quote(relative_path, safe='/')}"
-    )
 
 
 def _active_pending_pointer(root: Path) -> Path:
@@ -1551,51 +1398,6 @@ def _localize_images(
     return _rewrite_remote_image_references(markdown, replacements), generated_paths
 
 
-def _truncate_utf8(value: str, byte_limit: int) -> str:
-    used = 0
-    result: list[str] = []
-    for char in value:
-        encoded_size = len(char.encode("utf-8"))
-        if used + encoded_size > byte_limit:
-            break
-        result.append(char)
-        used += encoded_size
-    return "".join(result)
-
-
-def safe_filename(title: str, url: str, max_bytes: int = MAX_FILENAME_BYTES) -> str:
-    """Build a portable Unicode Markdown filename capped by encoded byte size."""
-    if max_bytes < 16:
-        raise ClipError("The configured filename limit is too small.")
-    cleaned_chars = []
-    for char in _normalize_text(title):
-        if char in _FORBIDDEN_FILENAME or unicodedata.category(char).startswith("C"):
-            continue
-        cleaned_chars.append(char)
-    stem = "".join(cleaned_chars)
-    stem = re.sub(r"\s+", " ", stem)
-    stem = re.sub(r"\.+", ".", stem).strip(" .")
-    if not stem:
-        stem = _url_hash(url)[:12]
-    if stem.split(".", 1)[0].upper() in DOS_RESERVED:
-        stem = f"_{stem}"
-
-    extension = ".md"
-    stem = _truncate_utf8(stem, max_bytes - len(extension)).rstrip(" .")
-    if not stem:
-        stem = _truncate_utf8(_url_hash(url)[:12], max_bytes - len(extension))
-    return stem + extension
-
-
-def _filename_with_suffix(title: str, url: str, suffix: str) -> str:
-    base = safe_filename(title, url, MAX_FILENAME_BYTES).removesuffix(".md")
-    tail = f"-{suffix}.md"
-    base = _truncate_utf8(base, MAX_FILENAME_BYTES - len(tail)).rstrip(" .")
-    if not base:
-        base = _url_hash(url)[:12]
-    return base + tail
-
-
 def _frontmatter_from_text(text: str) -> dict[str, object] | None:
     normalized = _normalize_text(text)
     if not normalized.startswith("---\n"):
@@ -1812,96 +1614,6 @@ def choose_target(
         ):
             return candidate
     raise ClipError("Unable to choose a unique filename for the clip.")
-
-
-def atomic_write(target: Path, content: str) -> None:
-    """Durably replace a note using a temporary file in the same directory."""
-    parent = target.parent.resolve()
-    if not parent.is_dir():
-        raise ClipError("The configured clip destination is unavailable.")
-    if target.is_symlink():
-        raise ClipError("Refusing to replace a symbolic-link note.")
-    _require_within(target.resolve(), parent, "Generated note path escaped its destination.")
-
-    fd = -1
-    temporary: str | None = None
-    try:
-        fd, temporary = tempfile.mkstemp(prefix=".clip-", suffix=".tmp", dir=parent)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            fd = -1
-            handle.write(_normalize_text(content))
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-        temporary = None
-        try:
-            flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-            directory_fd = os.open(parent, flags)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-        except OSError:
-            pass
-    except ClipError:
-        raise
-    except OSError as exc:
-        raise ClipError("Could not safely write the clipped note.") from exc
-    finally:
-        if fd >= 0:
-            os.close(fd)
-        if temporary is not None:
-            try:
-                os.unlink(temporary)
-            except FileNotFoundError:
-                pass
-            except OSError:
-                pass
-
-
-def atomic_write_bytes(target: Path, content: bytes) -> None:
-    """Durably replace a binary asset using a temporary file in the same directory."""
-    parent = target.parent.resolve()
-    if not parent.is_dir():
-        raise ClipError("The configured clip destination is unavailable.")
-    if target.is_symlink():
-        raise ClipError("Refusing to replace a symbolic-link note.")
-    _require_within(target.resolve(), parent, "Generated note path escaped its destination.")
-
-    fd = -1
-    temporary: str | None = None
-    try:
-        fd, temporary = tempfile.mkstemp(prefix=".clip-", suffix=".tmp", dir=parent)
-        with os.fdopen(fd, "wb") as handle:
-            fd = -1
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, target)
-        temporary = None
-        try:
-            flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-            directory_fd = os.open(parent, flags)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
-        except OSError:
-            pass
-    except ClipError:
-        raise
-    except OSError as exc:
-        raise ClipError("Could not safely write the clipped asset.") from exc
-    finally:
-        if fd >= 0:
-            os.close(fd)
-        if temporary is not None:
-            try:
-                os.unlink(temporary)
-            except FileNotFoundError:
-                pass
-            except OSError:
-                pass
 
 
 def _manual_section(text: str) -> str:
@@ -2130,105 +1842,6 @@ def write_managed_note(target: Path, content: str, *, refresh: bool) -> str:
         raise ClipError("The saved page changed; rerun with --refresh to update it.")
     atomic_write(target, _with_manual_section(content, _manual_section(existing)))
     return "written"
-
-
-def _run_bounded(
-    command: Sequence[str],
-    *,
-    timeout: int,
-    stdout_limit: int,
-    stderr_limit: int,
-    cwd: Path | None = None,
-    env: Mapping[str, str] | None = None,
-) -> ProcessResult:
-    """Run without a shell while draining pipes into strictly capped buffers."""
-    if not isinstance(command, (list, tuple)) or not all(
-        isinstance(part, str) for part in command
-    ):
-        raise ClipError("Internal command construction failed.")
-    try:
-        process = subprocess.Popen(
-            list(command),
-            cwd=str(cwd) if cwd is not None else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            env=dict(env) if env is not None else None,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        raise ClipError("A required local command could not be started.") from exc
-
-    stdout_buffer = bytearray()
-    stderr_buffer = bytearray()
-    exceeded = threading.Event()
-    termination_lock = threading.Lock()
-
-    def terminate_group() -> None:
-        with termination_lock:
-            if process.poll() is not None:
-                return
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                pass
-            try:
-                process.wait(timeout=1)
-                return
-            except subprocess.TimeoutExpired:
-                pass
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except (OSError, ProcessLookupError):
-                pass
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                pass
-
-    def drain(stream, buffer: bytearray, limit: int) -> None:
-        if stream is None:
-            return
-        while True:
-            chunk = stream.read(64 * 1024)
-            if not chunk:
-                return
-            remaining = limit - len(buffer)
-            if remaining > 0:
-                buffer.extend(chunk[:remaining])
-            if len(chunk) > remaining:
-                exceeded.set()
-                terminate_group()
-                return
-
-    threads = [
-        threading.Thread(
-            target=drain, args=(process.stdout, stdout_buffer, stdout_limit), daemon=True
-        ),
-        threading.Thread(
-            target=drain, args=(process.stderr, stderr_buffer, stderr_limit), daemon=True
-        ),
-    ]
-    for thread in threads:
-        thread.start()
-    timed_out = False
-    try:
-        returncode = process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        terminate_group()
-        returncode = process.returncode if process.returncode is not None else -1
-    finally:
-        for thread in threads:
-            thread.join(timeout=2)
-        for stream in (process.stdout, process.stderr):
-            if stream is not None:
-                stream.close()
-    if timed_out:
-        raise ClipError("The local command timed out.")
-    if exceeded.is_set():
-        raise ClipError("The local command returned too much output.")
-    return ProcessResult(returncode, bytes(stdout_buffer), bytes(stderr_buffer))
 
 
 def _decode_json_object(raw: bytes) -> Mapping[str, object]:
@@ -2659,13 +2272,6 @@ def run_extractor_with_fallback(
         raise
 
 
-def _decode_output(result: ProcessResult) -> str:
-    try:
-        return result.stdout.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ClipError("Git returned an invalid local response.") from exc
-
-
 def _status_paths(raw: bytes) -> set[str]:
     try:
         chunks = raw.decode("utf-8").split("\0")
@@ -2974,14 +2580,6 @@ def _note_size(path: Path) -> tuple[int, int]:
     if not data:
         return 0, 0
     return len(data), data.count(b"\n") + (0 if data.endswith(b"\n") else 1)
-
-
-_SECRET_PATTERNS = (
-    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
-    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-)
 
 
 def _ensure_no_secret_markers(note: str) -> None:
