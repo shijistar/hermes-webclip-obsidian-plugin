@@ -2537,6 +2537,36 @@ class ClipSummaryMarkdownTests(unittest.TestCase):
         self.assertIn("| 提交 | — |", text)
         self.assertNotIn("状态", text)
 
+    def test_a_failed_push_is_flagged_below_the_table(self):
+        text = self._result(push_state="push_failed").summary_markdown()
+        self.assertIn("> ⚠️ 已提交但推送失败", text)
+        # A blockquote warning, not a table row: it sits after the table.
+        self.assertLess(text.index("| 提交 |"), text.index("> ⚠️"))
+
+    def test_a_clean_push_prints_no_warning(self):
+        self.assertNotIn("⚠️", self._result().summary_markdown())
+
+    def test_unfinished_git_work_is_flagged_too(self):
+        cases = (
+            ("commit_failed", "> ⚠️ Git 提交失败"),
+            ("stage_failed", "> ⚠️ Git 暂存失败"),
+            ("verification_failed", "> ⚠️ Git 校验未通过"),
+            ("committed_unverified", "> ⚠️ 提交已创建但校验未通过"),
+        )
+        for state, expected in cases:
+            with self.subTest(state=state):
+                text = self._result(
+                    commit_state=state,
+                    push_state="not_attempted",
+                    commit_sha="",
+                    commit_subject="",
+                ).summary_markdown()
+                self.assertIn(expected, text)
+
+    def test_the_warning_is_localised(self):
+        text = self._result(push_state="push_failed").summary_markdown("en")
+        self.assertIn("> ⚠️ committed but the push failed", text)
+
     def test_favorite_keeps_the_short_message(self):
         text = self._result(action="favorite").summary_markdown()
         self.assertNotIn("| 项 |", text)
@@ -2605,6 +2635,95 @@ class ClipReportFieldTests(unittest.TestCase):
             self.assertEqual(
                 clip._note_size(Path(tmp) / "missing.md"), (0, 0)
             )
+
+
+class GitFinalizeIdentityTests(unittest.TestCase):
+    """The sha/subject lookup must never decide whether the push happens."""
+
+    @staticmethod
+    def _repo(tmp: str) -> Path:
+        root = Path(tmp).resolve()
+        remote = root / "remote.git"
+        repo = root / "vault"
+        subprocess.run(
+            ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "init", "-b", "master", str(repo)],
+            check=True,
+            capture_output=True,
+        )
+        for key, value in (
+            ("user.name", "Clip Test"),
+            ("user.email", "clip@example.invalid"),
+        ):
+            subprocess.run(
+                ["git", "-C", str(repo), "config", key, value], check=True
+            )
+        subprocess.run(
+            ["git", "-C", str(repo), "remote", "add", "origin", str(remote)],
+            check=True,
+        )
+        (repo / "seed.md").write_text("seed\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "seed.md"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "seed"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "push", "-u", "origin", "master"],
+            check=True,
+            capture_output=True,
+        )
+        return repo
+
+    @staticmethod
+    def _subject(repo: Path, rev: str = "HEAD") -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), "log", rev, "-1", "--format=%s"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def test_the_subject_comes_from_the_stored_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+
+            outcome = sync.finalize([note], commit_message="clip: a | b")
+
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "pushed")
+            self.assertEqual(outcome.commit_subject, self._subject(repo))
+            self.assertEqual(outcome.commit_subject, "clip: a | b")
+            self.assertEqual(len(outcome.commit_sha), 7)
+
+    def test_a_failing_identity_lookup_still_pushes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("log",):
+                    raise clip.ClipError("The local command timed out.")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: timed")
+
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "pushed")
+            self.assertEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "")
+            # The push still happened, which is the point of swallowing the error.
+            self.assertEqual(self._subject(repo, "origin/master"), "clip: timed")
 
 
 

@@ -64,7 +64,9 @@ preview_url_params = ""
 
 There are **three** Python entry points, all invoked from the plugin root (repo root in a source checkout, or the installed plugin dir):
 
-1. **Hermes command boundary** via `build_handler()` — returns a formatted `str` safe to show directly to the user.
+1. **Hermes command boundary** via `build_handler()` — returns a formatted `str`
+   safe to show directly to the user. It carries only `user_message()`: use it
+   for `favorite` / `unfavorite`, never for clips (they need `summary_markdown()`).
 2. **Structured API** via `ClipService.run()` — returns `ClipResult` or `PendingClipResult` for programmatic branching.
 3. **Batch API** via `ClipService.run_batch(specs)` — returns `BatchClipResult` (see *Multiple URLs* below); one vault lock and one commit for the whole list.
 
@@ -97,7 +99,7 @@ print(type(result).__name__)
 print(result.user_message())
 ```
 
-CLI shortcut (string handler):
+CLI shortcut (string handler, `favorite` / `unfavorite` only):
 
 ```bash
 cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
@@ -241,7 +243,9 @@ every spec's URL is cleaned before the list is built
 
 ## Workflow
 
-1. **Extract**: Call `service.run(url)` with the cleaned URL for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
+1. **Extract**: Call `service.run(url)` with the cleaned URL. Never clip through
+   `handler(url)` — it returns only `user_message()` and drops the summary table
+   that *Post-Clip* requires; `handler()` stays for `favorite` / `unfavorite`.
 2. **PendingClipResult** — returned only when the call carried
    `--save-images ask`: ask with a `clarify` card whose two labels start with `A.` / `B.`
    and are written in the user's language

@@ -234,6 +234,9 @@ class GitOutcome:
     detail: str = ""
     # Short sha of the commit this outcome created; empty when no commit exists.
     commit_sha: str = ""
+    # Subject Git actually stored (a commit-msg hook may rewrite it); empty when
+    # there is no commit or the lookup itself failed.
+    commit_subject: str = ""
 
 
 _SUMMARY_LABELS: dict[str, dict[str, str]] = {
@@ -251,6 +254,11 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
         "image_remote": "{n} 张，**全部远程链接**（image_mode: remote）",
         "image_local": "{n} 张，**已本地化到 vault**（image_mode: local）",
         "size_fmt": "{lines} 行 / {kb} KB",
+        "warn_push_failed": "> ⚠️ 已提交但推送失败，vault 与远端可能不同步",
+        "warn_commit_failed": "> ⚠️ Git 提交失败，笔记已写入但未提交",
+        "warn_stage_failed": "> ⚠️ Git 暂存失败，笔记已写入但未提交",
+        "warn_unverified": "> ⚠️ 提交已创建但校验未通过，未推送",
+        "warn_verification_failed": "> ⚠️ Git 校验未通过，未提交也未推送",
     },
     "en": {
         "item": "Item",
@@ -266,6 +274,11 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
         "image_remote": "{n}, **all remote** (image_mode: remote)",
         "image_local": "{n}, **localized into the vault** (image_mode: local)",
         "size_fmt": "{lines} lines / {kb} KB",
+        "warn_push_failed": "> ⚠️ committed but the push failed; the vault may be out of sync",
+        "warn_commit_failed": "> ⚠️ the Git commit failed; the note is written but not committed",
+        "warn_stage_failed": "> ⚠️ Git staging failed; the note is written but not committed",
+        "warn_unverified": "> ⚠️ the commit exists but verification failed; not pushed",
+        "warn_verification_failed": "> ⚠️ Git verification failed; nothing was committed or pushed",
     },
 }
 
@@ -368,9 +381,30 @@ class ClipResult:
                 for name, value in rows
             ),
         ]
+        warning = self._summary_warning(labels)
+        if warning:
+            lines.extend(("", warning))
         if self.github_url:
             lines.extend(("", f"[{labels['preview']}]({self.github_url})"))
         return "\n".join(lines)
+
+    def _summary_warning(self, labels: Mapping[str, str]) -> str:
+        """One line, only when synchronization did not fully succeed.
+
+        A successful push prints nothing extra, so the receipt stays a plain
+        table; a failed push or commit must not look like a clean clip.
+        """
+        if self.commit_state == "committed" and self.push_state == "push_failed":
+            return labels["warn_push_failed"]
+        if self.commit_state == "committed_unverified":
+            return labels["warn_unverified"]
+        if self.commit_state in {
+            "commit_failed",
+            "stage_failed",
+            "verification_failed",
+        }:
+            return labels[f"warn_{self.commit_state}"]
+        return ""
 
     def _summary_images(self, labels: Mapping[str, str]) -> str:
         if self.image_count <= 0:
@@ -2839,8 +2873,7 @@ class GitSync:
         )
         if commit.returncode != 0:
             return GitOutcome("commit_failed", "not_attempted")
-        head = self._git(self.repo_root, "rev-parse", "--short", "HEAD")
-        commit_sha = _decode_output(head).strip() if head.returncode == 0 else ""
+        commit_sha, commit_subject = self._commit_identity()
         committed = self._git(
             self.repo_root,
             "diff-tree",
@@ -2858,16 +2891,52 @@ class GitSync:
             "--untracked-files=all",
         )
         if committed.returncode != 0 or post_status.returncode != 0:
-            return GitOutcome("committed_unverified", "not_attempted", commit_sha=commit_sha)
+            return GitOutcome(
+                "committed_unverified",
+                "not_attempted",
+                commit_sha=commit_sha,
+                commit_subject=commit_subject,
+            )
         committed_paths = {
             part for part in _decode_output(committed).split("\0") if part
         }
         if committed_paths != changed or post_status.stdout:
-            return GitOutcome("committed_unverified", "not_attempted", commit_sha=commit_sha)
+            return GitOutcome(
+                "committed_unverified",
+                "not_attempted",
+                commit_sha=commit_sha,
+                commit_subject=commit_subject,
+            )
         push = self._git(self.repo_root, "push", "-u", "origin", "HEAD")
         if push.returncode != 0:
-            return GitOutcome("committed", "push_failed", commit_sha=commit_sha)
-        return GitOutcome("committed", "pushed", commit_sha=commit_sha)
+            return GitOutcome(
+                "committed",
+                "push_failed",
+                commit_sha=commit_sha,
+                commit_subject=commit_subject,
+            )
+        return GitOutcome(
+            "committed",
+            "pushed",
+            commit_sha=commit_sha,
+            commit_subject=commit_subject,
+        )
+
+    def _commit_identity(self) -> tuple[str, str]:
+        """(short sha, stored subject) of HEAD; ("", "") when the lookup fails.
+
+        This runs after a successful commit, so a timeout or a missing command
+        must not turn a finished commit into a clip error: the caller still has
+        to verify and push it, and only the report loses its sha.
+        """
+        try:
+            head = self._git(self.repo_root, "log", "-1", "--format=%h%x00%s")
+        except ClipError:
+            return "", ""
+        if head.returncode != 0:
+            return "", ""
+        sha, _, subject = _decode_output(head).partition("\0")
+        return sha.strip(), subject.strip()
 
 
 def _format_published(value: object) -> str:
@@ -3177,7 +3246,6 @@ class ClipService:
         article: Mapping[str, object] | None = None,
         image_mode: str = "",
         image_count: int = 0,
-        commit_subject: str = "",
     ) -> ClipResult:
         if not targets:
             raise ClipError("No target notes were supplied.")
@@ -3215,7 +3283,7 @@ class ClipService:
             image_count=image_count,
             size_bytes=size_bytes,
             line_count=line_count,
-            commit_subject=commit_subject,
+            commit_subject=outcome.commit_subject,
             commit_sha=outcome.commit_sha,
         )
 
@@ -3230,7 +3298,6 @@ class ClipService:
         article: Mapping[str, object] | None = None,
         image_mode: str = "",
         image_count: int = 0,
-        commit_subject: str = "",
     ) -> ClipResult:
         return self._result_for_targets(
             config,
@@ -3241,7 +3308,6 @@ class ClipService:
             article=article,
             image_mode=image_mode,
             image_count=image_count,
-            commit_subject=commit_subject,
         )
 
     def _marker_destination(self, config: ClipConfig) -> Path | None:
@@ -3395,7 +3461,6 @@ class ClipService:
             article=article,
             image_mode=image_mode or "",
             image_count=image_count,
-            commit_subject=commit_msg,
         )
 
     def _run_locked(

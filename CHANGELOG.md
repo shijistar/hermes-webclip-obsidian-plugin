@@ -12,7 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   source host, image count annotated with `image_mode`, note size, commit sha, and the
   preview link — so the agent prints plugin-computed figures instead of recomputing them.
   There is no git status row: the commit cell already answers "did it land?" and a sync
-  dashboard in a clip receipt is noise. `lang="en"` renders English labels;
+  dashboard in a clip receipt is noise. A failed push, commit, stage or verification
+  appends one warning line below the table; a clean clip prints nothing extra.
+  `lang="en"` renders English labels;
   `favorite` / `unfavorite` keep the existing short message. `user_message()` is unchanged,
   so the `/webclip` boundary and older callers keep working. Plugin 0.20.0 → 0.21.0,
   skill 1.10.0 → 1.11.0.
