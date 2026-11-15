@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   reports `committed_unverified`, and both keep the sha and subject. Previously
   any `ClipError` in that window returned `verification_failed`, so the receipt
   said the note was never committed while the commit existed locally.
+- A `git log` result that is not valid UTF-8 no longer aborts the sequence
+  either: `_commit_identity()` decodes inside its guard, so the commit is still
+  verified and pushed and only the sha in the receipt is lost.
 - Three extractor tests patch `_webclip.extract._run_bounded` and assert the
   mock ran. They had been patching the façade binding, which the module no
   longer consults, so they executed the real extractor and passed on an

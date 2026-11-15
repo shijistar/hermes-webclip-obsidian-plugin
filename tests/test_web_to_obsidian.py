@@ -2782,5 +2782,30 @@ class GitFinalizeIdentityTests(unittest.TestCase):
             self.assertNotEqual(outcome.commit_sha, "")
             self.assertEqual(outcome.commit_subject, "clip: verify timed")
 
+    def test_a_non_utf8_commit_message_still_pushes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("log",):
+                    # A commit subject that is not valid UTF-8, as a repository
+                    # with a GBK or latin-1 message would produce.
+                    return clip.ProcessResult(0, b"abc1234\x00\xff\xfe caf\xe9", b"")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: latin-1")
+
+            # The identity is lost, but the commit must still be verified and pushed.
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "pushed")
+            self.assertEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "")
+            self.assertEqual(self._subject(repo, "origin/master"), "clip: latin-1")
+
 
 

@@ -283,9 +283,9 @@ class GitSync:
         """
         try:
             head = self._git(self.repo_root, "log", "-1", "--format=%h%x00%s")
+            if head.returncode != 0:
+                return "", ""
+            sha, _, subject = _decode_output(head).partition("\0")
         except ClipError:
             return "", ""
-        if head.returncode != 0:
-            return "", ""
-        sha, _, subject = _decode_output(head).partition("\0")
         return sha.strip(), subject.strip()
