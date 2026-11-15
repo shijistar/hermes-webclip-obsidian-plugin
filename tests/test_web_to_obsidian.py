@@ -2463,3 +2463,267 @@ class SkillFrontmatterTests(unittest.TestCase):
         meta = clip.read_skill_frontmatter(path)
         self.assertEqual(meta["name"], "bare")
         self.assertNotIn("description", meta)
+
+
+class ClipSummaryMarkdownTests(unittest.TestCase):
+    """summary_markdown is the stable report; the agent only prints it."""
+
+    def _result(self, **overrides: object):
+        base: dict[str, object] = dict(
+            path="Inbox/2026-11-14-demo.md",
+            commit_state="committed",
+            push_state="pushed",
+            github_url="https://github.com/shijistar/obsidian/blob/master/Inbox/demo.md",
+            title="刚刚，DeepSeek全家桶API正式开放",
+            author="新智元",
+            published="2026-11-14 03:07",
+            source_host="c.m.163.com",
+            image_mode="remote",
+            image_count=7,
+            size_bytes=9932,
+            line_count=91,
+            commit_subject="clip: 刚刚，DeepSeek全家桶API正式开放",
+            commit_sha="4eeebcd",
+        )
+        base.update(overrides)
+        return clip.ClipResult(**base)  # type: ignore[arg-type]
+
+    def test_chinese_table_has_every_field_and_the_preview_link(self):
+        text = self._result().summary_markdown()
+        for expected in (
+            "| 项 | 内容 |",
+            "| 作者 | 新智元 |",
+            "| 发布时间 | 2026-11-14 03:07 |",
+            "| 来源 | c.m.163.com |",
+            "| 图片 | 7 张，**全部远程链接**（image_mode: remote） |",
+            "| 大小 | 91 行 / 9.7 KB |",
+            "| 提交 | 4eeebcd clip: ",
+            "[文章预览](",
+        ):
+            self.assertIn(expected, text)
+        # The report carries no git status line at all.
+        self.assertNotIn("状态", text)
+        self.assertNotIn("behind", text)
+
+    def test_english_labels(self):
+        text = self._result().summary_markdown("en")
+        self.assertIn("| Item | Value |", text)
+        self.assertIn("| Author | 新智元 |", text)
+        self.assertIn("| Size | 91 lines / 9.7 KB |", text)
+        self.assertIn("[Article preview](", text)
+
+    def test_image_row_counts_images_and_names_the_mode(self):
+        self.assertIn(
+            "| 图片 | 3 张，**已本地化到 vault**（image_mode: local） |",
+            self._result(image_mode="local", image_count=3).summary_markdown(),
+        )
+        self.assertIn(
+            "| 图片 | — |",
+            self._result(image_mode="", image_count=0).summary_markdown(),
+        )
+
+    def test_no_git_only_blanks_the_commit_cell(self):
+        text = self._result(commit_state="disabled", push_state="disabled", commit_sha="").summary_markdown()
+        self.assertIn("| 提交 | — |", text)
+        self.assertNotIn("Git 同步已关闭", text)
+        self.assertNotIn("状态", text)
+
+    def test_unchanged_clip_has_no_status_line_either(self):
+        text = self._result(
+            commit_state="unchanged",
+            push_state="not_needed",
+            commit_sha="",
+        ).summary_markdown()
+        self.assertIn("| 提交 | — |", text)
+        self.assertNotIn("状态", text)
+
+    def test_a_failed_push_is_flagged_below_the_table(self):
+        text = self._result(push_state="push_failed").summary_markdown()
+        self.assertIn("> ⚠️ 已提交但推送失败", text)
+        # A blockquote warning, not a table row: it sits after the table.
+        self.assertLess(text.index("| 提交 |"), text.index("> ⚠️"))
+
+    def test_a_clean_push_prints_no_warning(self):
+        self.assertNotIn("⚠️", self._result().summary_markdown())
+
+    def test_unfinished_git_work_is_flagged_too(self):
+        cases = (
+            ("commit_failed", "> ⚠️ Git 提交失败"),
+            ("stage_failed", "> ⚠️ Git 暂存失败"),
+            ("verification_failed", "> ⚠️ Git 校验未通过"),
+            ("committed_unverified", "> ⚠️ 提交已创建但校验未通过"),
+        )
+        for state, expected in cases:
+            with self.subTest(state=state):
+                text = self._result(
+                    commit_state=state,
+                    push_state="not_attempted",
+                    commit_sha="",
+                    commit_subject="",
+                ).summary_markdown()
+                self.assertIn(expected, text)
+
+    def test_the_warning_is_localised(self):
+        text = self._result(push_state="push_failed").summary_markdown("en")
+        self.assertIn("> ⚠️ committed but the push failed", text)
+
+    def test_favorite_keeps_the_short_message(self):
+        text = self._result(action="favorite").summary_markdown()
+        self.assertNotIn("| 项 |", text)
+        self.assertIn("Marked clip as favorite", text)
+
+    def test_a_pipe_or_newline_cannot_break_the_table(self):
+        text = self._result(
+            author="Foo | Bar",
+            commit_subject="clip: a | b\nc",
+        ).summary_markdown()
+        self.assertIn(r"| 作者 | Foo \| Bar |", text)
+        self.assertIn(r"clip: a \| b c", text)
+        self.assertNotIn("Foo | Bar", text)
+        # Every data row is still a two-column row.
+        data_rows = [line for line in text.splitlines() if line.startswith("| ")][2:]
+        self.assertTrue(data_rows)
+        for row in data_rows:
+            self.assertEqual(row.count(" | ") + 1, 2, row)
+
+    def test_commit_cell_shows_the_subject_that_actually_landed(self):
+        long_title = "一" * 55
+        text = self._result(
+            title=long_title,
+            commit_subject=f"clip: {long_title}",
+        ).summary_markdown()
+        self.assertIn(f"| 提交 | 4eeebcd clip: {long_title} |", text)
+        self.assertNotIn("…", text)
+
+    def test_commit_cell_falls_back_to_the_bare_sha(self):
+        text = self._result(commit_subject="").summary_markdown()
+        self.assertIn("| 提交 | 4eeebcd |", text)
+
+
+class ClipReportFieldTests(unittest.TestCase):
+    def test_published_is_trimmed_to_minutes(self):
+        self.assertEqual(
+            clip._format_published("2026-11-14 03:07:09"), "2026-11-14 03:07"
+        )
+        self.assertEqual(
+            clip._format_published("2026-11-14T03:07:09+00:00"), "2026-11-14 03:07"
+        )
+        self.assertEqual(clip._format_published("2026-11-14"), "2026-11-14")
+        self.assertEqual(clip._format_published("14 Nov 2026"), "14 Nov 2026")
+        self.assertEqual(clip._format_published(None), "")
+
+    def test_article_fields_pick_the_canonical_host(self):
+        fields = clip._article_report_fields(
+            {
+                "title": " T ",
+                "author": " A ",
+                "published": "2026-11-14 03:07:09",
+                "canonicalUrl": "https://C.M.163.com/news/a/x.html",
+                "url": "https://other.example/",
+            }
+        )
+        self.assertEqual(fields, ("T", "A", "2026-11-14 03:07", "c.m.163.com"))
+        self.assertEqual(clip._article_report_fields(None), ("", "", "", ""))
+
+    def test_note_size_counts_bytes_and_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            note = Path(tmp) / "n.md"
+            note.write_text("a\nb\nc\n", encoding="utf-8")
+            self.assertEqual(clip._note_size(note), (6, 3))
+            note.write_text("a\nb", encoding="utf-8")
+            self.assertEqual(clip._note_size(note), (3, 2))
+            self.assertEqual(
+                clip._note_size(Path(tmp) / "missing.md"), (0, 0)
+            )
+
+
+class GitFinalizeIdentityTests(unittest.TestCase):
+    """The sha/subject lookup must never decide whether the push happens."""
+
+    @staticmethod
+    def _repo(tmp: str) -> Path:
+        root = Path(tmp).resolve()
+        remote = root / "remote.git"
+        repo = root / "vault"
+        subprocess.run(
+            ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "init", "-b", "master", str(repo)],
+            check=True,
+            capture_output=True,
+        )
+        for key, value in (
+            ("user.name", "Clip Test"),
+            ("user.email", "clip@example.invalid"),
+        ):
+            subprocess.run(
+                ["git", "-C", str(repo), "config", key, value], check=True
+            )
+        subprocess.run(
+            ["git", "-C", str(repo), "remote", "add", "origin", str(remote)],
+            check=True,
+        )
+        (repo / "seed.md").write_text("seed\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repo), "add", "seed.md"], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-m", "seed"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(repo), "push", "-u", "origin", "master"],
+            check=True,
+            capture_output=True,
+        )
+        return repo
+
+    @staticmethod
+    def _subject(repo: Path, rev: str = "HEAD") -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), "log", rev, "-1", "--format=%s"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def test_the_subject_comes_from_the_stored_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+
+            outcome = sync.finalize([note], commit_message="clip: a | b")
+
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "pushed")
+            self.assertEqual(outcome.commit_subject, self._subject(repo))
+            self.assertEqual(outcome.commit_subject, "clip: a | b")
+            self.assertEqual(len(outcome.commit_sha), 7)
+
+    def test_a_failing_identity_lookup_still_pushes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("log",):
+                    raise clip.ClipError("The local command timed out.")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: timed")
+
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "pushed")
+            self.assertEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "")
+            # The push still happened, which is the point of swallowing the error.
+            self.assertEqual(self._subject(repo, "origin/master"), "clip: timed")
+
+
+

@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.10.0
+version: 1.11.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -64,7 +64,9 @@ preview_url_params = ""
 
 There are **three** Python entry points, all invoked from the plugin root (repo root in a source checkout, or the installed plugin dir):
 
-1. **Hermes command boundary** via `build_handler()` — returns a formatted `str` safe to show directly to the user.
+1. **Hermes command boundary** via `build_handler()` — returns a formatted `str`
+   safe to show directly to the user. It carries only `user_message()`: use it
+   for `favorite` / `unfavorite`, never for clips (they need `summary_markdown()`).
 2. **Structured API** via `ClipService.run()` — returns `ClipResult` or `PendingClipResult` for programmatic branching.
 3. **Batch API** via `ClipService.run_batch(specs)` — returns `BatchClipResult` (see *Multiple URLs* below); one vault lock and one commit for the whole list.
 
@@ -97,7 +99,7 @@ print(type(result).__name__)
 print(result.user_message())
 ```
 
-CLI shortcut (string handler):
+CLI shortcut (string handler, `favorite` / `unfavorite` only):
 
 ```bash
 cd ~/.hermes/profiles/<profile>/plugins/webclip-obsidian && \
@@ -241,7 +243,9 @@ every spec's URL is cleaned before the list is built
 
 ## Workflow
 
-1. **Extract**: Call `service.run(url)` with the cleaned URL for structured control flow, or `handler(url)` when a final user-facing string is sufficient.
+1. **Extract**: Call `service.run(url)` with the cleaned URL. Never clip through
+   `handler(url)` — it returns only `user_message()` and drops the summary table
+   that *Post-Clip* requires; `handler()` stays for `favorite` / `unfavorite`.
 2. **PendingClipResult** — returned only when the call carried
    `--save-images ask`: ask with a `clarify` card whose two labels start with `A.` / `B.`
    and are written in the user's language
@@ -249,8 +253,10 @@ every spec's URL is cleaned before the list is built
    - **`B.`** (local images) → `resume_pending('yes')` — download into the vault's `images/`
 3. **Resume** — only after an `ask` run: call `service.resume_pending('yes')` or
    `service.resume_pending('no')` (requires `ClipService` + pending state)
-4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`, and `action` (`clip` / `favorite` / `unfavorite`)
-5. **Return**: Show the GitHub vault URL to user for preview
+4. **ClipResult**: Contains `path`, `commit_state`, `push_state`, `github_url`, `action`
+   (`clip` / `favorite` / `unfavorite`), and the report fields behind `summary_markdown()`
+5. **Return**: Print `result.summary_markdown()` verbatim, then the content highlights
+   (see *Post-Clip*). Never recompute its figures.
 
 ## Multiple URLs (sequential writes, one commit)
 
@@ -356,7 +362,18 @@ New clips use the article's **published date** (from frontmatter `published` fie
 
 ## Post-Clip
 
-After article is saved and pushed:
+After an article is saved and pushed, report it in three steps:
 
-1. Show the GitHub vault URL from `ClipResult.github_url` (it already includes any configured `preview_url_params`)
-2. Update any tracking (e.g., reading list) if user maintains one
+1. **Print `result.summary_markdown()` verbatim.** It returns a table — author, published,
+   source, images, size, commit — followed by the preview link (`github_url` already
+   carries `preview_url_params`). Never recompute or retype its numbers: they come from the
+   plugin, not from you. Pass `lang="en"` when the conversation is in English; the default
+   is `"zh"`.
+2. **Append content highlights** under `### 内容要点` (or `### Key points` in English):
+   3–5 bullets read from the saved note. Only state what the note says — do not invent
+   figures, dates or claims.
+3. **Update any tracking** (e.g., a reading list) if the user maintains one.
+
+`favorite` / `unfavorite` results already degrade to the short message inside
+`summary_markdown()`; do not add a table to them. A batch clip keeps its own summary —
+do not reprint per-article tables.
