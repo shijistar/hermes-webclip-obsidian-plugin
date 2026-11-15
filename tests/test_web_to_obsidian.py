@@ -11,6 +11,7 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import extract as extract_module
 from _webclip import images as images_module
 from _webclip import service as service_module
 from _webclip import sites as sites_module
@@ -850,25 +851,34 @@ class ExtractorTests(unittest.TestCase):
 
     def test_malformed_or_oversized_extractor_json_is_rejected_without_stderr(self):
         malformed = clip.ProcessResult(0, b"not json", b"SECRET traceback")
-        with mock.patch.object(clip, "_run_bounded", return_value=malformed):
+        with mock.patch.object(
+            extract_module, "_run_bounded", return_value=malformed
+        ) as run_bounded:
             with self.assertRaises(clip.ClipError) as caught:
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+        run_bounded.assert_called_once()
         self.assertNotIn("SECRET", str(caught.exception))
         self.assertNotIn("traceback", str(caught.exception).lower())
 
     def test_extractor_success_payload_requires_all_typed_fields(self):
         bad = dict(SUCCESS, wordCount="three")
         result = clip.ProcessResult(0, json.dumps(bad).encode(), b"")
-        with mock.patch.object(clip, "_run_bounded", return_value=result):
+        with mock.patch.object(
+            extract_module, "_run_bounded", return_value=result
+        ) as run_bounded:
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+        run_bounded.assert_called_once()
 
     def test_extractor_success_payload_requires_keywords_to_be_a_string_list(self):
         bad = dict(SUCCESS, keywords=["ok", 1])
         result = clip.ProcessResult(0, json.dumps(bad).encode(), b"")
-        with mock.patch.object(clip, "_run_bounded", return_value=result):
+        with mock.patch.object(
+            extract_module, "_run_bounded", return_value=result
+        ) as run_bounded:
             with self.assertRaises(clip.ClipError):
                 clip.run_extractor(Path("/plugin"), "https://example.com")
+        run_bounded.assert_called_once()
 
     def test_extractor_dir_prefers_plugin_local_npm_install(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2727,6 +2737,50 @@ class GitFinalizeIdentityTests(unittest.TestCase):
             self.assertEqual(outcome.commit_subject, "")
             # The push still happened, which is the point of swallowing the error.
             self.assertEqual(self._subject(repo, "origin/master"), "clip: timed")
+
+    def test_a_push_timeout_keeps_the_commit_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("push",):
+                    raise clip.ClipError("The local command timed out.")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: push timed")
+
+            self.assertEqual(outcome.commit_state, "committed")
+            self.assertEqual(outcome.push_state, "push_failed")
+            self.assertNotEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "clip: push timed")
+            # The commit exists locally even though the push never completed.
+            self.assertEqual(self._subject(repo), "clip: push timed")
+
+    def test_a_verification_timeout_keeps_the_commit_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp)
+            sync = clip.GitSync.preflight(repo, expected_branch="master")
+            note = repo / "note.md"
+            note.write_text("body\n", encoding="utf-8")
+            real = clip.GitSync._git
+
+            def flaky(repo_root, *args, **kwargs):
+                if args[:1] == ("diff-tree",):
+                    raise clip.ClipError("The local command timed out.")
+                return real(repo_root, *args, **kwargs)
+
+            with mock.patch.object(clip.GitSync, "_git", staticmethod(flaky)):
+                outcome = sync.finalize([note], commit_message="clip: verify timed")
+
+            self.assertEqual(outcome.commit_state, "committed_unverified")
+            self.assertEqual(outcome.push_state, "not_attempted")
+            self.assertNotEqual(outcome.commit_sha, "")
+            self.assertEqual(outcome.commit_subject, "clip: verify timed")
 
 
 

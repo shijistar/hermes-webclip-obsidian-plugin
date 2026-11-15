@@ -232,53 +232,47 @@ class GitSync:
         if commit.returncode != 0:
             return GitOutcome("commit_failed", "not_attempted")
         commit_sha, commit_subject = self._commit_identity()
-        committed = self._git(
-            self.repo_root,
-            "diff-tree",
-            "--no-commit-id",
-            "--name-only",
-            "-z",
-            "-r",
-            "HEAD",
-        )
-        post_status = self._git(
-            self.repo_root,
-            "status",
-            "--porcelain=v1",
-            "-z",
-            "--untracked-files=all",
-        )
-        if committed.returncode != 0 or post_status.returncode != 0:
-            return GitOutcome(
-                "committed_unverified",
-                "not_attempted",
-                commit_sha=commit_sha,
-                commit_subject=commit_subject,
+        identity = {"commit_sha": commit_sha, "commit_subject": commit_subject}
+        # The commit exists from here on. A timeout in verification or push must
+        # not turn it into a pre-commit failure: the outcome keeps the identity
+        # and only downgrades the part that actually failed.
+        try:
+            committed = self._git(
+                self.repo_root,
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-z",
+                "-r",
+                "HEAD",
             )
-        committed_paths = {
-            part for part in _decode_output(committed).split("\0") if part
-        }
-        if committed_paths != changed or post_status.stdout:
-            return GitOutcome(
-                "committed_unverified",
-                "not_attempted",
-                commit_sha=commit_sha,
-                commit_subject=commit_subject,
+            post_status = self._git(
+                self.repo_root,
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
             )
-        push = self._git(self.repo_root, "push", "-u", "origin", "HEAD")
+            verified = (
+                committed.returncode == 0
+                and post_status.returncode == 0
+                and {
+                    part for part in _decode_output(committed).split("\0") if part
+                }
+                == changed
+                and not post_status.stdout
+            )
+        except ClipError:
+            verified = False
+        if not verified:
+            return GitOutcome("committed_unverified", "not_attempted", **identity)
+        try:
+            push = self._git(self.repo_root, "push", "-u", "origin", "HEAD")
+        except ClipError:
+            return GitOutcome("committed", "push_failed", **identity)
         if push.returncode != 0:
-            return GitOutcome(
-                "committed",
-                "push_failed",
-                commit_sha=commit_sha,
-                commit_subject=commit_subject,
-            )
-        return GitOutcome(
-            "committed",
-            "pushed",
-            commit_sha=commit_sha,
-            commit_subject=commit_subject,
-        )
+            return GitOutcome("committed", "push_failed", **identity)
+        return GitOutcome("committed", "pushed", **identity)
 
     def _commit_identity(self) -> tuple[str, str]:
         """(short sha, stored subject) of HEAD; ("", "") when the lookup fails.

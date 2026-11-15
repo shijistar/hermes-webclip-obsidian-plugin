@@ -17,6 +17,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   unaffected. Both loading modes (top-level module for tests, package submodule
   for Hermes) share one `_webclip` instance. No version bump: pure refactor.
 
+### Fixed
+
+- A timeout after a successful `git commit` no longer discards the commit: a
+  push timeout reports `committed` with `push_failed` and a verification timeout
+  reports `committed_unverified`, and both keep the sha and subject. Previously
+  any `ClipError` in that window returned `verification_failed`, so the receipt
+  said the note was never committed while the commit existed locally.
+- Three extractor tests patch `_webclip.extract._run_bounded` and assert the
+  mock ran. They had been patching the façade binding, which the module no
+  longer consults, so they executed the real extractor and passed on an
+  unrelated failure instead of the payload validation they claim to cover.
+
 ## 2026-11-14
 
 ### Added
