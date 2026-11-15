@@ -11,6 +11,7 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import images as images_module
 from _webclip import sites as sites_module
 
 
@@ -620,7 +621,7 @@ class ImageWorkflowHelpersTests(unittest.TestCase):
                 return target
 
             markdown = "![x](https://cdn.example/image.png)\n"
-            with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
+            with mock.patch.object(images_module, "download_remote_image", side_effect=fake_download):
                 rewritten_one, paths_one = clip._localize_images(
                     markdown,
                     "Same Title",
@@ -2057,7 +2058,7 @@ class BatchClipServiceTests(unittest.TestCase):
                 "run_extractor_with_fallback",
                 side_effect=lambda p, u, no_browser=False: payloads[u],
             ), mock.patch.object(
-                clip, "download_remote_image", side_effect=self._fake_download
+                images_module, "download_remote_image", side_effect=self._fake_download
             ):
                 result = service.run_batch(
                     [f"{local} --save-images yes", f"{remote} --save-images no"]

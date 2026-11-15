@@ -8,6 +8,7 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import images as images_module
 from _webclip import sites as sites_module
 
 
@@ -277,7 +278,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 target.write_bytes(b"png")
                 return target
 
-            with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
+            with mock.patch.object(images_module, "download_remote_image", side_effect=fake_download):
                 result = service.resume_pending("yes")
 
             note = vault / result.path
@@ -351,7 +352,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 return target
 
             with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
-                with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
+                with mock.patch.object(images_module, "download_remote_image", side_effect=fake_download):
                     result = cast(
                         clip.ClipResult,
                         service.run("https://example.com/article --save-images yes"),
@@ -401,7 +402,7 @@ class ClipServiceIntegrationTests(unittest.TestCase):
                 return target
 
             with mock.patch.object(sites_module, "run_extractor", return_value=dict(ARTICLE)):
-                with mock.patch.object(clip, "download_remote_image", side_effect=fake_download):
+                with mock.patch.object(images_module, "download_remote_image", side_effect=fake_download):
                     with self.assertRaisesRegex(clip.ClipError, "rerun with --refresh"):
                         service.run("https://example.com/article --save-images yes --no-git")
 
