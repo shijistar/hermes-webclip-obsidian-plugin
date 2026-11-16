@@ -309,5 +309,53 @@ class PreviewUrlParamsSecurityTests(unittest.TestCase):
                 clip.ClipConfig.from_file(config_path)
 
 
+class ReceiptCellInjectionTests(unittest.TestCase):
+    """Page-derived receipt cells must render as literal text.
+
+    Every value below was measured against GitHub's GFM renderer: without the
+    wrap it becomes an ``<a>`` (autolink), ``<em>``, ``<strong>`` or ``<del>``,
+    so a scraped title can turn into a live link or a mention of a real account.
+    """
+
+    def test_autolink_triggers_are_wrapped_in_a_code_span(self):
+        for value in (
+            "https://example.com",
+            "www.example.com",
+            "contact a@b.com",
+            "thanks @shijistar",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(clip._summary_cell(value), f"` {value} `")
+
+    def test_emphasis_and_strikethrough_are_wrapped_in_a_code_span(self):
+        for value in ("**Important**", "_italic_", "~~strike~~"):
+            with self.subTest(value=value):
+                self.assertEqual(clip._summary_cell(value), f"` {value} `")
+
+    def test_plain_text_keeps_its_characters(self):
+        for value, expected in (
+            ("普通标题 2026", "普通标题 2026"),
+            ("Tom & Jerry", "Tom &amp; Jerry"),
+            ("A | B", "A \\| B"),
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(clip._summary_cell(value), expected)
+
+    def test_an_underscore_inside_a_word_still_gets_a_code_span(self):
+        # Deliberate over-protection: `_` is an emphasis delimiter, so a title
+        # such as snake_case_title renders monospace instead of risking <em>.
+        self.assertEqual(clip._summary_cell("snake_case_title"), "` snake_case_title `")
+
+    def test_the_plugin_image_row_keeps_its_emphasis(self):
+        result = clip.ClipResult(
+            path="note.md",
+            commit_state="disabled",
+            push_state="disabled",
+            image_mode="remote",
+            image_count=3,
+        )
+        self.assertIn("**全部远程链接**", result.summary_markdown())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,6 +26,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Skill docs: `SKILL.md` records that the WSL-era `GODEBUG=http2client=0` prefix is not
   needed on macOS, so `gh` and `git` commands run unprefixed.
 
+### Fixed
+
+- Receipt cells no longer render page text as Markdown. Titles like
+  `[Claim prize](https://evil.example)`, `![x](https://evil/track.gif)`, `https://example.com`,
+  `@shijistar`, `**Important**` or `~~strike~~` used to become real links, remote images,
+  account mentions or styled text inside the summary table, and a raw `<img>` tag survived as an
+  element. Values carrying any of those markers are now wrapped in a code span, which GFM
+  renders literally — backslash escaping and HTML entities were both measured against GitHub's
+  renderer and do not stop the parse. Only page-derived cells are wrapped, so the plugin's own
+  image and size cells keep their emphasis.
+- `_summary_cell()` doubles backslashes before escaping pipes, so a value containing `\|`
+  keeps its backslash instead of rendering as `|`. Plugin version bumped 0.22.0 → 0.22.1.
+
 ## 2026-11-15
 
 ### Changed
