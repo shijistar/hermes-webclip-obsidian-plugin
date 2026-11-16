@@ -2536,6 +2536,14 @@ class ClipSummaryMarkdownTests(unittest.TestCase):
     def test_a_missing_title_renders_the_dash(self):
         self.assertIn("| 标题 | — |", self._result(title="").summary_markdown())
 
+    def test_the_english_title_falls_back_to_the_dash_too(self):
+        self.assertIn("| Title | — |", self._result(title="").summary_markdown("en"))
+
+    def test_a_long_title_is_capped(self):
+        text = self._result(title="标" * 200).summary_markdown()
+        self.assertIn("| 标题 | " + "标" * 120 + "… |", text)
+        self.assertNotIn("标" * 121, text)
+
     def test_the_title_cannot_break_the_table(self):
         text = self._result(title="A | B\nC").summary_markdown()
         self.assertIn(r"| 标题 | A \| B C |", text)

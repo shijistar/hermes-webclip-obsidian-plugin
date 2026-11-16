@@ -10,6 +10,9 @@ import re
 
 from .core import ClipError, _SECRET_PATTERNS
 
+# A page <title> may be up to 10 KB; the receipt is printed verbatim, so cap it.
+_SUMMARY_TITLE_LIMIT = 120
+
 _SUMMARY_LABELS: dict[str, dict[str, str]] = {
     "zh": {
         "item": "项",
@@ -130,16 +133,18 @@ class ClipResult:
     def summary_markdown(self, lang: str = "zh") -> str:
         """Markdown report for a finished clip.
 
-        The agent prints this verbatim instead of recomputing figures, so the
-        numbers come from the plugin rather than from the model. Favorite marker
-        operations keep the short ``user_message()`` form: a table of author,
-        images and note size says nothing useful about them.
+        The table leads with the article title, then author, published date,
+        source, images, note size and commit. The agent prints this verbatim
+        instead of recomputing figures, so the numbers come from the plugin
+        rather than from the model. Favorite marker operations keep the short
+        ``user_message()`` form: a table of author, images and note size says
+        nothing useful about them.
         """
         if self.action in {"favorite", "unfavorite"}:
             return self.user_message()
         labels = _SUMMARY_LABELS.get(lang, _SUMMARY_LABELS["zh"])
         rows = (
-            (labels["title"], self.title or labels["none"]),
+            (labels["title"], self._summary_title(labels)),
             (labels["author"], self.author or labels["none"]),
             (labels["published"], self.published or labels["none"]),
             (labels["source"], self.source_host or labels["none"]),
@@ -179,6 +184,15 @@ class ClipResult:
         }:
             return labels[f"warn_{self.commit_state}"]
         return ""
+
+    def _summary_title(self, labels: Mapping[str, str]) -> str:
+        """Article title, capped so one long <title> cannot dominate the receipt."""
+        title = self.title.strip()
+        if not title:
+            return labels["none"]
+        if len(title) <= _SUMMARY_TITLE_LIMIT:
+            return title
+        return f"{title[:_SUMMARY_TITLE_LIMIT]}…"
 
     def _summary_images(self, labels: Mapping[str, str]) -> str:
         if self.image_count <= 0:
