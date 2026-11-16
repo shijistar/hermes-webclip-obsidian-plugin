@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## 2026-11-16
 
+### Added
+
+- `ClipResult.summary_markdown()` now leads its table with a **title** row, so a receipt
+  identifies the article instead of starting at the author. The value comes from the
+  `ClipResult.title` field that `_article_report_fields()` already filled, is capped at 120
+  characters so one long `<title>` cannot dominate the receipt, and renders the same em
+  dash as the other empty cells when no title is present. Plugin version bumped
+  0.21.0 → 0.22.0; skill 1.11.0 → 1.11.1.
+
 ### Changed
 
 - Skill docs: `references/zhihu-cookie-and-scraper-diagnostics.md` now records the measured
@@ -19,11 +28,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- `_summary_cell()` doubles backslashes before escaping pipes. A value containing `\|`
-  rendered as `|` in the receipt — the backslash was consumed as an escape prefix — and a
-  value ending in a backslash lost it too; the author, published and commit cells of every
-  receipt were affected. Verified against GitHub's GFM renderer: the row never split, so this
-  was character loss rather than a broken table. Plugin version bumped 0.21.0 → 0.21.1.
+- Receipt cells no longer render page text as Markdown. A title such as
+  `[Claim prize](https://evil.example)` or `![x](https://evil/track.gif)` used to become a
+  real clickable link or a remote image inside the summary table, and a raw `<img>` tag
+  survived as an element. Values carrying inline Markdown markers are now wrapped in a code
+  span, which GFM renders literally — backslash escaping and HTML entities were both measured
+  against GitHub's renderer and do not stop the link being parsed. Only page-derived cells are
+  wrapped; the plugin's own image and size cells keep their emphasis.
+- `_summary_cell()` doubles backslashes before escaping pipes, so a value containing `\|`
+  keeps its backslash instead of rendering as `|`. Plugin version bumped 0.22.0 → 0.22.1.
 
 ## 2026-11-15
 

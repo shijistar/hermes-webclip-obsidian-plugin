@@ -10,10 +10,14 @@ import re
 
 from .core import ClipError, _SECRET_PATTERNS
 
+# A page <title> may be up to 10 KB; the receipt is printed verbatim, so cap it.
+_SUMMARY_TITLE_LIMIT = 120
+
 _SUMMARY_LABELS: dict[str, dict[str, str]] = {
     "zh": {
         "item": "项",
         "value": "内容",
+        "title": "标题",
         "author": "作者",
         "published": "发布时间",
         "source": "来源",
@@ -34,6 +38,7 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
     "en": {
         "item": "Item",
         "value": "Value",
+        "title": "Title",
         "author": "Author",
         "published": "Published",
         "source": "Source",
@@ -54,20 +59,29 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
 }
 
 
-def _summary_cell(value: object) -> str:
-    """Escape a value so it cannot break out of a Markdown table cell.
+# Untrusted page text that contains one of these would render as a real link,
+# image or HTML element. A code span is the only construct GFM renders literally:
+# backslash escaping leaves `[x](url)` clickable, and HTML entities do not stop it.
+_SUMMARY_MARKUP_MARKERS = ("](", "![", "<", ">", "`")
 
-    The backslash is doubled *before* ``|`` is escaped. Without this, a value
-    containing ``\\|`` renders as ``|`` — the backslash is consumed as an escape
-    prefix — and a value ending in a backslash loses it the same way.
+
+def _summary_cell(value: object) -> str:
+    """Render a value as literal text inside a Markdown table cell.
+
+    Values here are page-derived and untrusted, so a title such as
+    ``[Claim prize](https://evil.example)`` or ``![x](https://evil/t.gif)`` must
+    not become a clickable link or a remote image in the receipt. Ordinary text
+    keeps its characters (backslashes doubled, pipes and ampersands neutralised);
+    a value still carrying inline Markdown markers is wrapped in a code span.
     """
-    return (
-        str(value)
-        .replace("\\", "\\\\")
-        .replace("\r", " ")
-        .replace("\n", " ")
-        .replace("|", "\\|")
-    )
+    text = str(value).replace("\r", " ").replace("\n", " ")
+    if any(marker in text for marker in _SUMMARY_MARKUP_MARKERS):
+        # Inside a code span a backslash is literal, so only the table's pipe
+        # separator needs escaping; the fence is one backtick longer than the
+        # longest run in the value so the span cannot be closed early.
+        longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+        return f"{'`' * (longest + 1)} {text.replace('|', chr(92) + '|')} {'`' * (longest + 1)}"
+    return text.replace("&", "&amp;").replace("\\", "\\\\").replace("|", "\\|")
 
 
 @dataclass(frozen=True)
@@ -139,28 +153,35 @@ class ClipResult:
     def summary_markdown(self, lang: str = "zh") -> str:
         """Markdown report for a finished clip.
 
-        The agent prints this verbatim instead of recomputing figures, so the
-        numbers come from the plugin rather than from the model. Favorite marker
-        operations keep the short ``user_message()`` form: a table of author,
-        images and note size says nothing useful about them.
+        The table leads with the article title, then author, published date,
+        source, images, note size and commit. The agent prints this verbatim
+        instead of recomputing figures, so the numbers come from the plugin
+        rather than from the model. Favorite marker operations keep the short
+        ``user_message()`` form: a table of author, images and note size says
+        nothing useful about them.
         """
         if self.action in {"favorite", "unfavorite"}:
             return self.user_message()
         labels = _SUMMARY_LABELS.get(lang, _SUMMARY_LABELS["zh"])
         rows = (
-            (labels["author"], self.author or labels["none"]),
-            (labels["published"], self.published or labels["none"]),
-            (labels["source"], self.source_host or labels["none"]),
-            (labels["images"], self._summary_images(labels)),
-            (labels["size"], self._summary_size(labels)),
-            (labels["commit"], self._summary_commit(labels)),
+            # (label, value, untrusted). Only page-derived values are escaped: the
+            # image and size cells are plugin-generated and carry their own
+            # Markdown emphasis, which escaping would turn into literal asterisks.
+            (labels["title"], self._summary_title(labels), True),
+            (labels["author"], self.author or labels["none"], True),
+            (labels["published"], self.published or labels["none"], True),
+            (labels["source"], self.source_host or labels["none"], True),
+            (labels["images"], self._summary_images(labels), False),
+            (labels["size"], self._summary_size(labels), False),
+            (labels["commit"], self._summary_commit(labels), True),
         )
         lines = [
             f"| {labels['item']} | {labels['value']} |",
             "| --- | --- |",
             *(
-                f"| {_summary_cell(name)} | {_summary_cell(value)} |"
-                for name, value in rows
+                f"| {_summary_cell(name)} | "
+                f"{_summary_cell(value) if untrusted else value} |"
+                for name, value, untrusted in rows
             ),
         ]
         warning = self._summary_warning(labels)
@@ -187,6 +208,15 @@ class ClipResult:
         }:
             return labels[f"warn_{self.commit_state}"]
         return ""
+
+    def _summary_title(self, labels: Mapping[str, str]) -> str:
+        """Article title, capped so one long <title> cannot dominate the receipt."""
+        title = self.title.strip()
+        if not title:
+            return labels["none"]
+        if len(title) <= _SUMMARY_TITLE_LIMIT:
+            return title
+        return f"{title[:_SUMMARY_TITLE_LIMIT]}…"
 
     def _summary_images(self, labels: Mapping[str, str]) -> str:
         if self.image_count <= 0:

@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.11.0
+version: 1.11.1
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -365,7 +365,7 @@ New clips use the article's **published date** (from frontmatter `published` fie
 
 After an article is saved and pushed, report it in three steps:
 
-1. **Print `result.summary_markdown()` verbatim.** It returns a table — author, published,
+1. **Print `result.summary_markdown()` verbatim.** It returns a table — title, author, published,
    source, images, size, commit — followed by the preview link (`github_url` already
    carries `preview_url_params`). Never recompute or retype its numbers: they come from the
    plugin, not from you. Pass `lang="en"` when the conversation is in English; the default
