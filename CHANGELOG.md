@@ -12,8 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   four-layer outcome of a cookie-less Zhihu clip — protocol `403`, Playwright `403`, local
   logged-in browser `40362` throttling with a placeholder title, and `web_extract` as the
   layer that returns the body — plus the rule that rung 4 succeeding does not validate
-  rung 3, the trim boundary (`编辑于 <date> <time>・<region>`) used before saving, and the
-  `image_count` parameter that keeps a retained image from being reported as none.
+  rung 3, the edit-metadata line that bounds the article body, and the `image_count`
+  parameter that keeps a retained image from being reported as none.
 - Skill docs: `SKILL.md` records that the WSL-era `GODEBUG=http2client=0` prefix is not
   needed on macOS, so `gh` and `git` commands run unprefixed.
 
