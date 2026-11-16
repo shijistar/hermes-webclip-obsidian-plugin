@@ -2505,6 +2505,7 @@ class ClipSummaryMarkdownTests(unittest.TestCase):
         text = self._result().summary_markdown()
         for expected in (
             "| 项 | 内容 |",
+            "| 标题 | 刚刚，DeepSeek全家桶API正式开放 |",
             "| 作者 | 新智元 |",
             "| 发布时间 | 2026-11-14 03:07 |",
             "| 来源 | c.m.163.com |",
@@ -2521,9 +2522,32 @@ class ClipSummaryMarkdownTests(unittest.TestCase):
     def test_english_labels(self):
         text = self._result().summary_markdown("en")
         self.assertIn("| Item | Value |", text)
+        self.assertIn("| Title | 刚刚，DeepSeek全家桶API正式开放 |", text)
         self.assertIn("| Author | 新智元 |", text)
         self.assertIn("| Size | 91 lines / 9.7 KB |", text)
         self.assertIn("[Article preview](", text)
+
+    def test_the_title_row_leads_the_table(self):
+        text = self._result().summary_markdown()
+        data_rows = [line for line in text.splitlines() if line.startswith("| ")][2:]
+        self.assertTrue(data_rows)
+        self.assertEqual(data_rows[0], "| 标题 | 刚刚，DeepSeek全家桶API正式开放 |")
+
+    def test_a_missing_title_renders_the_dash(self):
+        self.assertIn("| 标题 | — |", self._result(title="").summary_markdown())
+
+    def test_the_english_title_falls_back_to_the_dash_too(self):
+        self.assertIn("| Title | — |", self._result(title="").summary_markdown("en"))
+
+    def test_a_long_title_is_capped(self):
+        text = self._result(title="标" * 200).summary_markdown()
+        self.assertIn("| 标题 | " + "标" * 120 + "… |", text)
+        self.assertNotIn("标" * 121, text)
+
+    def test_the_title_cannot_break_the_table(self):
+        text = self._result(title="A | B\nC").summary_markdown()
+        self.assertIn(r"| 标题 | A \| B C |", text)
+        self.assertNotIn("A | B", text)
 
     def test_image_row_counts_images_and_names_the_mode(self):
         self.assertIn(
