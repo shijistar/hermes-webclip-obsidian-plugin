@@ -4,6 +4,19 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-16
+
+### Changed
+
+- Skill docs: `references/zhihu-cookie-and-scraper-diagnostics.md` now records the measured
+  four-layer outcome of a cookie-less Zhihu clip — protocol `403`, Playwright `403`, local
+  logged-in browser `40362` throttling with a placeholder title, and `web_extract` as the
+  layer that returns the body — plus the rule that rung 4 succeeding does not validate
+  rung 3, the edit-metadata line that bounds the article body, and the `image_count`
+  parameter that keeps a retained image from being reported as none.
+- Skill docs: `SKILL.md` records that the WSL-era `GODEBUG=http2client=0` prefix is not
+  needed on macOS, so `gh` and `git` commands run unprefixed.
+
 ## 2026-11-15
 
 ### Changed
