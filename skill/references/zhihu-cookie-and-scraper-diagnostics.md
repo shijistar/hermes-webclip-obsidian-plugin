@@ -67,5 +67,6 @@ Lessons that carry over to later runs:
   return the body while the local browser stays throttled.
 - When rung 4 wins, save through `_persist_article()` with the page chrome trimmed: cut the
   tail at the `编辑于 <date> <time>・<region>` metadata line, keep the leading blockquote, and
-  count Markdown images **after** trimming — a Zhihu body usually ends at zero images,
-  which is when `image_mode=None` is correct.
+  count Markdown images **after** trimming, then pass that count as `image_count`. A Zhihu
+  body usually ends at zero images, which is when `image_mode=None` is correct; a non-zero
+  count keeps the remote image URLs and is reported as such in the receipt.

@@ -347,7 +347,7 @@ live in `references/` and are linked from the rule they belong to.
   `references/platforms/`.
 - **Git sync tests**: `GitSync.preflight()` needs a branch with an upstream. See `references/git-sync-testing-pattern.md`.
 - **Dirty vault between batch clips**: never `git checkout -- .`; clean only generated residue under `Inbox/`/`images/` and keep a 2-second delay between 163 requests. See `references/batch-processing.md`.
-- **`GODEBUG=http2client=0` is WSL history**: on macOS `gh` and `git` network commands run clean, so do not re-add the prefix to historical commands or scripts. A prefixed command inherited from the WSL setup should be dropped, not preserved.
+- **`GODEBUG=http2client=0` is WSL history**: on macOS `gh` and `git` network commands run clean, so do not re-add the prefix to historical commands or scripts. When an inherited command still carries the prefix, remove only the prefix and keep the command itself — `GODEBUG=http2client=0 git pull --ff-only` becomes `git pull --ff-only`.
 
 ## Commit Message
 
