@@ -59,10 +59,16 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
 }
 
 
-# Untrusted page text that contains one of these would render as a real link,
-# image or HTML element. A code span is the only construct GFM renders literally:
-# backslash escaping leaves `[x](url)` clickable, and HTML entities do not stop it.
-_SUMMARY_MARKUP_MARKERS = ("](", "![", "<", ">", "`")
+# Untrusted page text containing one of these renders as active markup: a link,
+# an image, an HTML element, a GFM autolink (`www.`, `://`, `@user`), emphasis or
+# strikethrough. A code span is the only construct GFM renders literally —
+# backslash escaping leaves `[x](url)` clickable and HTML entities are decoded
+# before inline parsing.
+_SUMMARY_MARKUP_MARKERS = (
+    "](", "![", "<", ">", "`",  # link, image, HTML, code
+    "*", "_", "~",  # emphasis, emphasis, strikethrough
+    "www.", "://", "@",  # GFM autolink triggers
+)
 
 
 def _summary_cell(value: object) -> str:

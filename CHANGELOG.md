@@ -28,13 +28,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
-- Receipt cells no longer render page text as Markdown. A title such as
-  `[Claim prize](https://evil.example)` or `![x](https://evil/track.gif)` used to become a
-  real clickable link or a remote image inside the summary table, and a raw `<img>` tag
-  survived as an element. Values carrying inline Markdown markers are now wrapped in a code
-  span, which GFM renders literally — backslash escaping and HTML entities were both measured
-  against GitHub's renderer and do not stop the link being parsed. Only page-derived cells are
-  wrapped; the plugin's own image and size cells keep their emphasis.
+- Receipt cells no longer render page text as Markdown. Titles like
+  `[Claim prize](https://evil.example)`, `![x](https://evil/track.gif)`, `https://example.com`,
+  `@shijistar`, `**Important**` or `~~strike~~` used to become real links, remote images,
+  account mentions or styled text inside the summary table, and a raw `<img>` tag survived as an
+  element. Values carrying any of those markers are now wrapped in a code span, which GFM
+  renders literally — backslash escaping and HTML entities were both measured against GitHub's
+  renderer and do not stop the parse. Only page-derived cells are wrapped, so the plugin's own
+  image and size cells keep their emphasis.
 - `_summary_cell()` doubles backslashes before escaping pipes, so a value containing `\|`
   keeps its backslash instead of rendering as `|`. Plugin version bumped 0.22.0 → 0.22.1.
 
