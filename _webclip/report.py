@@ -14,6 +14,7 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
     "zh": {
         "item": "项",
         "value": "内容",
+        "title": "标题",
         "author": "作者",
         "published": "发布时间",
         "source": "来源",
@@ -34,6 +35,7 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
     "en": {
         "item": "Item",
         "value": "Value",
+        "title": "Title",
         "author": "Author",
         "published": "Published",
         "source": "Source",
@@ -137,6 +139,7 @@ class ClipResult:
             return self.user_message()
         labels = _SUMMARY_LABELS.get(lang, _SUMMARY_LABELS["zh"])
         rows = (
+            (labels["title"], self.title or labels["none"]),
             (labels["author"], self.author or labels["none"]),
             (labels["published"], self.published or labels["none"]),
             (labels["source"], self.source_host or labels["none"]),

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## 2026-11-16
 
+### Added
+
+- `ClipResult.summary_markdown()` now leads its table with a **title** row, so a receipt
+  identifies the article instead of starting at the author. The value comes from the
+  `ClipResult.title` field that `_article_report_fields()` already filled, and a payload
+  without a title renders the same em dash as the other empty cells. Plugin version bumped
+  0.21.0 → 0.22.0; skill 1.11.0 → 1.11.1.
+
 ### Changed
 
 - Skill docs: `references/zhihu-cookie-and-scraper-diagnostics.md` now records the measured
