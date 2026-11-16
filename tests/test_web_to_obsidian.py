@@ -2613,6 +2613,30 @@ class ClipSummaryMarkdownTests(unittest.TestCase):
         self.assertIn("| 提交 | 4eeebcd |", text)
 
 
+class SummaryCellEscapingTests(unittest.TestCase):
+    """A table cell must survive pipes, newlines and backslashes.
+
+    Checked against GitHub's GFM renderer: the old escaping turned ``A\\|B``
+    into a rendered ``A|B`` — the backslash was consumed as an escape prefix —
+    while doubling it first renders ``A\\|B`` intact. The row never split, so
+    the defect was lost characters, not a broken table.
+    """
+
+    def test_a_pipe_is_escaped(self):
+        self.assertEqual(clip._summary_cell("A | B"), r"A \| B")
+
+    def test_a_backslash_is_doubled_before_pipes_are_escaped(self):
+        # Three backslashes on the wire render as one literal backslash plus a
+        # literal pipe; two would lose the backslash.
+        self.assertEqual(clip._summary_cell("A\\|B"), "A" + "\\" * 3 + "|B")
+
+    def test_a_trailing_backslash_is_doubled(self):
+        self.assertEqual(clip._summary_cell("A\\"), "A" + "\\" * 2)
+
+    def test_newlines_become_spaces(self):
+        self.assertEqual(clip._summary_cell("A\nB"), "A B")
+
+
 class ClipReportFieldTests(unittest.TestCase):
     def test_published_is_trimmed_to_minutes(self):
         self.assertEqual(

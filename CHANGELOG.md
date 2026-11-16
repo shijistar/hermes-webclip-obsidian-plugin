@@ -17,6 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Skill docs: `SKILL.md` records that the WSL-era `GODEBUG=http2client=0` prefix is not
   needed on macOS, so `gh` and `git` commands run unprefixed.
 
+### Fixed
+
+- `_summary_cell()` doubles backslashes before escaping pipes. A value containing `\|`
+  rendered as `|` in the receipt — the backslash was consumed as an escape prefix — and a
+  value ending in a backslash lost it too; the author, published and commit cells of every
+  receipt were affected. Verified against GitHub's GFM renderer: the row never split, so this
+  was character loss rather than a broken table. Plugin version bumped 0.21.0 → 0.21.1.
+
 ## 2026-11-15
 
 ### Changed

@@ -55,8 +55,19 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
 
 
 def _summary_cell(value: object) -> str:
-    """Escape a value so it cannot break out of a Markdown table cell."""
-    return str(value).replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+    """Escape a value so it cannot break out of a Markdown table cell.
+
+    The backslash is doubled *before* ``|`` is escaped. Without this, a value
+    containing ``\\|`` renders as ``|`` — the backslash is consumed as an escape
+    prefix — and a value ending in a backslash loses it the same way.
+    """
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\r", " ")
+        .replace("\n", " ")
+        .replace("|", "\\|")
+    )
 
 
 @dataclass(frozen=True)
