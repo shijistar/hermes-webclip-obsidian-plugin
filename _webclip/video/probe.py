@@ -69,24 +69,36 @@ def _variants(text: str, *, url: str) -> tuple[str, ...]:
     ``#EXT-X-MEDIA`` tag between the tag and its URI shows up in the wild, and a
     strict ``\\n(?!\\#)`` pattern then reports "no variants" — which looks like a
     media playlist with zero segments instead of a master we failed to read.
+
+    One forward pass: a previous slice-per-variant version was O(n²), so a
+    playlist of 50k ``STREAM-INF`` lines (still under the 2 MB cap) burned
+    ~1.25 billion candidate visits while the run held the vault lock.
     """
-    lines = text.splitlines()
     found: list[str] = []
-    for index, line in enumerate(lines):
-        if not line.strip().upper().startswith(_STREAM_INF_PREFIX):
+    pending = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.upper().startswith(_STREAM_INF_PREFIX):
+            pending = True
             continue
-        for following in lines[index + 1 :]:
-            candidate = following.strip()
-            if not candidate or candidate.startswith("#"):
-                continue
-            found.append(urljoin(url, candidate))
-            break
+        if not pending or not stripped or stripped.startswith("#"):
+            continue
+        found.append(urljoin(url, stripped))
+        pending = False
     return tuple(found)
+
+
+_URI_ATTR_RE = re.compile(r'URI\s*=\s*"[^"]*"', re.IGNORECASE)
+_METHOD_ATTR_RE = re.compile(r'METHOD\s*=\s*"?([A-Za-z0-9-]+)"?', re.IGNORECASE)
 
 
 def _is_encrypted(text: str) -> bool:
     for match in _KEY_RE.finditer(text):
-        if "METHOD=NONE" not in match.group(1).upper().replace(" ", ""):
+        # Drop the URI first: it can itself contain `METHOD=NONE`
+        # (`…?METHOD=NONE`), which would make an encrypted stream look plain.
+        attributes = _URI_ATTR_RE.sub("", match.group(1))
+        method = _METHOD_ATTR_RE.search(attributes)
+        if method is None or method.group(1).upper() != "NONE":
             return True
     return False
 

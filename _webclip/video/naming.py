@@ -24,6 +24,13 @@ from ..urls import _url_hash
 
 DEFAULT_EXTENSION = ".mp4"
 
+# The declared subtype comes from the page, so it is mapped through a fixed set
+# instead of being interpolated: `video/exe` would otherwise produce `.exe`, and
+# `video/md` a `.md` file that looks like a note inside the vault.
+_VIDEO_SUBTYPES = frozenset(
+    {"mp4", "webm", "mov", "mkv", "avi", "flv", "ogg", "mpeg", "3gpp"}
+)
+
 
 def clean_stem(value: str) -> str:
     """Strip characters a filesystem rejects and collapse whitespace."""
@@ -52,7 +59,7 @@ def extension_for(candidate_type: str, src: str) -> str:
         subtype = declared.split("/", 1)[1].split(";", 1)[0].strip()
         alias = {"quicktime": "mov", "x-matroska": "mkv", "x-msvideo": "avi"}
         subtype = alias.get(subtype, subtype)
-        if subtype.isalnum():
+        if subtype in _VIDEO_SUBTYPES:
             return f".{subtype}"
     path = src.split("?", 1)[0].split("#", 1)[0]
     tail = Path(path).suffix.lower()

@@ -57,11 +57,21 @@ class DestinationTests(unittest.TestCase):
         destination = resolve_destination(self.vault, configured)
         self.assertTrue(destination.inside_vault)
 
-    def test_a_symlink_escaping_the_vault_is_outside(self):
+    def test_a_relative_destination_escaping_through_a_symlink_is_rejected(self):
+        # A relative destination is defined as vault-contained: following a link
+        # out of the vault would write outside while the config claims otherwise,
+        # and the managed ignore block could never cover those files.
         outside = self.root / "elsewhere"
         outside.mkdir()
         (self.vault / "linked").symlink_to(outside)
-        destination = resolve_destination(self.vault, "linked/video")
+        with self.assertRaises(ClipError):
+            resolve_destination(self.vault, "linked/video")
+
+    def test_an_absolute_destination_through_a_symlink_stays_outside(self):
+        outside = self.root / "elsewhere"
+        outside.mkdir()
+        (self.vault / "linked").symlink_to(outside)
+        destination = resolve_destination(self.vault, str(self.vault / "linked" / "video"))
         self.assertFalse(destination.inside_vault)
 
 
@@ -93,6 +103,14 @@ class GitignoreTests(unittest.TestCase):
         first = (self.vault / ".gitignore").read_text(encoding="utf-8")
         self.assertFalse(ensure_gitignore(self.vault, self.vault / "attachments" / "video"))
         self.assertEqual((self.vault / ".gitignore").read_text(encoding="utf-8"), first)
+
+    def test_glob_characters_in_the_directory_name_are_escaped(self):
+        # `clips[2026]` is a literal name, not a pattern: unescaped, the rule
+        # matches a different directory (or nothing) and the files stay untracked.
+        (self.vault / "clips[2026]").mkdir(parents=True)
+        ensure_gitignore(self.vault, self.vault / "clips[2026]")
+        text = (self.vault / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/clips\\[2026\\]/", text)
 
     def test_a_second_destination_is_added_without_losing_the_first(self):
         # Videos already downloaded into the first directory must stay ignored:
@@ -163,6 +181,14 @@ class NamingTests(unittest.TestCase):
     def test_an_empty_name_is_rejected(self):
         with self.assertRaises(ValueError):
             build_filename(title="", src="https://cdn/a.mp4", name="///")
+
+    def test_a_page_declared_subtype_outside_the_video_set_is_ignored(self):
+        # The subtype is page text; `video/md` would otherwise save a `.md` file
+        # that looks like a note inside the vault.
+        for declared in ("video/exe", "video/md", "video/html", "video/" + "a" * 300):
+            with self.subTest(declared=declared[:24]):
+                self.assertEqual(extension_for(declared, "https://cdn/a.mp4"), ".mp4")
+        self.assertEqual(extension_for("video/webm", "https://cdn/a.jpg"), ".webm")
 
     def test_unique_path_avoids_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -58,7 +58,20 @@ def resolve_destination(vault: Path, configured: str) -> VideoDestination:
         inside = True
     except ValueError:
         inside = False
+    if not raw.is_absolute() and not inside:
+        # A relative destination is defined as vault-contained; a symlink that
+        # escapes would put the downloads outside while the config claims they
+        # are inside — and the ignore block could then never cover them.
+        raise ClipError("A relative video destination must stay inside the vault.")
     return VideoDestination(resolved, inside)
+
+
+_GLOB_CHARS = frozenset("*?[]\\")
+
+
+def _escape_glob(value: str) -> str:
+    """Neutralise gitignore pattern characters in a literal directory name."""
+    return "".join(f"\\{char}" if char in _GLOB_CHARS else char for char in value)
 
 
 def _ignore_entry(vault: Path, directory: Path) -> str:
@@ -67,7 +80,10 @@ def _ignore_entry(vault: Path, directory: Path) -> str:
         raise ClipError(
             "The vault itself cannot be the video destination; choose a subdirectory."
         )
-    return f"/{relative.as_posix().rstrip('/')}/"
+    # A directory literally named `clips[2026]` or `vids*` must not be read as a
+    # glob: the entry would then miss the real directory (files stay untracked,
+    # the next /webclip refuses) or match unrelated ones.
+    return f"/{_escape_glob(relative.as_posix().rstrip('/'))}/"
 
 
 def ensure_gitignore(vault: Path, directory: Path) -> bool:
@@ -87,7 +103,10 @@ def ensure_gitignore(vault: Path, directory: Path) -> bool:
     entries = sorted({*_block_entries(existing), entry})
     block = BLOCK_START + "\n" + "".join(f"{item}\n" for item in entries) + BLOCK_END
     if _BLOCK_RE.search(existing):
-        updated = _BLOCK_RE.sub(block, existing, count=1)
+        # A function replacement keeps the block literal: `re.sub` would read
+        # backslash sequences in a directory name as escapes and either mangle
+        # them or raise `re.error`.
+        updated = _BLOCK_RE.sub(lambda _match: block, existing, count=1)
     else:
         separator = "" if (not existing or existing.endswith("\n")) else "\n"
         updated = f"{existing}{separator}{block}\n"

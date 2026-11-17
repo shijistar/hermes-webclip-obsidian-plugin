@@ -14,8 +14,8 @@ commit & push it to the Obsidian vault Git.
 ## Version
 
 `SKILL.md` frontmatter `version` is the skill version (currently `1.13.0`).
-The plugin version is tracked separately in `../plugin.yaml` and
-`../CHANGELOG.md`.
+The plugin version is tracked separately in `../../plugin.yaml` and
+`../../CHANGELOG.md`.
 
 ## Deploy to a Hermes profile
 

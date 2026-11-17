@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import secrets
 import tomllib
 from typing import Mapping
 from urllib.parse import urlsplit
@@ -56,16 +57,28 @@ class VideoService:
         The video command must not fail because some *other* part of the clip
         configuration is broken — it only needs the vault location and the lock
         file to agree with ``/webclip``.
+
+        When ``config.toml`` is absent, ``/webclip`` falls back to the
+        environment (``ClipConfig.from_env``); the vault and the lock have to
+        come from the same place or the two commands work on different vaults
+        and stop excluding each other.
         """
+        section: dict = {}
         config_path = self.plugin_root / "config.toml"
-        if not config_path.is_file():
-            return {}
-        try:
-            data = tomllib.loads(config_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, tomllib.TOMLDecodeError):
-            return {}
-        section = data.get("clip")
-        return section if isinstance(section, dict) else {}
+        if config_path.is_file():
+            try:
+                data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, tomllib.TOMLDecodeError):
+                data = {}
+            found = data.get("clip")
+            if isinstance(found, dict):
+                section = dict(found)
+        env = self.env if self.env is not None else os.environ
+        if "vault" not in section and env.get("WEB_TO_OBSIDIAN_VAULT"):
+            section["vault"] = env["WEB_TO_OBSIDIAN_VAULT"]
+        if "lock_file" not in section and env.get("WEB_TO_OBSIDIAN_LOCK_FILE"):
+            section["lock_file"] = env["WEB_TO_OBSIDIAN_LOCK_FILE"]
+        return section
 
     def _vault(self) -> Path:
         raw = DEFAULT_VAULT
@@ -257,7 +270,12 @@ class VideoService:
         # `--overwrite` was used and the download then failed.
         # The extension stays last: ffmpeg infers the output container from it,
         # and `name.mp4.part` makes it fail with "no suitable output format".
-        working = target.with_name(f"{target.stem}.part{target.suffix}")
+        # The random infix lets `download_to_file` create the file with O_EXCL:
+        # a name derived only from the title is guessable, and an existing
+        # symlink at that path would redirect the write.
+        working = target.with_name(
+            f"{target.stem}.{secrets.token_hex(4)}.part{target.suffix}"
+        )
 
         try:
             if kind == "hls":

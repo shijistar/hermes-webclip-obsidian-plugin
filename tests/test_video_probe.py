@@ -170,6 +170,16 @@ class UnsupportedAndMalformedTests(unittest.TestCase):
                 probe("https://cdn.example.com/a.m3u8")
         self.assertIn("EXT-X-MAP", str(caught.exception))
 
+    def test_a_method_none_inside_the_key_uri_does_not_disarm_the_check(self):
+        # The URI is arbitrary text and can itself contain `METHOD=NONE`.
+        text = MEDIA_PLAYLIST.replace(
+            "#EXT-X-TARGETDURATION:10",
+            '#EXT-X-TARGETDURATION:10\n#EXT-X-KEY:METHOD=AES-128,URI="https://k/?METHOD=NONE"',
+            1,
+        )
+        info = parse_playlist(text, url="https://cdn.example.com/a.m3u8")
+        self.assertTrue(info.encrypted)
+
     def test_a_plain_playlist_reports_no_unsupported_tag(self):
         info = parse_playlist(MEDIA_PLAYLIST, url="https://cdn.example.com/a.m3u8")
         self.assertEqual(info.unsupported, "")
