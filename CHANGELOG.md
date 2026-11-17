@@ -35,6 +35,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   content; and an existing `favorite` marker is carried over only on the implicit path, so an
   explicit `--refresh` with `favorite=False` still clears it. Plugin version bumped
   0.22.1 → 0.22.2.
+- `AGENTS.md` no longer mirrors the current module versions in its versioning table. The values
+  live in `plugin.yaml`, `extractor/package.json` and the `version` frontmatter of
+  `skill/SKILL.md`, and copying them into a document that must be edited by hand only added a
+  second place to forget. The table now records where each version lives.
 
 ## 2026-11-16
 

@@ -101,17 +101,19 @@ install deps; `npm install` alone also runs the package's `prepare` hook,
 ## Versioning rules
 
 The project tracks module versions in **three** places. The CHANGELOG uses
-**date headings** (`## YYYY-MM-DD`), not version numbers:
+**date headings** (`## YYYY-MM-DD`), not version numbers, so it is not a
+version source:
 
-| Place                    | Field                    | Current           |
-| ------------------------ | ------------------------ | ----------------- |
-| `plugin.yaml`            | `version`                | 0.22.2            |
-| `extractor/package.json` | `version`                | 0.4.1             |
-| `skill/SKILL.md`         | frontmatter `version`    | 1.12.0            |
-| `CHANGELOG.md`           | `## YYYY-MM-DD` headings | 2026-11-17 latest |
+| Place                    | Field                  |
+| ------------------------ | ---------------------- |
+| `plugin.yaml`            | `version`              |
+| `extractor/package.json` | `version`              |
+| `skill/SKILL.md`         | frontmatter `version`  |
 
-Module versions are independent of each other and of the CHANGELOG; there is
-no requirement that they match a changelog heading.
+Read the current version from those fields; this table records where a version
+lives, not what it is. Mirroring the numbers here would only add a second place
+to forget. Module versions are independent of each other and of the CHANGELOG;
+there is no requirement that they match a changelog heading.
 
 ## Mandatory rules
 
