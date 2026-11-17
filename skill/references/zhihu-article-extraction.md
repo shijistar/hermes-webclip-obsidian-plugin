@@ -108,8 +108,12 @@ read-back is the entire verification.
   Move down the ladder.
 - **`--no-browser` is not "the quick attempt"** on Zhihu: it 403s on any article that needs a
   session. Run it only to tell a protocol refusal from a rendering failure.
-- **A dirty plugin repo blocks the clip**: the vault/plugin hygiene check refuses to commit over
-  unrelated work. Stash it (`git stash push -m <label>`, never discard) and name it in the report.
+- **A dirty vault blocks the clip.** `GitSync.preflight` refuses an unclean worktree
+  (`Git protection requires an entirely clean worktree.`) along with the wrong branch, an
+  in-progress Git operation and a missing upstream — all as `ClipError`, which is protection
+  working, not a crash. `finalize` then refuses to commit anything outside the files this clip
+  generated. Stash the vault changes (`git stash push -m <label>`, never discard) and name them
+  in the report. The plugin's own source repo is unrelated: its state does not affect a clip.
 - **Fallback bodies carry link-shaped headings.** Measured 16 of 73: Zhihu renders tag headings
   as `https://zhida.zhihu.com/search?…&zd_token=…` links, and `web_extract` keeps the anchor.
   They are the page's own DOM, not content drift. Do not flatten them on a fallback note: the

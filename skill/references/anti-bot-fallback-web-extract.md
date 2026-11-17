@@ -40,11 +40,14 @@ article = {
 ```python
 from pathlib import Path
 from datetime import datetime
-from web_to_obsidian import ClipService, ClipConfig, GitSync
+from web_to_obsidian import ClipService, ClipConfig, ClipError, GitSync
 
 plugin_root = Path('.')
 config = ClipConfig.from_file(plugin_root / 'config.toml')
-git_sync = GitSync.preflight(config.vault, config.sync_branch)
+try:
+    git_sync = GitSync.preflight(config.vault, config.sync_branch)
+except ClipError as exc:
+    raise SystemExit(f"Git preflight refused the clip: {exc}") from None
 
 service = ClipService(plugin_root)
 result = service._persist_article(
