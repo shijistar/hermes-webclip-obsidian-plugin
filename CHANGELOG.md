@@ -4,6 +4,18 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-17
+
+### Added
+
+- `skill/references/zhihu-article-extraction.md`: the Zhihu per-article procedure that until now
+  lived only in a local profile skill — the four-layer ladder, how to read a `40362` refusal
+  (request-layer throttling, not a cookie problem, plus the three-probe check that proves it),
+  why a login is not an extraction lever, the body-trim boundaries, and the fallback fingerprint
+  caveat: on the fallback path `source_content_hash` is the constant hash of an empty string, so
+  no refresh, dedupe or "page changed" decision may rest on it. `SKILL.md` now points at it
+  beside the existing diagnostics reference. Skill version 1.11.1 → 1.12.0.
+
 ## 2026-11-16
 
 ### Added

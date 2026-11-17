@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.11.1
+version: 1.12.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -339,7 +339,10 @@ live in `references/` and are linked from the rule they belong to.
 - **`image_mode` semantics** and private GitHub blob URLs: see `references/github-private-blob-url-and-image-mode.md`.
 - **HTML `<img>` tags** do not trigger the `image_mode` confirmation flow.
 - **WeChat**: curl fallback, author field format and the CAPTCHA wall. See `references/wechat-curl-extraction.md`.
-- **Zhihu**: cookie completeness, login validity and fetch success are three separate checks. See `references/zhihu-cookie-and-scraper-diagnostics.md`.
+- **Zhihu**: cookie completeness, login validity and fetch success are three separate checks. The
+  per-article procedure — ladder, the `40362` throttle signature, body trimming and the fallback
+  fingerprint caveat — is `references/zhihu-article-extraction.md`; diagnostics are
+  `references/zhihu-cookie-and-scraper-diagnostics.md`.
 - **Anti-bot fallback**: when the extractor fails but `web_extract` succeeds, build the article dict and call `_persist_article()`; it must carry both `content_markdown` and `markdown`. See `references/anti-bot-fallback-web-extract.md`.
 - **SPA pages**: JS-only pages cannot be extracted by the extractor, `web_extract` or curl; report them instead of saving an empty shell. See `references/anti-bot-fallback-web-extract.md`.
 - **Real-browser extraction**: when a page needs a logged-in session, drive a real browser
