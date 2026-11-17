@@ -13,6 +13,29 @@ function collect(html, pageUrl = PAGE_URL) {
   return collectVideos(document, pageUrl);
 }
 
+test('clamps page-declared dimensions and trims titles to the Python limits', () => {
+  const found = collect(`
+    <html><head><title>${'t'.repeat(20000)}</title></head><body>
+      <video src="/clip.mp4" width="100001" height="-5"></video>
+    </body></html>`);
+
+  assert.equal(found.length, 1);
+  assert.equal(found[0].width, 100000);
+  assert.equal(found[0].height, 0);
+  assert.ok(Buffer.byteLength(found[0].title, 'utf8') <= 10000);
+});
+
+test('responsive image sources cannot displace the video candidate', () => {
+  const sources = Array.from({ length: 20 }, (_, i) => `<source src="/img-${i}.png">`).join('');
+  const found = collect(`
+    <html><body>
+      <picture>${sources}</picture>
+      <video src="/clip.mp4"></video>
+    </body></html>`);
+
+  assert.deepEqual(found.map(item => item.src), ['https://example.com/clip.mp4']);
+});
+
 test('collects a plain video[src] with its caption, poster and dimensions', () => {
   const found = collect(`
     <html><head><title>Page title</title></head><body>

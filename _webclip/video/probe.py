@@ -32,8 +32,13 @@ MAX_PLAYLIST_BYTES = 2 * 1024 * 1024
 MAX_MASTER_DEPTH = 1
 
 _EXTINF_RE = re.compile(r"^#EXTINF:\s*([0-9.]+)", re.MULTILINE)
+_DURATION_RE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 _KEY_RE = re.compile(r"^#EXT-X-(?:SESSION-)?KEY:(.*)$", re.MULTILINE)
 _STREAM_INF_PREFIX = "#EXT-X-STREAM-INF"
+# Tags whose semantics this downloader would silently ignore: a byte-range
+# playlist would download the whole resource once per entry, and an fMP4
+# playlist needs its `EXT-X-MAP` initialisation section to be parseable at all.
+_UNSUPPORTED_TAGS = ("#EXT-X-BYTERANGE", "#EXT-X-MAP")
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,17 @@ class PlaylistInfo:
     encrypted: bool
     live: bool
     variants: tuple[str, ...]
+    #: A tag whose semantics this downloader does not implement; the playlist is
+    #: refused rather than downloaded incorrectly.
+    unsupported: str = ""
+
+
+def _reject_unsupported(info: PlaylistInfo) -> None:
+    if info.unsupported:
+        raise ClipError(
+            f"The video playlist uses {info.unsupported}, which this downloader "
+            "does not support yet."
+        )
 
 
 def _variants(text: str, *, url: str) -> tuple[str, ...]:
@@ -79,6 +95,14 @@ def parse_playlist(text: str, *, url: str) -> PlaylistInfo:
     if not text.lstrip().startswith("#EXTM3U"):
         raise ClipError("The video playlist is not a valid HLS playlist.")
     durations = _EXTINF_RE.findall(text)
+    for value in durations:
+        # The tag regex is permissive (`[0-9.]+`), so `#EXTINF:1.2.3` and `#EXTINF:.`
+        # reach `float()` and raise ValueError — which is not a ClipError and would
+        # abort the whole batch instead of failing one candidate.
+        if not _DURATION_RE.fullmatch(value):
+            raise ClipError("The video playlist contains an invalid segment duration.")
+    upper = text.upper()
+    unsupported = next((tag for tag in _UNSUPPORTED_TAGS if tag in upper), "")
     return PlaylistInfo(
         url=url,
         segments=len(durations),
@@ -86,6 +110,7 @@ def parse_playlist(text: str, *, url: str) -> PlaylistInfo:
         encrypted=_is_encrypted(text),
         live="#EXT-X-ENDLIST" not in text,
         variants=_variants(text, url=url),
+        unsupported=unsupported,
     )
 
 
@@ -100,6 +125,7 @@ def probe(
         url, headers=headers, timeout=timeout, max_bytes=MAX_PLAYLIST_BYTES
     )
     info = parse_playlist(body.decode("utf-8", errors="replace"), url=final_url)
+    _reject_unsupported(info)
     if info.encrypted:
         # A session key on the master protects every variant below it. Report it
         # here instead of descending: the media playlist usually carries no key,
@@ -114,6 +140,7 @@ def probe(
             info.variants[0], headers=headers, timeout=timeout, max_bytes=MAX_PLAYLIST_BYTES
         )
         info = parse_playlist(body.decode("utf-8", errors="replace"), url=final_url)
+        _reject_unsupported(info)
         depth += 1
         if info.encrypted:
             return info
@@ -150,6 +177,7 @@ def read_media_playlist(
     )
     text = body.decode("utf-8", errors="replace")
     info = parse_playlist(text, url=final_url)
+    _reject_unsupported(info)
     if info.variants:
         raise ClipError("A master playlist must be probed before its segments are read.")
     if info.encrypted:

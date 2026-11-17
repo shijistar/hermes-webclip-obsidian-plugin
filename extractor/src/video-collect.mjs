@@ -17,6 +17,34 @@
 const MAX_CANDIDATES = 20;
 const MAX_JSON_LD_BYTES = 200_000;
 const MAX_JSON_LD_SCRIPTS = 5;
+// Mirrored from `_validate_videos` in `_webclip/article.py`. Exceeding any of
+// these rejects the whole payload — including `/webclip`, which does not ask for
+// videos at all — so the collector has to stay inside the same limits.
+const MAX_SRC_BYTES = 8192;
+const MAX_TITLE_BYTES = 10_000;
+const MAX_POSTER_BYTES = 8192;
+const MAX_TYPE_BYTES = 256;
+const MAX_ORIGIN_BYTES = 64;
+const MAX_DIMENSION = 100_000;
+
+const utf8Length = value => Buffer.byteLength(value, 'utf8');
+
+/** Trim to a UTF-8 byte budget without splitting a character. */
+const clampBytes = (value, limit) => {
+  const text = typeof value === 'string' ? value : '';
+  if (utf8Length(text) <= limit) return text;
+  let out = '';
+  for (const char of text) {
+    if (utf8Length(out + char) > limit) break;
+    out += char;
+  }
+  return out;
+};
+
+const clampDimension = value => {
+  const number = Number.isFinite(value) ? Math.trunc(value) : 0;
+  return Math.min(Math.max(number, 0), MAX_DIMENSION);
+};
 
 /** Media attributes that carry a playable address, in preference order. */
 const VIDEO_DATA_ATTRIBUTES = [
@@ -136,17 +164,19 @@ export function collectVideos(document, sourceUrl) {
     const resolved = resolveCandidate(rawValue, base);
     if (!resolved) return;
     const href = resolved.href;
+    if (utf8Length(href) > MAX_SRC_BYTES) return;
     if (seen.has(href)) return;
     seen.add(href);
     const posterUrl = poster ? resolveCandidate(poster, base) : null;
     candidates.push({
       src: href,
-      type: typeFromUrl(resolved, declaredType),
-      title: title || pageTitle,
-      poster: posterUrl ? posterUrl.href : '',
-      width: width || 0,
-      height: height || 0,
-      origin,
+      type: clampBytes(typeFromUrl(resolved, declaredType), MAX_TYPE_BYTES),
+      title: clampBytes(title || pageTitle, MAX_TITLE_BYTES),
+      poster:
+        posterUrl && utf8Length(posterUrl.href) <= MAX_POSTER_BYTES ? posterUrl.href : '',
+      width: clampDimension(width),
+      height: clampDimension(height),
+      origin: clampBytes(origin, MAX_ORIGIN_BYTES),
     });
   };
 
@@ -181,6 +211,10 @@ export function collectVideos(document, sourceUrl) {
   }
 
   for (const source of document.querySelectorAll('source[src]')) {
+    // `<picture>` and `<audio>` use `<source>` too. They are not video, and a
+    // responsive image set would otherwise fill the candidate limit before the
+    // real player is reached.
+    if (typeof source.closest === 'function' && source.closest('picture, audio')) continue;
     const player = typeof source.closest === 'function' ? source.closest('video') : null;
     push(source.getAttribute('src'), {
       origin: 'source',

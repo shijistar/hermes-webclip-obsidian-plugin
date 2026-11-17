@@ -128,5 +128,52 @@ class ProbeTests(unittest.TestCase):
                 read_media_playlist("https://cdn/x.m3u8")
 
 
+class UnsupportedAndMalformedTests(unittest.TestCase):
+    """A playlist the downloader cannot honour must be refused, not mangled."""
+
+    def test_a_malformed_duration_is_a_clip_error(self):
+        text = MEDIA_PLAYLIST.replace("#EXTINF:9.009,", "#EXTINF:1.2.3,", 1)
+        with self.assertRaises(ClipError) as caught:
+            parse_playlist(text, url="https://cdn.example.com/a.m3u8")
+        self.assertIn("duration", str(caught.exception))
+
+    def test_a_byte_range_playlist_is_marked_unsupported(self):
+        text = MEDIA_PLAYLIST.replace(
+            "#EXTINF:9.009,\nseg-1.ts",
+            "#EXT-X-BYTERANGE:1000@0\n#EXTINF:9.009,\nseg-1.ts",
+            1,
+        )
+        info = parse_playlist(text, url="https://cdn.example.com/a.m3u8")
+        self.assertEqual(info.unsupported, "#EXT-X-BYTERANGE")
+
+    def test_an_fmp4_playlist_is_marked_unsupported(self):
+        text = MEDIA_PLAYLIST.replace(
+            "#EXT-X-TARGETDURATION:10",
+            '#EXT-X-TARGETDURATION:10\n#EXT-X-MAP:URI="init.mp4"',
+            1,
+        )
+        info = parse_playlist(text, url="https://cdn.example.com/a.m3u8")
+        self.assertEqual(info.unsupported, "#EXT-X-MAP")
+
+    def test_probe_refuses_an_unsupported_playlist(self):
+        text = MEDIA_PLAYLIST.replace(
+            "#EXT-X-TARGETDURATION:10",
+            '#EXT-X-TARGETDURATION:10\n#EXT-X-MAP:URI="init.mp4"',
+            1,
+        )
+        with mock.patch.object(
+            probe_module,
+            "fetch_bytes",
+            return_value=("https://cdn.example.com/a.m3u8", text.encode()),
+        ):
+            with self.assertRaises(ClipError) as caught:
+                probe("https://cdn.example.com/a.m3u8")
+        self.assertIn("EXT-X-MAP", str(caught.exception))
+
+    def test_a_plain_playlist_reports_no_unsupported_tag(self):
+        info = parse_playlist(MEDIA_PLAYLIST, url="https://cdn.example.com/a.m3u8")
+        self.assertEqual(info.unsupported, "")
+
+
 if __name__ == "__main__":
     unittest.main()
