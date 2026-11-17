@@ -255,7 +255,9 @@ class VideoService:
         # Download next to the target and rename only after the merge succeeded.
         # Writing straight to `target` would destroy an existing file the moment
         # `--overwrite` was used and the download then failed.
-        working = target.with_name(f"{target.name}.part")
+        # The extension stays last: ffmpeg infers the output container from it,
+        # and `name.mp4.part` makes it fail with "no suitable output format".
+        working = target.with_name(f"{target.stem}.part{target.suffix}")
 
         try:
             if kind == "hls":

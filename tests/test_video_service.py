@@ -188,6 +188,25 @@ class ServiceTests(unittest.TestCase):
             [path.name for path in self.outside.iterdir()], ["Clip.mp4"]
         )
 
+    def test_the_working_file_keeps_the_container_extension(self):
+        # ffmpeg infers the output format from the extension; a `.mp4.part`
+        # ending makes it refuse with "no suitable output format".
+        service = VideoService(self.plugin)
+        article = self._article({"src": "https://cdn.example.com/a.m3u8", "title": "Clip"})
+        seen: dict[str, str] = {}
+
+        def fake_hls(plan, target, **kwargs):
+            seen["name"] = target.name
+            target.write_bytes(b"x" * 100)
+            return DownloadedFile(path=target, bytes_written=100)
+
+        with mock.patch.object(service_module, "run_extractor", return_value=article), mock.patch.object(
+            service_module, "download_hls", side_effect=fake_hls
+        ):
+            service.run(f"https://example.com/page --to {self.outside}")
+        self.assertTrue(seen["name"].endswith(".mp4"))
+        self.assertNotIn(".mp4.part", seen["name"])
+
     def test_a_second_run_is_refused_while_the_lock_is_held(self):
         from _webclip.git_sync import VaultLock
 
