@@ -29,8 +29,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   matches. The comparison is a whitelist (`title`, `url`, `original_url`, `original_host`,
   `author`, `site`, `published`, `description`, `keywords`, `extraction_method`, `webclip_id`),
   so the reader's own edits to `status`, `category` or `tags` no longer block a rule-driven
-  rewrite; a note missing either fingerprint is not exempt; an existing `favorite` marker is
-  carried over. Plugin version bumped 0.22.1 → 0.22.2.
+  rewrite. Four guards keep the exemption from widening: a note missing either fingerprint is not
+  exempt; a source fingerprint equal to the empty-body hash `sha256("\n")` is not exempt (it
+  carries no source identity); a body of pure whitespace is rejected rather than treated as
+  content; and an existing `favorite` marker is carried over only on the implicit path, so an
+  explicit `--refresh` with `favorite=False` still clears it. Plugin version bumped
+  0.22.1 → 0.22.2.
 
 ## 2026-11-16
 

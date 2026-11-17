@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -369,6 +370,7 @@ class RenderOnlyRefreshRegressionTests(unittest.TestCase):
     PAGE = "# Article\n\npage text\n"
     BODY_V1 = "# Article\n\nbody v1\n"
     BODY_V2 = "# Article\n\nbody v2\n"
+    EMPTY_SOURCE = "sha256:" + hashlib.sha256(b"\n").hexdigest()
 
     def _note(
         self,
@@ -466,6 +468,50 @@ class RenderOnlyRefreshRegressionTests(unittest.TestCase):
             metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
             self.assertIsNotNone(metadata)
             self.assertIs((metadata or {}).get("favorite"), True)
+
+    def test_a_whitespace_body_with_an_empty_source_is_refused(self):
+        """Stripping the body let " " through and replaced a real article with a space."""
+        with self.assertRaisesRegex(clip.ClipError, "empty 'markdown'"):
+            clip.render_note(
+                dict(SUCCESS, markdown=""),
+                created="2026-11-17T00:00:00+00:00",
+                content_markdown=" ",
+            )
+
+    def test_a_legacy_empty_fingerprint_note_is_not_exempt(self):
+        """A note whose source fingerprint is the empty-body hash has no source identity.
+
+        Built by rewriting the fingerprints directly: the render guard refuses to create
+        this shape any more, so the only remaining source is a note written before it.
+        """
+
+        def with_hashes(text: str, source: str, content: str) -> str:
+            text = re.sub(r"source_content_hash: sha256:[0-9a-f]+", f"source_content_hash: {source}", text)
+            return re.sub(r"content_hash: sha256:[0-9a-f]+", f"content_hash: {content}", text)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            target.write_text(
+                with_hashes(self._note(body=self.BODY_V1), self.EMPTY_SOURCE, "sha256:" + "a" * 64),
+                encoding="utf-8",
+            )
+            incoming = with_hashes(
+                self._note(body=self.BODY_V2), self.EMPTY_SOURCE, "sha256:" + "b" * 64
+            )
+            with self.assertRaisesRegex(clip.ClipError, "--refresh"):
+                clip.write_managed_note(target, incoming, refresh=False)
+
+    def test_an_explicit_favorite_removal_wins_over_the_exemption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            clip.write_managed_note(
+                target, self._note(body=self.BODY_V1, favorite=True), refresh=False
+            )
+            clip.write_managed_note(
+                target, self._note(body=self.BODY_V2, favorite=False), refresh=True
+            )
+            metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
+            self.assertNotIn("favorite", metadata or {})
 
 
 if __name__ == "__main__":
