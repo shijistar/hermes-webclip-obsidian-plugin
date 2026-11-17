@@ -116,17 +116,13 @@ read-back is the entire verification.
   in the report. The plugin's own source repo is unrelated: its state does not affect a clip.
 - **Fallback bodies carry link-shaped headings.** Measured 16 of 73: Zhihu renders tag headings
   as `https://zhida.zhihu.com/search?…&zd_token=…` links, and `web_extract` keeps the anchor.
-  They are the page's own DOM, not content drift. Do not flatten them on a fallback note: the
-  fallback payload sets `article["markdown"] = ""`, so `source_content_hash` is the constant
-  `sha256("\n")` (`sha256:01ba4719…`) and describes nothing. Any rule shaped "source hash
-  unchanged ⇒ the page did not change" is vacuously true there, and a rewritten article would be
-  saved without the `--refresh` gate. Check the field in one line before building anything on
-  it:
+  They are the page's own DOM, not content drift. Flattening them is safe **only** when the
+  untrimmed page text is what feeds `source_content_hash`: pass the page as
+  `article["markdown"]` and the trimmed/flattened body as `content_markdown` (see
+  `anti-bot-fallback-web-extract.md`). `render_note()` now refuses a rendered body with an empty
+  `markdown` — that combination used to produce the constant fingerprint `sha256("\n")`
+  (`sha256:01ba4719…`), under which a rewritten article looked unchanged.
 
-  ```python
-  clip._frontmatter_from_text(note)["source_content_hash"]   # constant ⇒ no source fingerprint
-  ```
-
-  Flattening only becomes safe once the real page text is what feeds `source_content_hash`.
-  Until then, link-shaped headings are a reading annoyance; a blind fingerprint is a
-  correctness bug.
+  Notes clipped before that guard keep the constant fingerprint until their next `--refresh`.
+  Treat `content_hash == source_content_hash` on a fallback note as "un-verifiable", never as
+  "the source did not change".

@@ -105,7 +105,7 @@ The project tracks module versions in **three** places. The CHANGELOG uses
 
 | Place                    | Field                    | Current           |
 | ------------------------ | ------------------------ | ----------------- |
-| `plugin.yaml`            | `version`                | 0.22.1            |
+| `plugin.yaml`            | `version`                | 0.22.2            |
 | `extractor/package.json` | `version`                | 0.4.1             |
 | `skill/SKILL.md`         | frontmatter `version`    | 1.12.0            |
 | `CHANGELOG.md`           | `## YYYY-MM-DD` headings | 2026-11-17 latest |

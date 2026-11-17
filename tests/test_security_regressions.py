@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -355,6 +356,162 @@ class ReceiptCellInjectionTests(unittest.TestCase):
             image_count=3,
         )
         self.assertIn("**全部远程链接**", result.summary_markdown())
+
+
+class RenderOnlyRefreshRegressionTests(unittest.TestCase):
+    """A body that only the renderer changed must not demand --refresh.
+
+    The fallback contract puts the untrimmed page in ``article["markdown"]`` (what
+    ``source_content_hash`` fingerprints) and the trimmed body in ``content_markdown``.
+    Every case below fails on the pre-fix code, where the source fingerprint was the
+    constant ``sha256("\\n")`` and nothing could tell a rewrite from a re-render.
+    """
+
+    PAGE = "# Article\n\npage text\n"
+    BODY_V1 = "# Article\n\nbody v1\n"
+    BODY_V2 = "# Article\n\nbody v2\n"
+    EMPTY_SOURCE = "sha256:" + hashlib.sha256(b"\n").hexdigest()
+
+    def _note(
+        self,
+        *,
+        page: str | None = None,
+        body: str | None = None,
+        favorite: bool | None = None,
+    ) -> str:
+        data = dict(SUCCESS, markdown=self.PAGE if page is None else page)
+        return clip.render_note(
+            data,
+            created="2026-11-17T00:00:00+00:00",
+            content_markdown=body,
+            favorite=favorite,
+        )
+
+    def test_a_rendered_body_without_source_text_is_refused(self):
+        with self.assertRaisesRegex(clip.ClipError, "empty 'markdown'"):
+            clip.render_note(
+                dict(SUCCESS, markdown=""),
+                created="2026-11-17T00:00:00+00:00",
+                content_markdown=self.BODY_V1,
+            )
+
+    def test_a_renderer_change_rewrites_without_asking_for_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            self.assertEqual(
+                clip.write_managed_note(target, self._note(body=self.BODY_V1), refresh=False),
+                "written",
+            )
+            self.assertEqual(
+                clip.write_managed_note(target, self._note(body=self.BODY_V2), refresh=False),
+                "written",
+            )
+            text = target.read_text(encoding="utf-8")
+            self.assertIn("body v2", text)
+            self.assertNotIn("body v1", text)
+
+    def test_a_reader_edited_status_does_not_block_the_rewrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            clip.write_managed_note(target, self._note(body=self.BODY_V1), refresh=False)
+            target.write_text(
+                target.read_text(encoding="utf-8").replace(
+                    "status: needs-review", "status: done", 1
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                clip.write_managed_note(target, self._note(body=self.BODY_V2), refresh=False),
+                "written",
+            )
+
+    def test_a_changed_source_still_requires_refresh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            clip.write_managed_note(target, self._note(body=self.BODY_V1), refresh=False)
+            moved = self._note(page=self.PAGE + "the author edited this\n", body=self.BODY_V2)
+            with self.assertRaisesRegex(clip.ClipError, "--refresh"):
+                clip.write_managed_note(target, moved, refresh=False)
+
+    def test_a_note_without_a_fingerprint_is_not_exempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            clip.write_managed_note(target, self._note(body=self.BODY_V1), refresh=False)
+            target.write_text(
+                "\n".join(
+                    line
+                    for line in target.read_text(encoding="utf-8").split("\n")
+                    if not line.startswith("content_hash:")
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(clip.ClipError, "--refresh"):
+                clip.write_managed_note(target, self._note(body=self.BODY_V2), refresh=False)
+
+    def test_a_raw_note_keeps_the_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            # No content_markdown: content_hash == source_content_hash, the shape of a
+            # note saved before any render rules existed.
+            raw = clip.render_note(SUCCESS, created="2026-11-17T00:00:00+00:00")
+            clip.write_managed_note(target, raw, refresh=False)
+            with self.assertRaisesRegex(clip.ClipError, "--refresh"):
+                clip.write_managed_note(target, self._note(body=self.BODY_V1), refresh=False)
+
+    def test_the_favorite_marker_survives_a_render_only_rewrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            clip.write_managed_note(
+                target, self._note(body=self.BODY_V1, favorite=True), refresh=False
+            )
+            clip.write_managed_note(target, self._note(body=self.BODY_V2), refresh=False)
+            metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
+            self.assertIsNotNone(metadata)
+            self.assertIs((metadata or {}).get("favorite"), True)
+
+    def test_a_whitespace_body_with_an_empty_source_is_refused(self):
+        """Stripping the body let " " through and replaced a real article with a space."""
+        with self.assertRaisesRegex(clip.ClipError, "empty 'markdown'"):
+            clip.render_note(
+                dict(SUCCESS, markdown=""),
+                created="2026-11-17T00:00:00+00:00",
+                content_markdown=" ",
+            )
+
+    def test_a_legacy_empty_fingerprint_note_is_not_exempt(self):
+        """A note whose source fingerprint is the empty-body hash has no source identity.
+
+        Built by rewriting the fingerprints directly: the render guard refuses to create
+        this shape any more, so the only remaining source is a note written before it.
+        """
+
+        def with_hashes(text: str, source: str, content: str) -> str:
+            text = re.sub(r"source_content_hash: sha256:[0-9a-f]+", f"source_content_hash: {source}", text)
+            return re.sub(r"content_hash: sha256:[0-9a-f]+", f"content_hash: {content}", text)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            target.write_text(
+                with_hashes(self._note(body=self.BODY_V1), self.EMPTY_SOURCE, "sha256:" + "a" * 64),
+                encoding="utf-8",
+            )
+            incoming = with_hashes(
+                self._note(body=self.BODY_V2), self.EMPTY_SOURCE, "sha256:" + "b" * 64
+            )
+            with self.assertRaisesRegex(clip.ClipError, "--refresh"):
+                clip.write_managed_note(target, incoming, refresh=False)
+
+    def test_an_explicit_favorite_removal_wins_over_the_exemption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "note.md"
+            clip.write_managed_note(
+                target, self._note(body=self.BODY_V1, favorite=True), refresh=False
+            )
+            clip.write_managed_note(
+                target, self._note(body=self.BODY_V2, favorite=False), refresh=True
+            )
+            metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
+            self.assertNotIn("favorite", metadata or {})
 
 
 if __name__ == "__main__":

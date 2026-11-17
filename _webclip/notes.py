@@ -6,6 +6,7 @@ from datetime import datetime
 from datetime import timezone
 from pathlib import Path
 from typing import Sequence
+import hashlib
 import re
 import yaml
 
@@ -254,6 +255,45 @@ def _managed_section(text: str) -> str | None:
     return text[start:end] if end >= 0 else None
 
 
+# Fields that describe the source page rather than the rendering of it. Only these
+# decide whether a body difference came from the site or from the renderer:
+# `status`, `category` and `tags` are the reader's own edits, `word_count` is filled
+# in by the caller, and `content_hash` is the renderer's own fingerprint.
+_SOURCE_FIELDS = (
+    "title",
+    "url",
+    "original_url",
+    "original_host",
+    "author",
+    "site",
+    "published",
+    "description",
+    "keywords",
+    "extraction_method",
+    "webclip_id",
+)
+
+_HASH_FIELDS = ("source_content_hash", "content_hash")
+
+# sha256("\n") — what render_note derives from an empty source body. A note carrying this
+# fingerprint has no source identity, so it must never be exempt from --refresh: any
+# "the source did not change" conclusion built on it is vacuous.
+_EMPTY_SOURCE_HASH = "sha256:" + hashlib.sha256(b"\n").hexdigest()
+
+
+def _source_fields(metadata: dict[str, object]) -> dict[str, object]:
+    return {key: metadata.get(key) for key in _SOURCE_FIELDS}
+
+
+def _valid_hashes(metadata: dict[str, object]) -> bool:
+    """True only when both fingerprints are well-formed sha256 digests."""
+    for key in _HASH_FIELDS:
+        value = metadata.get(key)
+        if not isinstance(value, str) or not value.startswith("sha256:") or len(value) != 71:
+            return False
+    return True
+
+
 def _note_semantic_state(text: str) -> tuple[dict[str, object], str] | None:
     metadata = _frontmatter_from_text(text)
     managed = _managed_section(text)
@@ -453,6 +493,37 @@ def write_managed_note(target: Path, content: str, *, refresh: bool) -> str:
         # The marker is user intent, not article content: apply it without
         # requiring --refresh while preserving the manual section.
         atomic_write(target, _with_manual_section(content, _manual_section(existing)))
+        return "written"
+    if (
+        _valid_hashes(old_meta)
+        and _valid_hashes(new_meta)
+        and old_meta["source_content_hash"] == new_meta["source_content_hash"]
+        and old_meta["source_content_hash"] != _EMPTY_SOURCE_HASH
+        and old_meta["content_hash"] != old_meta["source_content_hash"]
+        and new_meta["content_hash"] != new_meta["source_content_hash"]
+        and _source_fields(old_meta) == _source_fields(new_meta)
+    ):
+        # Same source, same source-derived metadata, both bodies already rendered
+        # rather than raw: the managed body differs only because the renderer
+        # changed (a new trim rule, link-shaped headings flattened). Rewrite
+        # without demanding --refresh; the manual section survives.
+        #
+        # A favorite marker is carried over only on that implicit path: an explicit
+        # --refresh with favorite=False is the user asking to clear it, and must win.
+        #
+        # Everything else keeps the gate: a moved source, a note with no source
+        # fingerprint (the empty-body hash above), a still-raw note
+        # (content_hash == source_content_hash, where the first render change
+        # really does alter what the reader sees), or metadata missing a
+        # fingerprint — where nothing can prove the source is unchanged.
+        rewritten = content
+        if (
+            not refresh
+            and old_meta.get("favorite") is True
+            and new_meta.get("favorite") is not True
+        ):
+            rewritten, _ = _set_favorite_marker(rewritten, True)
+        atomic_write(target, _with_manual_section(rewritten, _manual_section(existing)))
         return "written"
     if not refresh:
         raise ClipError("The saved page changed; rerun with --refresh to update it.")

@@ -16,6 +16,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   no refresh, dedupe or "page changed" decision may rest on it. `SKILL.md` now points at it
   beside the existing diagnostics reference. Skill version 1.11.1 → 1.12.0.
 
+### Changed
+
+- The fallback contract now puts the fetched page text in `article["markdown"]`, with the trimmed
+  or re-rendered body only in `content_markdown`. `render_note()` refuses a payload that supplies
+  a rendered body with an empty `markdown`, because that combination made `source_content_hash`
+  the constant `sha256("\n")` — under which a rewritten article looked unchanged and was saved
+  without the `--refresh` gate. Notes clipped before this change keep the constant fingerprint
+  until their next `--refresh`.
+- `write_managed_note()` rewrites the managed section without `--refresh` when the source
+  fingerprint is unchanged, both bodies are already rendered, and every source-derived field
+  matches. The comparison is a whitelist (`title`, `url`, `original_url`, `original_host`,
+  `author`, `site`, `published`, `description`, `keywords`, `extraction_method`, `webclip_id`),
+  so the reader's own edits to `status`, `category` or `tags` no longer block a rule-driven
+  rewrite. Four guards keep the exemption from widening: a note missing either fingerprint is not
+  exempt; a source fingerprint equal to the empty-body hash `sha256("\n")` is not exempt (it
+  carries no source identity); a body of pure whitespace is rejected rather than treated as
+  content; and an existing `favorite` marker is carried over only on the implicit path, so an
+  explicit `--refresh` with `favorite=False` still clears it. Plugin version bumped
+  0.22.1 → 0.22.2.
+
 ## 2026-11-16
 
 ### Added
