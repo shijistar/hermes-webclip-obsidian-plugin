@@ -13,7 +13,7 @@ commit & push it to the Obsidian vault Git.
 
 ## Version
 
-`SKILL.md` frontmatter `version` is the skill version (currently `1.11.1`).
+`SKILL.md` frontmatter `version` is the skill version (currently `1.12.0`).
 The plugin version is tracked separately in `../plugin.yaml` and
 `../CHANGELOG.md`.
 
@@ -42,6 +42,7 @@ match `plugins.enabled` in `config.yaml`.
 | `references/platforms/wsl.md`                          | Borrowing a Windows Chrome session from WSL                                                            |
 | `references/repo-linked-maintenance.md`                | Maintenance rules for working on this plugin from its source repo                                      |
 | `references/wechat-curl-extraction.md`                 | WeChat curl fallback, author field format and the CAPTCHA wall                                        |
+| `references/zhihu-article-extraction.md`               | Zhihu per-article procedure: four-layer ladder, `40362` signature, body trimming, fallback caveat     |
 | `references/zhihu-cookie-and-scraper-diagnostics.md`   | Layered Zhihu cookie/fetch/browser diagnostics                                                        |
 
 ## Trigger phrases
