@@ -67,6 +67,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `skill/SKILL.md`, and copying them into a document that must be edited by hand only added a
   second place to forget. The table now records where each version lives.
 
+### Fixed
+
+- A vault destination's `.gitignore` commit reported only "A Git command failed while tidying the
+  vault" when the repository had no author identity. Git 2.56 no longer invents `user@hostname`,
+  so this surfaced as an unexplained failure on CI and on fresh vaults. The plugin now says
+  "Git has no author identity in this vault. Set user.name and user.email", and other Git
+  failures carry the stderr detail instead of being discarded. The video test fixtures pin a
+  local identity for the same reason: the plugin commits without `-c`.
+
 ## 2026-11-16
 
 ### Added

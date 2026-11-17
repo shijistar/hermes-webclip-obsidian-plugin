@@ -138,6 +138,10 @@ class ServiceTests(unittest.TestCase):
 
     def test_a_vault_destination_writes_and_commits_the_ignore_block(self):
         _git(self.vault, "init", "-q")
+        # The plugin commits on its own (no `-c`), so the repo needs a local
+        # identity: newer git refuses to invent `user@hostname`.
+        _git(self.vault, "config", "user.email", "t@example.com")
+        _git(self.vault, "config", "user.name", "Test")
         _git(self.vault, "commit", "--allow-empty", "-q", "-m", "init")
         service = VideoService(self.plugin)
         article = self._article({"src": "https://cdn.example.com/a.mp4", "title": "Clip"})

@@ -6,8 +6,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from _webclip.core import ClipError
+from _webclip.video import store as store_module
 from _webclip.video.naming import build_filename, extension_for, unique_path
 from _webclip.video.store import (
     BLOCK_END,
@@ -70,6 +72,10 @@ class GitignoreTests(unittest.TestCase):
         self.vault = self.root / "vault"
         (self.vault / "attachments" / "video").mkdir(parents=True)
         _git(self.vault, "init", "-q")
+        # The plugin commits on its own (no `-c`), so the repo needs a local
+        # identity: newer git refuses to invent `user@hostname`.
+        _git(self.vault, "config", "user.email", "t@example.com")
+        _git(self.vault, "config", "user.name", "Test")
         _git(self.vault, "commit", "--allow-empty", "-q", "-m", "init")
 
     def tearDown(self):
@@ -166,6 +172,41 @@ class NamingTests(unittest.TestCase):
             self.assertEqual(
                 unique_path(directory, "Clip.mp4", overwrite=True).name, "Clip.mp4"
             )
+
+
+class GitErrorTests(unittest.TestCase):
+    """The plugin commits without `-c`, so identity errors reach the user."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault = Path(self.tmp.name) / "vault"
+        self.vault.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_missing_identity_is_reported_actionably(self):
+        # git >=2.5x refuses to invent `user@hostname`; the old generic message
+        # left the user with no idea what to configure.
+        result = mock.Mock(
+            returncode=1,
+            stdout=b"",
+            stderr=b"fatal: no email was given and auto-detection is disabled",
+        )
+        with mock.patch.object(store_module, "_run_bounded", return_value=result):
+            with self.assertRaises(ClipError) as caught:
+                store_module._git(self.vault, "commit", "-m", "x")
+        self.assertIn("user.name", str(caught.exception))
+        self.assertNotIn("A Git command failed", str(caught.exception))
+
+    def test_other_failures_carry_the_git_detail(self):
+        result = mock.Mock(
+            returncode=1, stdout=b"", stderr=b"fatal: something odd happened"
+        )
+        with mock.patch.object(store_module, "_run_bounded", return_value=result):
+            with self.assertRaises(ClipError) as caught:
+                store_module._git(self.vault, "status")
+        self.assertIn("something odd happened", str(caught.exception))
 
 
 if __name__ == "__main__":

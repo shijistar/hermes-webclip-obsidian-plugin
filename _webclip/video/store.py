@@ -105,7 +105,28 @@ def _git(vault: Path, *args: str) -> str:
         stderr_limit=MAX_STDERR_BYTES,
     )
     if result.returncode != 0:
-        raise ClipError("A Git command failed while tidying the vault.")
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        # Older git invented `user@hostname` when no identity was configured;
+        # newer releases refuse instead. The wording differs by version, so match
+        # any of the messages that mean "there is no author identity":
+        #   fatal: unable to auto-detect email address (got '…')
+        #   fatal: no email was given and auto-detection is disabled
+        #   *** Please tell me who you are.  … user.email
+        identity_markers = (
+            "user.email",
+            "auto-detect email",
+            "auto-detection is disabled",
+            "tell me who you are",
+        )
+        if any(marker in detail.lower() for marker in identity_markers):
+            raise ClipError(
+                "Git has no author identity in this vault. Set user.name and "
+                "user.email, then run the command again."
+            )
+        message = "A Git command failed while tidying the vault."
+        if detail:
+            message = f"{message} {detail[:300]}"
+        raise ClipError(message)
     return result.stdout.decode("utf-8", errors="replace")
 
 
