@@ -36,7 +36,7 @@ article = {
 }
 ```
 
-3. **Call _persist_article directly** — use `ClipConfig.from_file()` and `GitSync()` constructor:
+3. **Call _persist_article directly** — use `ClipConfig.from_file()` and `GitSync.preflight()`:
 ```python
 from pathlib import Path
 from datetime import datetime
@@ -44,7 +44,7 @@ from web_to_obsidian import ClipService, ClipConfig, GitSync
 
 plugin_root = Path('.')
 config = ClipConfig.from_file(plugin_root / 'config.toml')
-git_sync = GitSync(vault=config.vault, repo_root=config.vault, branch=config.sync_branch)
+git_sync = GitSync.preflight(config.vault, config.sync_branch)
 
 service = ClipService(plugin_root)
 result = service._persist_article(
@@ -63,7 +63,7 @@ print(result.user_message())
 **⚠️ API notes**:
 - `ClipConfig.from_file()` reads from `config.toml` — the single source of truth for all config (vault, destination, images, sync_branch, lock_file, pending_root). No hardcoded paths.
 - `ClipConfig.from_env()` reads from env vars with hardcoded defaults — prefer `from_file()` for portability.
-- `GitSync(vault, repo_root, branch)` constructor requires all 3 positional args. Auto-detecting `repo_root` via `git rev-parse` is NOT built into the constructor; use `GitSync.preflight(vault, branch)` classmethod if you want that convenience (it also validates git state).
+- Build `GitSync` with the `GitSync.preflight(vault, branch)` classmethod, not the constructor. Preflight resolves `repo_root` via `git rev-parse`, verifies the vault is on the expected sync branch, refuses an in-progress Git operation and rebases onto upstream. The constructor performs none of those checks, so a direct-API clip through it can commit onto the wrong branch or during a rebase.
 - `generated_paths` is optional, defaults to `()`
 
 ## Key Points
@@ -112,6 +112,7 @@ SPAs). The HTML response carries only bundles, so the Node.js extractor,
 
 ## Version History
 
+- 2026-11-17: The direct-API recipe builds `GitSync` with `GitSync.preflight(vault, branch)` instead of the constructor. The constructor skips the sync-branch check, the in-progress-operation guard and the upstream rebase, so a fallback clip could commit onto the wrong branch or into a rebase.
 - 2026-10-25: Corrected the example to pass the extracted body (`content`) into `content_markdown`; it previously passed the empty `article["markdown"]` and produced frontmatter-only notes. Clarified that `markdown` is required but may be empty.
 - 2026-09-04: Restored `ClipConfig.from_file()` + `GitSync()` constructor per code review — removes hardcoded vault path, uses config.toml as single source of truth. Rewrote API notes.
 - 2026-09-03-v2: Changed to `ClipConfig.from_env()` + `GitSync.preflight()`. Added doubao.com example. (Reverted — see v3.)

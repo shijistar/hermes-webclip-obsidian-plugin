@@ -21,8 +21,12 @@ unauthenticated request with `403`, and rung 3 is not guaranteed either.
 
 ## Read each refusal before choosing the next rung
 
-- `HTTP_STATUS` (403) from the CLI: the page refused the request itself. Move down; do not retry
-  the same rung.
+- `HTTP_STATUS` from the CLI means the server answered with a non-2xx status. The CLI does not
+  echo the code back: 403, 404, 429 and 5xx all surface as the same `HTTP_STATUS` with the same
+  message, so do not read it as "anti-bot". Probe the status separately
+  (`curl -sS -o /dev/null -w '%{http_code}' <url>` with the same user agent) before deciding —
+  a 404 is a wrong URL, a 5xx is the site's problem, and only a 403/429 points at throttling.
+  Whichever it is, move down the ladder instead of retrying the same rung.
 - A logged-in browser whose `document.body.innerText` is bare JSON
   `{"error":{"message":"…请求存在异常…","code":40362}}` with a placeholder `document.title` is
   **request-layer throttling**. It says nothing about the cookies: never report it as "cookies
@@ -70,7 +74,9 @@ saving it raw produces a note that looks complete but carries ads and login prom
 ## Saving a fallback body
 
 Use the recipe in `anti-bot-fallback-web-extract.md` (`_persist_article` with the body in
-`content_markdown=`). Two Zhihu-specific details:
+`content_markdown=`), and build the Git handle with `GitSync.preflight(vault, branch)` rather
+than the constructor — preflight validates the sync branch, refuses an in-progress Git
+operation and rebases onto upstream. Two Zhihu-specific details:
 
 - Derive `image_mode`/`image_count` from the trimmed body: `n == 0` → `image_mode=None`;
   `n > 0` → `image_mode="remote"`, `image_count=n`. Otherwise the receipt reports "no images"
@@ -89,9 +95,12 @@ The blocked-page Markdown still carries the page's own metadata blocks:
 ## Verify before reporting success
 
 Read the note back: frontmatter `title/url/published`, first and last body line, total lines, and
-that the bullet counts match the sections kept. Then confirm the remote object exists for the
-pushed commit (`gh api repos/<owner>/<repo>/contents/<path>?ref=<branch> --jq '.size'`).
-`commit_state`/`push_state` are the plugin's own report, not proof of the remote write.
+that the bullet counts match the sections kept. If the receipt reports the commit as pushed,
+confirm the remote object exists for it
+(`gh api repos/<owner>/<repo>/contents/<path>?ref=<branch> --jq '.size'`) —
+`commit_state`/`push_state` are the plugin's own report, not proof of the remote write. A
+`--no-git` clip has nothing to look up: Git reports `disabled`, no commit is made, and the local
+read-back is the entire verification.
 
 ## Pitfalls
 
