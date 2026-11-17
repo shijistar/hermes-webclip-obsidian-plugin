@@ -271,6 +271,16 @@ def render_note(
     source = normalize_url(str(checked["canonicalUrl"] or checked["url"]))
     fetched_url = normalize_url(str(checked["url"]))
     source_markdown = sanitize_markdown(str(checked["markdown"])).rstrip("\n")
+    if content_markdown is not None and content_markdown.strip() and not source_markdown.strip():
+        # A rendered body with no source text means source_content_hash would
+        # fingerprint an empty string: the note would look complete while
+        # carrying a fingerprint that describes nothing, and every later refresh
+        # or "page changed" decision built on it would be vacuous.
+        raise ClipError(
+            "The payload has a rendered body but an empty 'markdown' field. Pass the page "
+            "text as article['markdown'] so source_content_hash fingerprints the source, and "
+            "keep only the trimmed or re-rendered body in content_markdown."
+        )
     effective_markdown = (
         _normalize_text(content_markdown).rstrip("\n")
         if content_markdown is not None

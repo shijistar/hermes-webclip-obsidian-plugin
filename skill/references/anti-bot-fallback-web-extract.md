@@ -15,8 +15,12 @@ When the Node.js extractor fails due to anti-bot measures (Zhihu, Doubao, some p
 ```python
 from hermes_tools import web_extract
 result = web_extract([url])
-content = result["results"][0]["content"]   # the article body you will save
+page_text = result["results"][0]["content"]   # whole page, untrimmed → article["markdown"]
+body = trim_to_article(page_text)             # article only → content_markdown
 ```
+The split matters: `article["markdown"]` is what `source_content_hash` fingerprints, so it
+must be the page as fetched. Trimming or flattening it before hashing hides every future
+source-side edit behind an unchanged digest.
 
 2. **Build article dict** (must pass `_validate_success_payload`):
 ```python
@@ -32,7 +36,7 @@ article = {
     "url": url,                 # required, valid URL
     "wordCount": 1000,          # int >= 0
     "method": "web_extract_fallback",  # required, non-empty
-    "markdown": ""              # required string (may be empty "")
+    "markdown": page_text        # required: the page as fetched, untrimmed
 }
 ```
 
@@ -56,7 +60,7 @@ result = service._persist_article(
     captured_at=datetime.now(),
     refresh=False,
     git_sync=git_sync,
-    content_markdown=content,   # the real body from web_extract — NOT article["markdown"]
+    content_markdown=body,      # trimmed/rendered body; article["markdown"] holds the raw page
     image_mode=None,  # HTML <img> tags don't trigger Markdown image flow
     generated_paths=[],
 )
@@ -74,7 +78,12 @@ print(result.user_message())
 - `image_mode=None` is correct when the extracted content has no Markdown `![](...)` images (only HTML `<img>`)
 - HTML `<img>` tags are NOT processed by the remote-image confirmation flow
 - This bypasses the `PendingClipResult` / `resume_pending()` flow entirely
-- The `markdown` field is **required** (an empty string is allowed): `_validate_success_payload()` rejects a dict without it. The real content goes in the `content_markdown` parameter.
+- `markdown` is **required and must carry the fetched page text, untrimmed**. `render_note()`
+  derives `source_content_hash` from it; an empty value makes that fingerprint the constant
+  `sha256("\n")`, and no refresh, dedupe or "page changed" decision can then tell a rewritten
+  page from a re-render. `render_note()` refuses a payload that supplies a rendered body with an
+  empty `markdown`, so a note can no longer be saved with a fingerprint that describes nothing.
+  Keep the trimmed or flattened body in `content_markdown`.
 - Requires: `ok: true`, `method: non-empty`, valid `canonicalUrl` and `url`, non-empty `title`
 
 ## Example: Doubao Article
@@ -92,7 +101,7 @@ article = {
     "url": "https://www.doubao.com/thread/aa1278a169ca5",
     "wordCount": 200,
     "method": "web_extract_fallback",
-    "markdown": ""
+    "markdown": page_text
 }
 ```
 
@@ -116,6 +125,11 @@ SPAs). The HTML response carries only bundles, so the Node.js extractor,
 ## Version History
 
 - 2026-11-17: The direct-API recipe builds `GitSync` with `GitSync.preflight(vault, branch)` instead of the constructor. The constructor skips the sync-branch check, the in-progress-operation guard and the upstream rebase, so a fallback clip could commit onto the wrong branch or into a rebase.
+- 2026-11-17: `article["markdown"]` must now carry the fetched page text, untrimmed; the trimmed
+  body goes only in `content_markdown`. This makes `source_content_hash` describe the source
+  again — with `markdown: ""` it was the constant `sha256("\n")`, so nothing could distinguish a
+  rewritten page from a re-render. `render_note()` now refuses a rendered body with an empty
+  `markdown`. Notes saved before this change keep the gate until their next `--refresh`.
 - 2026-10-25: Corrected the example to pass the extracted body (`content`) into `content_markdown`; it previously passed the empty `article["markdown"]` and produced frontmatter-only notes. Clarified that `markdown` is required but may be empty.
 - 2026-09-04: Restored `ClipConfig.from_file()` + `GitSync()` constructor per code review — removes hardcoded vault path, uses config.toml as single source of truth. Rewrote API notes.
 - 2026-09-03-v2: Changed to `ClipConfig.from_env()` + `GitSync.preflight()`. Added doubao.com example. (Reverted — see v3.)
