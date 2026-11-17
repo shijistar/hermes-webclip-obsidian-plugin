@@ -75,6 +75,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   "Git has no author identity in this vault. Set user.name and user.email", and other Git
   failures carry the stderr detail instead of being discarded. The video test fixtures pin a
   local identity for the same reason: the plugin commits without `-c`.
+- The `/save-video` receipt no longer renders page-controlled text. A title could carry a newline
+  and forge a `MEDIA:` line (or a bare existing path), which the gateway turns into an uploaded
+  attachment; the success line now shows the saved filename and every page-supplied field is
+  flattened and de-fanged.
+- A response shorter than its declared `Content-Length` was accepted as complete — `read(amt)`
+  returns `b""` instead of raising `IncompleteRead` when the peer closes early — so a truncated
+  video could be published, and could replace a good file under `--overwrite`. Both readers now
+  verify the received count, and the temporary file is created with `O_EXCL` under a randomised
+  name so a pre-placed symlink fails the write instead of redirecting it.
+- One bad candidate can no longer abort the batch: a malformed `#EXTINF` duration, a page-declared
+  `width="100001"` that made the payload validator raise (which also broke `/webclip`), and an
+  `http.client.HTTPException` from a broken status line are all reported per candidate.
+- Playlists this downloader cannot honour are refused at pre-flight instead of being downloaded
+  incorrectly: `EXT-X-BYTERANGE` (the whole resource once per range) and `EXT-X-MAP` (the fMP4
+  initialisation section would be dropped).
+- Smaller fixes: the declared MIME subtype is mapped through a fixed set (`video/md` no longer
+  saves a `.md` file inside the vault), gitignore entries escape glob characters, the managed
+  block is built with a literal replacement, a relative destination that escapes the vault
+  through a symlink is refused, variant parsing is a single pass, `METHOD` is read as an
+  attribute, the vault and lock fall back to `WEB_TO_OBSIDIAN_*` like `/webclip`, and
+  `<picture>`/`<audio>` sources no longer consume the video candidate limit.
 
 ## 2026-11-16
 
