@@ -13,7 +13,7 @@ preview_url_params = ""
 [video]
 # Absolute path (~ expanded) = outside the vault; a relative path = inside the
 # vault, resolved against [clip].vault. Default: outside the vault.
-destination = "~/Videos/webclip"
+destination = "~/Movies/Videos/webclip"
 # When the destination is inside the vault, write and commit an ignore block so
 # the next /webclip still passes its clean-worktree preflight.
 gitignore = true

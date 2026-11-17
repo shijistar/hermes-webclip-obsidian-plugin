@@ -79,7 +79,7 @@ class VideoConfigTests(unittest.TestCase):
 
     def test_defaults_when_the_file_is_missing(self):
         settings = self._load(None)
-        self.assertEqual(settings.destination, "~/Videos/webclip")
+        self.assertEqual(settings.destination, "~/Movies/Videos/webclip")
         self.assertTrue(settings.gitignore)
         self.assertEqual(settings.max_size_mb, 500)
         self.assertEqual(settings.max_per_run, 10)
@@ -127,7 +127,7 @@ class VideoConfigTests(unittest.TestCase):
 
     def test_an_empty_destination_degrades(self):
         settings = self._load('[video]\ndestination = "  "\n')
-        self.assertEqual(settings.destination, "~/Videos/webclip")
+        self.assertEqual(settings.destination, "~/Movies/Videos/webclip")
         self.assertEqual(len(settings.warnings), 1)
 
     def test_broken_toml_degrades_instead_of_raising(self):

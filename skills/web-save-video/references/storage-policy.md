@@ -3,14 +3,14 @@
 Video belongs outside a Git-tracked vault unless the user says otherwise: a
 27 MB clip committed today stays in the repository's history after deletion, so
 a few dozen clips turn the vault into gigabytes. `/save-video` therefore defaults
-to `~/Videos/webclip`.
+to `~/Movies/Videos/webclip`.
 
 ## Configuration
 
 ```toml
 [video]
 # absolute path (~ expanded) = outside the vault; relative = inside, against [clip].vault
-destination = "~/Videos/webclip"
+destination = "~/Movies/Videos/webclip"
 # when the destination resolves inside the vault, keep it out of Git
 gitignore = true
 max_size_mb = 500

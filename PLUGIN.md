@@ -148,7 +148,7 @@ output: it never writes a note.
 
 - Up to 10 URLs per command; each page may contribute several videos, which get
   `-1`/`-2` suffixes on a shared base name.
-- Default destination is `[video].destination` (`~/Videos/webclip`), outside the
+- Default `[video].destination` is `~/Movies/Videos/webclip`, outside the
   vault. A destination inside the vault gets a managed `.gitignore` block that is
   written **and committed**, so the next `/webclip` still passes its
   clean-worktree preflight.

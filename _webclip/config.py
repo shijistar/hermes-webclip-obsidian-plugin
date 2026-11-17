@@ -276,7 +276,7 @@ class VideoConfig:
     it.
     """
 
-    destination: str = "~/Videos/webclip"
+    destination: str = "~/Movies/Videos/webclip"
     gitignore: bool = True
     max_size_mb: int = 500
     max_per_run: int = 10

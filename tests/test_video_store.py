@@ -46,7 +46,7 @@ class DestinationTests(unittest.TestCase):
         self.assertFalse(destination.inside_vault)
 
     def test_tilde_expansion_outside_the_vault_stays_outside(self):
-        destination = resolve_destination(self.vault, "~/Videos/webclip")
+        destination = resolve_destination(self.vault, "~/Movies/Videos/webclip")
         self.assertFalse(destination.inside_vault)
 
     def test_an_absolute_path_inside_the_vault_counts_as_inside(self):

@@ -52,7 +52,7 @@ Reported as a failure, never as a silent zero:
 
 ## Where Files Go
 
-Default `[video].destination` is `~/Videos/webclip`, outside the vault. A
+Default `[video].destination` is `~/Movies/Videos/webclip`, outside the vault. A
 destination inside the vault gets a managed `.gitignore` block that is written
 **and committed**, because `/webclip` refuses to run on a dirty worktree. See
 `references/storage-policy.md`.
