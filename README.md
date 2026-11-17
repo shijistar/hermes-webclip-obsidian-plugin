@@ -205,7 +205,7 @@ workflow live in [`AGENTS.md`](AGENTS.md).
 | Favorite marker rules | [`PLUGIN.md`](PLUGIN.md#favorite-marker) |
 | Plugin network, vault, and Git safety | [`PLUGIN.md`](PLUGIN.md#network-and-content-safety) |
 | Extractor CLI and error codes | [`extractor/README.md`](extractor/README.md) |
-| Agent skill deployment | [`skill/README.md`](skill/README.md) |
+| Agent skill deployment | [`skills/web-clip-to-obsidian/README.md`](skills/web-clip-to-obsidian/README.md) |
 | Contributor guide | [`AGENTS.md`](AGENTS.md) |
 | Version history | [`CHANGELOG.md`](CHANGELOG.md) |
 

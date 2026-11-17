@@ -9,7 +9,7 @@ The source repo is the only copy of both the plugin and its skill:
 - source repo: `~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin`
 - plugin: symlinked into `<profile>/plugins/webclip-obsidian` while developing, or copied
   by `hermes plugins install` on a normal install
-- skill: `<repo>/skill/`, registered by the plugin's `register()`
+- skill: `<repo>/skills/web-clip-to-obsidian/`, registered by the plugin's `register()`
 
 Therefore, do **not** treat the installed plugin directory as an isolated place for
 ad-hoc fixes after a one-off failure.
@@ -24,7 +24,7 @@ ad-hoc fixes after a one-off failure.
 
 ## Why this matters
 
-With the symlink deployment, a local edit to the plugin (its bundled `skill/` included)
+With the symlink deployment, a local edit to the plugin (its bundled `skills/` included)
 changes the source repo immediately. After `hermes plugins install`, the installed tree
 is an independent copy, so editing that copy leaves the repo untouched — which is why
 fixes belong in the source repo either way. A change that is never reviewed and pushed

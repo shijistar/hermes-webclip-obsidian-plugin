@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import os
 
 from .article import _decode_json_object, _extractor_failure, _validate_success_payload
@@ -54,13 +55,53 @@ def _extractor_dir(plugin_root: Path) -> Path:
     return plugin_root.parent / "extractor"
 
 
+MIN_EXTRACTOR_VERSION = (0, 5, 0)
+
+
+def _extractor_package_version(extractor_dir: Path) -> tuple[int, ...]:
+    """Version of the extractor package on disk, or ``()`` when unreadable."""
+    try:
+        payload = json.loads((extractor_dir / "package.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return ()
+    raw = payload.get("version")
+    if not isinstance(raw, str):
+        return ()
+    parts: list[int] = []
+    for chunk in raw.split(".")[:3]:
+        if not chunk.isdigit():
+            return ()
+        parts.append(int(chunk))
+    return tuple(parts)
+
+
+def _require_video_capable_extractor(extractor_dir: Path) -> None:
+    """Fail loudly instead of returning zero videos from an old extractor.
+
+    An extractor below 0.5.0 has no ``--with-videos`` flag and no ``videos``
+    field. Without this check the caller would receive a payload that validates
+    fine and reports no videos at all — the one failure mode that looks like
+    "this page has no video".
+    """
+    version = _extractor_package_version(extractor_dir)
+    if version and version >= MIN_EXTRACTOR_VERSION:
+        return
+    raise ClipError(
+        "The installed extractor is too old to report video metadata; update the plugin."
+    )
+
+
 def run_extractor(
-    plugin_root: Path, url: str, no_browser: bool = False
+    plugin_root: Path, url: str, no_browser: bool = False, with_videos: bool = False
 ) -> dict[str, object]:
     extractor_dir = _extractor_dir(plugin_root)
+    if with_videos:
+        _require_video_capable_extractor(extractor_dir)
     command = ["node", str(extractor_dir / "src" / "cli.mjs"), url]
     if no_browser:
         command.append("--no-browser")
+    if with_videos:
+        command.append("--with-videos")
     result = _run_bounded(
         command,
         timeout=EXTRACTOR_TIMEOUT,
@@ -75,4 +116,4 @@ def run_extractor(
         raise
     if result.returncode != 0 or payload.get("ok") is not True:
         raise _extractor_failure(payload)
-    return _validate_success_payload(payload)
+    return _validate_success_payload(payload, require_videos=with_videos)

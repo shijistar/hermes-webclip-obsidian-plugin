@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `/save-video <url> [<url> ...] [--name <name>] [--to <dir>] [--overwrite] [--no-browser]`:
+  downloads the video(s) on a page to local disk. Generic HTML5 pages use the extractor's new
+  `videos` field; Netease pages are fetched by a site adapter because a `/news/v/` stub has no
+  article body. HLS playlists are pre-flighted (encryption, liveness, segment count) and their
+  segments are downloaded by the plugin's own SSRF-guarded client before ffmpeg remuxes **local**
+  files; direct media is streamed with a byte ceiling enforced while writing. Every candidate is
+  reported, and a failure never aborts the rest of the batch.
+- `[video]` table in `config.toml`: `destination` (absolute = outside the vault, relative =
+  inside), `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`, `ytdlp`. Parsed
+  independently of `[clip]`, so a typo here degrades to defaults with a warning instead of
+  breaking `/webclip`.
+- `skills/web-save-video/`: new skill (main file under 80 lines) with seven references —
+  platform matrix, DOM discovery, HLS, direct download, naming, storage policy, Netease.
+- `_webclip/netguard.py`: resolves a page-supplied URL once, rejects private / link-local /
+  non-default-port answers, pins the connection to the approved address and revalidates every
+  redirect. This is what stops a playlist from pointing the downloader at `127.0.0.1` or a cloud
+  metadata endpoint.
 - `skill/references/zhihu-article-extraction.md`: the Zhihu per-article procedure that until now
   lived only in a local profile skill — the four-layer ladder, how to read a `40362` refusal
   (request-layer throttling, not a cookie problem, plus the three-probe check that proves it),
@@ -18,6 +35,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- Repository layout: `skill/` became `skills/<name>/`, so a second skill can ship from the same
+  package. Registration paths in `__init__.py`, `post-install.sh`, `AGENTS.md`, `PLUGIN.md`,
+  `README.md` and the skill's own references were updated; the registered names are unchanged.
+  Skill version 1.12.0 → 1.13.0.
+- Extractor 0.4.1 → 0.5.0. `extractHtml()` now returns a `videos` array (collected from the DOM
+  before Defuddle runs), `--with-videos` lets a video-stub page clear the quality gate, and asking
+  an older extractor for videos is a loud error instead of an empty list. `/webclip` never asks
+  for `videos`, so its behaviour is unchanged.
+- `_webclip/article.py` validates the new `videos` field (http(s) sources only, at most 20
+  entries) and distinguishes "the extractor cannot report videos" from "this page has none".
 - The fallback contract now puts the fetched page text in `article["markdown"]`, with the trimmed
   or re-rendered body only in `content_markdown`. `render_note()` refuses a payload that supplies
   a rendered body with an empty `markdown`, because that combination made `source_content_hash`

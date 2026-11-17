@@ -9,3 +9,19 @@ pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 # Leave empty to keep the URL unchanged. Feishu/Lark example:
 #   "lk_jump_to_browser=true&lk_mobile_jump_to_browser=true"
 preview_url_params = ""
+
+[video]
+# Absolute path (~ expanded) = outside the vault; a relative path = inside the
+# vault, resolved against [clip].vault. Default: outside the vault.
+destination = "~/Videos/webclip"
+# When the destination is inside the vault, write and commit an ignore block so
+# the next /webclip still passes its clean-worktree preflight.
+gitignore = true
+# Refuse a single file larger than this (MB).
+max_size_mb = 500
+# At most this many files per command.
+max_per_run = 10
+# Per-request and per-segment timeout (seconds).
+download_timeout_s = 300
+# Optional path to yt-dlp; empty means auto-detect (not used yet).
+ytdlp = ""

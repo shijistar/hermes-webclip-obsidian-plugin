@@ -51,80 +51,109 @@ class PluginRegistrationTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_registers_webclip_with_documented_hint_and_closed_over_handler(self):
+    def test_registers_both_commands_with_documented_hints(self):
         plugin = self._load_plugin()
         context = FakeContext()
         plugin.register(context)
 
-        self.assertEqual(len(context.command_calls), 1)
-        args, kwargs = context.command_calls[0]
-        self.assertEqual(args, ("webclip",))
         self.assertEqual(
-            kwargs["args_hint"],
+            [call[0][0] for call in context.command_calls], ["webclip", "save-video"]
+        )
+        webclip = context.command_calls[0][1]
+        self.assertEqual(
+            webclip["args_hint"],
             "<url|webclip_id> [--refresh] [--no-browser] [--no-git] "
             "[--save-images yes|no|ask] [--favorite|--unfavorite]",
         )
-        self.assertIn("Obsidian", kwargs["description"])
-        self.assertTrue(callable(kwargs["handler"]))
+        self.assertIn("Obsidian", webclip["description"])
+        self.assertTrue(callable(webclip["handler"]))
+
+        video = context.command_calls[1][1]
+        self.assertEqual(
+            video["args_hint"],
+            "<url> [<url> ...] [--name <name>] [--to <dir>] [--overwrite] [--no-browser]",
+        )
+        self.assertIn("video", video["description"].lower())
+        self.assertTrue(callable(video["handler"]))
+
         self.assertEqual(len(context.tool_calls), 1)
         self.assertEqual(
             context.tool_calls[0]["name"], "web_to_obsidian_resume_pending"
         )
 
-    def test_registers_the_skill_under_the_plugin_namespace(self):
+    def test_registers_both_skills_under_the_plugin_namespace(self):
         plugin = self._load_plugin()
         context = FakeContext()
         plugin.register(context)
 
-        self.assertEqual(len(context.skill_calls), 1)
-        args, kwargs = context.skill_calls[0]
-        self.assertEqual(args[0], "web-clip-to-obsidian")
-        skill_md = args[1]                      # path is the second positional arg
-        self.assertEqual(skill_md.name, "SKILL.md")
-        self.assertEqual(skill_md.parent.name, "skill")
-        self.assertTrue(skill_md.is_file())
-        # The description must come from the file, not a second hardcoded string.
-        head = skill_md.read_text(encoding="utf-8-sig")
-        self.assertIn(kwargs["description"], head)
-        self.assertIn("Obsidian", kwargs["description"])
-        # frontmatter travels with the registration so Hermes can apply the file's
-        # platform/condition gates instead of seeing an empty mapping.
-        self.assertEqual(kwargs["frontmatter"]["name"], "web-clip-to-obsidian")
-        self.assertEqual(kwargs["frontmatter"]["description"], kwargs["description"])
-        self.assertIn("version", kwargs["frontmatter"])
+        self.assertEqual(len(context.skill_calls), 2)
+        registered = {call[0][0]: call for call in context.skill_calls}
+        self.assertEqual(
+            set(registered), {"web-clip-to-obsidian", "web-save-video"}
+        )
+        for name, (args, kwargs) in registered.items():
+            skill_md = args[1]                  # path is the second positional arg
+            self.assertEqual(skill_md.name, "SKILL.md")
+            # skills/<name>/SKILL.md — the directory carries the registration name
+            self.assertEqual(skill_md.parent.name, name)
+            self.assertEqual(skill_md.parent.parent.name, "skills")
+            self.assertTrue(skill_md.is_file())
+            # The description must come from the file, not a second hardcoded string.
+            head = skill_md.read_text(encoding="utf-8-sig")
+            self.assertIn(kwargs["description"], head)
+            self.assertEqual(kwargs["frontmatter"]["name"], name)
+            self.assertEqual(kwargs["frontmatter"]["description"], kwargs["description"])
+            self.assertIn("version", kwargs["frontmatter"])
 
-    def test_failed_skill_registration_keeps_the_command_registered(self):
+        self.assertIn("Obsidian", registered["web-clip-to-obsidian"][1]["description"])
+        self.assertIn("video", registered["web-save-video"][1]["description"].lower())
+
+    def test_failed_skill_registration_keeps_both_commands_registered(self):
         plugin = self._load_plugin()
         context = FakeContext()
         context.skill_error = FileNotFoundError("no SKILL.md")
         plugin.register(context)
 
-        self.assertEqual(len(context.command_calls), 1)   # /webclip still there
+        self.assertEqual(len(context.command_calls), 2)   # both commands survive
         self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
-        self.assertEqual(context.skill_calls, [])         # skill dropped, not fatal
+        self.assertEqual(context.skill_calls, [])         # skills dropped, not fatal
 
-    def test_a_damaged_skill_file_does_not_take_the_command_down(self):
+    def test_a_damaged_skill_file_does_not_take_the_commands_down(self):
         # Invalid UTF-8 raises UnicodeDecodeError, which is not an OSError: reading
-        # the frontmatter must not escape register() and drop /webclip with it.
+        # the frontmatter must not escape register() and drop the commands with it.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             shutil.copy(ROOT / "__init__.py", root / "__init__.py")
             shutil.copy(ROOT / "web_to_obsidian.py", root / "web_to_obsidian.py")
-            (root / "skill").mkdir()
-            (root / "skill" / "SKILL.md").write_bytes(b"---\nname: \xff\xfe\n---\n")
+            shutil.copytree(ROOT / "skills", root / "skills")
+            (root / "skills" / "web-save-video" / "SKILL.md").write_bytes(
+                b"---\nname: \xff\xfe\n---\n"
+            )
             plugin = self._load_plugin(root)
             context = FakeContext()
             plugin.register(context)
 
-        self.assertEqual(len(context.command_calls), 1)   # /webclip still there
+        self.assertEqual(len(context.command_calls), 2)   # both commands still there
         self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
-        self.assertEqual(len(context.skill_calls), 1)     # and the skill
-        self.assertEqual(context.skill_calls[0][1]["frontmatter"], {})
-        self.assertEqual(context.skill_calls[0][1]["description"], "")
+        self.assertEqual(len(context.skill_calls), 2)     # damaged one degrades to {}
+        damaged = [call for call in context.skill_calls if call[0][0] == "web-save-video"]
+        self.assertEqual(damaged[0][1]["frontmatter"], {})
+        self.assertEqual(damaged[0][1]["description"], "")
 
     def test_handler_never_propagates_and_does_not_expose_exception_details(self):
         with mock.patch.object(clip.ClipService, "run", side_effect=RuntimeError("SECRET stack")):
             response = clip.build_handler(ROOT)("https://example.com --no-git")
+        self.assertIn("failed", response.lower())
+        self.assertNotIn("SECRET", response)
+        self.assertNotIn("RuntimeError", response)
+
+    def test_video_handler_never_propagates_and_does_not_expose_exception_details(self):
+        from _webclip.video import service as video_service
+
+        with mock.patch.object(
+            video_service.VideoService, "run", side_effect=RuntimeError("SECRET stack")
+        ):
+            response = video_service.build_handler(ROOT)("https://example.com")
         self.assertIn("failed", response.lower())
         self.assertNotIn("SECRET", response)
         self.assertNotIn("RuntimeError", response)

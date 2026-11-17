@@ -211,7 +211,7 @@ fi
 printf '\033[1;32m\nInstall summary\033[0m\n'
 printf '  Plugin:     %s\n' "$INSTALLED_PLUGIN_DIR"
 printf '  Extractor:  %s\n' "$INSTALLED_PLUGIN_DIR/extractor"
-printf '  Skill:      %s\n' "$INSTALLED_PLUGIN_DIR/skill (registered by the plugin)"
+printf '  Skill:      %s\n' "$INSTALLED_PLUGIN_DIR/skills (registered by the plugin)"
 printf '  Config:     %s\n' "$INSTALLED_PLUGIN_DIR/config.toml"
 printf '\033[1;32m\nNext steps:\033[0m\n'
 printf '  1. Review config.toml (vault, destination, sync_branch).\n'

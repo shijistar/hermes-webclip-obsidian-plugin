@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.12.0
+version: 1.13.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -30,7 +30,7 @@ the durable rule is in `references/repo-linked-maintenance.md`.
 ```
 Source repo:     ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin/
 Plugin path:     ~/.hermes/profiles/<profile>/plugins/webclip-obsidian/  (the repo is linked here while developing)
-Skill:           <plugin>/skill/SKILL.md, registered as `webclip-obsidian:web-clip-to-obsidian`
+Skill:           <plugin>/skills/web-clip-to-obsidian/SKILL.md, registered as `webclip-obsidian:web-clip-to-obsidian`
 Config:          <plugin>/config.toml
 ```
 

@@ -10,6 +10,7 @@ import {
   normalizeUrl,
   resolveAndValidateUrl,
 } from './network-policy.mjs';
+import { collectVideos } from './video-collect.mjs';
 
 export const MIN_MARKDOWN_CHARS = 200;
 export const MAX_BROWSER_REQUESTS = 80;
@@ -81,7 +82,19 @@ function collectKeywords(document) {
   return keywords;
 }
 
-export function meetsQualityGate(result) {
+export function meetsQualityGate(result, { allowVideoStub = false } = {}) {
+  // A video page has no article body: its Markdown is a caption and a player.
+  // Only the /save-video path opts in to accepting that shape, and only when we
+  // actually found a playable source — otherwise `/webclip` keeps its existing
+  // "not a substantial article" behaviour untouched.
+  if (
+    allowVideoStub &&
+    meaningfulTitle(result?.title) &&
+    Array.isArray(result?.videos) &&
+    result.videos.length > 0
+  ) {
+    return true;
+  }
   if (!meaningfulTitle(result?.title) || typeof result?.markdown !== 'string' || result.markdown.trim().length < MIN_MARKDOWN_CHARS) {
     return false;
   }
@@ -261,6 +274,12 @@ export async function extractHtml(html, inputUrl) {
   const canonicalUrl = safeCanonical(document, sourceUrl);
   absolutizeLinks(document, sourceUrl);
 
+  // Collect players before Defuddle touches the document. `absolutizeLinks()`
+  // rewrites anchors and img/source but leaves `video[src]` and every `data-*`
+  // media attribute alone, so this is the only place the real stream address is
+  // still readable.
+  const videos = collectVideos(document, sourceUrl);
+
   // Netease app deep-link tips are noise; strip them before Defuddle reads the DOM.
   const isNetease = sourceUrl.hostname === '163.com' || sourceUrl.hostname.endsWith('.163.com');
   if (isNetease) removeNeteaseImagePrompts(document);
@@ -299,6 +318,7 @@ export async function extractHtml(html, inputUrl) {
     wordCount: Number.isSafeInteger(parsed.wordCount) && parsed.wordCount >= 0
       ? parsed.wordCount
       : countWords(markdown),
+    videos,
   };
 }
 
@@ -396,6 +416,7 @@ async function extractWithPlaywright(inputUrl, {
   browserLauncher = chromium,
   timeoutMs = BROWSER_TIMEOUT_MS,
   maxRequests = MAX_BROWSER_REQUESTS,
+  withVideos = false,
 } = {}) {
   const approved = await resolveAndValidateUrl(inputUrl, { resolver, allowNonDefaultPorts });
   let browser;
@@ -431,7 +452,7 @@ async function extractWithPlaywright(inputUrl, {
     const finalUrl = page.url();
     await resolveAndValidateUrl(finalUrl, { resolver, allowNonDefaultPorts });
     const result = await extractHtml(await page.content(), finalUrl);
-    if (!meetsQualityGate(result)) throw qualityError();
+    if (!meetsQualityGate(result, { allowVideoStub: withVideos })) throw qualityError();
     return { ...result, url: normalizeUrl(finalUrl).href, method: 'playwright' };
   } catch (cause) {
     if (cause instanceof PolicyError || cause instanceof ExtractorError) throw cause;
@@ -458,7 +479,8 @@ export async function extractUrl(inputUrl, options = {}) {
   }
 
   const staticResult = await extractHtml(fetched.html, fetched.finalUrl);
-  if (meetsQualityGate(staticResult)) {
+  const withVideos = options.withVideos === true;
+  if (meetsQualityGate(staticResult, { allowVideoStub: withVideos })) {
     return { ...staticResult, url: normalizeUrl(fetched.finalUrl).href, method: 'static' };
   }
   if (options.allowBrowser === false || options.dynamic === false || options.browser === false) throw qualityError();
@@ -469,5 +491,6 @@ export async function extractUrl(inputUrl, options = {}) {
     browserLauncher: options.browserLauncher,
     timeoutMs: options.browserTimeoutMs || BROWSER_TIMEOUT_MS,
     maxRequests: options.maxBrowserRequests || MAX_BROWSER_REQUESTS,
+    withVideos,
   });
 }

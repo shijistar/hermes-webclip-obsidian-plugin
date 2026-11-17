@@ -10,7 +10,7 @@ dated notes into an Obsidian vault, and synchronizes them via guarded Git.
 | ------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | repo root    | Hermes plugin package: config, safe vault writes, image handling, Git sync | `__init__.py`, `web_to_obsidian.py`, `plugin.yaml`, `config.example.toml`                          |
 | `extractor/` | Hardened Node.js extraction engine (Defuddle static + Playwright fallback) | `src/cli.mjs`, `src/extractor.mjs`, `src/network-policy.mjs`, `package.json`                                      |
-| `skill/`     | Hermes agent skill teaching the clip-to-Obsidian workflow                  | `SKILL.md`, `references/*.md`                                                                                     |
+| `skills/`    | Hermes agent skills registered by the plugin (clip + video)                | `web-clip-to-obsidian/SKILL.md`, `web-save-video/SKILL.md`                                                        |
 | `tests/`     | Python plugin test suites                                                  | `conftest.py`, `test_web_to_obsidian.py`, `test_integration.py`, `test_plugin.py`, `test_security_regressions.py` |
 
 The repo root **is** the plugin package: `plugin.yaml`, `__init__.py`, and
@@ -45,7 +45,9 @@ hermes-webclip-obsidian-plugin/
 │   ├── images.py               # SSRF guards, image downloads, localisation
 │   ├── notes.py                # note discovery, frontmatter, favourite markers
 │   ├── pending.py              # image-confirmation state
+│   ├── netguard.py             # SSRF-safe pinned HTTP for media downloads
 │   ├── sites.py                # WeChat / Netease fallbacks
+│   ├── video/                  # /save-video: adapters, probe, downloads, naming, store
 │   └── service.py              # ClipService, build_handler, build_resume_tool
 ├── plugin.yaml                 # plugin metadata + version
 ├── post-install.sh                  # one-shot installer (ships with hermes plugins install)
@@ -62,10 +64,14 @@ hermes-webclip-obsidian-plugin/
 │   ├── test/                   # node --test suites + fixtures
 │   ├── README.md               # extractor README
 │   └── package.json            # extractor version
-└── skill/                      # Hermes agent skill
-    ├── SKILL.md                # workflow instructions for the agent + version in
-    ├── README.md               # skill README
-    └── references/             # site quirks & fallback deep-dives
+└── skills/                     # Hermes agent skills, registered by the plugin
+    ├── web-clip-to-obsidian/
+    │   ├── SKILL.md            # workflow instructions + version in frontmatter
+    │   ├── README.md
+    │   └── references/         # site quirks & fallback deep-dives
+    └── web-save-video/
+        ├── SKILL.md            # /save-video workflow + version in frontmatter
+        └── references/         # platform matrix, discovery, HLS, naming, storage
 ```
 
 ## Build & test
@@ -108,7 +114,7 @@ version source:
 | ------------------------ | ---------------------- |
 | `plugin.yaml`            | `version`              |
 | `extractor/package.json` | `version`              |
-| `skill/SKILL.md`         | frontmatter `version`  |
+| `skills/*/SKILL.md`      | frontmatter `version`  |
 
 Read the current version from those fields; this table records where a version
 lives, not what it is. Mirroring the numbers here would only add a second place
@@ -138,7 +144,7 @@ Do not merge a change whose tests do not pass in the local run.
 Any **new feature or behavior change** MUST:
 
 1. bump the `version` of every module the change touches
-   (`plugin.yaml`, `extractor/package.json`, `skill/SKILL.md` —
+   (`plugin.yaml`, `extractor/package.json`, `skills/*/SKILL.md` —
    bump only what the change actually touches);
 2. add a `## YYYY-MM-DD` entry in `CHANGELOG.md` (use today's date) describing
    the change, under the existing changelog conventions. If an entry for that
@@ -161,7 +167,7 @@ version is addressable by tag:
 | skill     | `skill@`              | `skill@1.4.2`              |
 
 - The version value comes from the module's version field
-  (`plugin.yaml`, `extractor/package.json`, `skill/SKILL.md` frontmatter).
+  (`plugin.yaml`, `extractor/package.json`, `skills/*/SKILL.md` frontmatter).
 - Create the tag only for modules whose version actually changed in the
   commit.
 - **Tags MUST be created on `master` after the PR is merged**, not on the
