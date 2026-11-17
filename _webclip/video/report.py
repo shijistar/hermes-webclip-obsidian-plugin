@@ -7,6 +7,8 @@ download broke".
 
 from __future__ import annotations
 
+import re
+
 from .models import VideoOutcome, VideoReport
 
 # Above this size the file stays on disk only: pushing a multi-hundred-megabyte
@@ -16,6 +18,25 @@ MEDIA_ATTACH_LIMIT_BYTES = 50 * 1024 * 1024
 
 STATUS_OK = "OK"
 STATUS_FAILED = "FAILED"
+
+_DIRECTIVE_RE = re.compile(r"(?i)\bmedia\s*:")
+# An absolute path the platform would treat as a deliverable attachment. The
+# guard skips a slash preceded by `:` or another slash so URLs survive intact.
+_PATH_LIKE_RE = re.compile(r"(?<![\w:/])/(?:[\w.-]+/)*[\w.-]+")
+
+
+def _text(value: str, limit: int = 300) -> str:
+    """Flatten page-controlled text so it cannot act as a delivery directive.
+
+    Page text reaches the chat verbatim, and the gateway turns both a `MEDIA:`
+    tag and a bare existing absolute path into an upload. Collapsing whitespace
+    kills the standalone-line shape; the substitution kills the tag and the
+    path shape while leaving ordinary prose readable.
+    """
+    flat = " ".join(str(value).split())
+    flat = _DIRECTIVE_RE.sub("media\uFF1A", flat)
+    flat = _PATH_LIKE_RE.sub(lambda match: match.group(0).replace("/", "\u2044"), flat)
+    return flat[:limit]
 
 
 def _format_size(value: int) -> str:
@@ -39,12 +60,14 @@ def _format_duration(value: float | None) -> str:
 
 def _line(outcome: VideoOutcome) -> str:
     if not outcome.ok:
-        return f"- FAILED {outcome.source}: {outcome.message}"
+        return f"- FAILED {_text(outcome.source)}: {_text(outcome.message)}"
     if outcome.path is None:
-        return f"- {STATUS_OK} {outcome.title}"
-    name = outcome.title or outcome.path.name
+        return f"- {STATUS_OK} {_text(outcome.title)}"
+    # The saved filename, never the page's own text: a title can carry newlines
+    # and absolute paths, and the gateway turns both `MEDIA:` tags and bare
+    # existing paths into uploaded attachments.
     return (
-        f"- {STATUS_OK} {name} → {outcome.path} "
+        f"- {STATUS_OK} {outcome.path.name} → {outcome.path} "
         f"({_format_size(outcome.bytes_written)}, {_format_duration(outcome.duration_s)})"
     )
 

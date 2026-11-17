@@ -180,6 +180,42 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(body, b"#EXTM3U\n")
         self.assertEqual(url, "https://cdn.example.com/a.m3u8")
 
+    def test_a_body_shorter_than_its_declared_length_is_rejected(self):
+        # Measured: `read(amt)` returns b"" instead of raising IncompleteRead
+        # when the peer closes early, so the short body looks complete.
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "clip.mp4"
+            with self._patch([_FakeResponse(200, b"x" * 10, {"Content-Length": "100"})]):
+                with self.assertRaises(ClipError):
+                    download_to_file("https://cdn.example.com/a.mp4", target)
+            self.assertFalse(target.exists(), "a truncated body must not be left behind")
+
+    def test_fetch_bytes_rejects_a_truncated_playlist(self):
+        with self._patch([_FakeResponse(200, b"#EXTM3U\n", {"Content-Length": "4096"})]):
+            with self.assertRaises(ClipError):
+                fetch_bytes("https://cdn.example.com/a.m3u8")
+
+    def test_a_response_without_a_declared_length_still_succeeds(self):
+        # Chunked responses have no Content-Length; they must stay supported.
+        with self._patch([_FakeResponse(200, b"payload")]):
+            _, written = download_to_file(
+                "https://cdn.example.com/a.mp4", Path(tempfile.mkdtemp()) / "clip.mp4"
+            )
+        self.assertEqual(written, 7)
+
+    def test_a_pre_existing_symlink_is_not_followed(self):
+        # The `.part` name is derivable from the page title, so a link planted
+        # in the destination must not redirect the write.
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside.bin"
+            outside.write_bytes(b"original")
+            target = Path(tmp) / "clip.mp4"
+            target.symlink_to(outside)
+            with self._patch([_FakeResponse(200, b"video")]):
+                with self.assertRaises(OSError):
+                    download_to_file("https://cdn.example.com/a.mp4", target)
+            self.assertEqual(outside.read_bytes(), b"original")
+
 
 if __name__ == "__main__":
     unittest.main()

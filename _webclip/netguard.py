@@ -20,6 +20,8 @@ headers, its fixed 15 MB ceiling, its error wording) stays there.
 from __future__ import annotations
 
 from pathlib import Path
+import http.client
+import os
 import socket
 import ssl
 from typing import Mapping
@@ -42,6 +44,7 @@ CHUNK_BYTES = 64 * 1024
 
 _POLICY_MESSAGE = "The video address is blocked by network policy."
 _TOO_LARGE_MESSAGE = "The video is larger than the configured size limit."
+_TRUNCATED_MESSAGE = "The video server ended the response before its declared length."
 _REDIRECT_LIMIT_MESSAGE = "The video address redirected too many times."
 _BAD_REDIRECT_MESSAGE = "The video address returned an invalid redirect."
 
@@ -135,7 +138,10 @@ def _open_pinned(
     try:
         connection.request("GET", approved.request_target, headers=request_headers)
         response = connection.getresponse()
-    except (OSError, ssl.SSLError) as exc:
+    except (OSError, ssl.SSLError, http.client.HTTPException) as exc:
+        # `BadStatusLine`, `LineTooLong` and friends are HTTPException, not
+        # OSError; uncaught they would escape every caller's error handling and
+        # abort the whole batch instead of failing one video.
         connection.close()
         raise ClipError("The video request failed.") from exc
     except BaseException:
@@ -144,14 +150,21 @@ def _open_pinned(
     return approved, connection, response
 
 
-def _declared_size_exceeds(response, max_bytes: int) -> bool:
+def _declared_length(response) -> int | None:
+    """The body length the server declares, when it declares a usable one."""
     declared = response.getheader("Content-Length")
     if declared is None:
-        return False
+        return None
     try:
-        return int(declared) > max_bytes
+        value = int(declared)
     except ValueError:
-        return False
+        return None
+    return value if value >= 0 else None
+
+
+def _declared_size_exceeds(response, max_bytes: int) -> bool:
+    declared = _declared_length(response)
+    return declared is not None and declared > max_bytes
 
 
 def _next_redirect(current_url: str, location: str | None) -> str:
@@ -200,6 +213,12 @@ def fetch_bytes(
                 payload.extend(chunk)
                 if len(payload) > max_bytes:
                     raise ClipError(_TOO_LARGE_MESSAGE)
+            # `read(amt)` returns b"" instead of raising IncompleteRead when the
+            # peer closes early (measured: 10 bytes of a declared 100), so a
+            # short body would otherwise look complete.
+            declared = _declared_length(response)
+            if declared is not None and len(payload) != declared:
+                raise ClipError(_TRUNCATED_MESSAGE)
             return approved.url, bytes(payload)
         finally:
             connection.close()
@@ -236,8 +255,13 @@ def download_to_file(
                 raise ClipError(f"The video server returned HTTP {status}.")
             if _declared_size_exceeds(response, max_bytes):
                 raise ClipError(_TOO_LARGE_MESSAGE)
+            declared = _declared_length(response)
             written = 0
-            with destination.open("wb") as handle:
+            # O_EXCL: the name is derived from page-controlled text, so a
+            # pre-placed symlink must make the create fail rather than redirect
+            # the write outside the destination directory.
+            fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+            with os.fdopen(fd, "wb") as handle:
                 while True:
                     chunk = response.read(CHUNK_BYTES)
                     if not chunk:
@@ -248,6 +272,9 @@ def download_to_file(
                     if written > max_bytes:
                         raise ClipError(_TOO_LARGE_MESSAGE)
                     handle.write(chunk)
+            if declared is not None and written != declared:
+                destination.unlink(missing_ok=True)
+                raise ClipError(_TRUNCATED_MESSAGE)
             return approved.url, written
         finally:
             connection.close()
