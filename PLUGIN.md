@@ -219,6 +219,11 @@ output: it never writes a note.
 - `--overwrite` replaces an existing file; without it a free `-1` name is used.
   A failed download never damages the file it was about to replace.
 - Every candidate is reported; one failure does not abort the rest of the batch.
+- **The vault lock is held for the whole command**, including a slow download.
+  While a `/save-video` run is in progress — a YouTube download can take minutes
+  at upstream speeds — a concurrent `/webclip` refuses to start with "vault busy".
+  That is deliberate: the lock covers filename uniqueness and the `.gitignore`
+  commit, not just the write. Long downloads are the cost.
 - Supported in this release: generic HTML5 pages, Netease, Bilibili and YouTube.
   Bilibili is fetched as the html5 player's single muxed mp4, so anonymously it
   tops out at 720P; live streams and bangumi are refused by name instead of
