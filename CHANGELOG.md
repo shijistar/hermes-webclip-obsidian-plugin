@@ -97,6 +97,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   attribute, the vault and lock fall back to `WEB_TO_OBSIDIAN_*` like `/webclip`, and
   `<picture>`/`<audio>` sources no longer consume the video candidate limit.
 
+### Docs
+
+- `skills/web-save-video/references/netease.md` records the `/news/sv/` URL prefix (same player
+  markup, same adapter — `matches()` only checks the hostname, so no path check was added), four
+  end-to-end samples spanning 16:9, 4:3 and 9:16 from 720×1280 to 1920×1080, and the measured
+  behaviour of `data-mp4`: it held the same `.m3u8` address as `data-m3u8` in 3/3 pages, so the
+  container must be derived from the URL rather than the attribute name.
+
 ## 2026-11-16
 
 ### Added

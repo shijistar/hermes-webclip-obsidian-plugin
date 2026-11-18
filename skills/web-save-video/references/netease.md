@@ -1,8 +1,10 @@
 # Netease (163.com)
 
-Two page shapes carry video, and they behave differently.
+Two page shapes carry video, and they behave differently. The short-video pages
+come under two URL prefixes, `/news/v/` and `/news/sv/`; both serve the same
+player markup and both reach the adapter.
 
-## Video page: `c.m.163.com/news/v/<ID>.html`
+## Video page: `c.m.163.com/news/v/<ID>.html` (also `/news/sv/`)
 
 Measured on 2025-11-05 across ten samples:
 
@@ -14,6 +16,31 @@ Measured on 2025-11-05 across ten samples:
 | Bitrate variants | none — the page exposes a single quality |
 | `/SD/` in the path | **not** a resolution: the same directory held both 1276×718 and 1920×1080 |
 
+## Measured again on 2026-11-18, end to end
+
+Four pages downloaded through `/save-video` — the whole path, not a bare probe:
+page fetch → adapter scan → HLS pre-flight → ffmpeg remux → receipt. Container
+duration is compared with the sum of `#EXTINF`; the residue is the remux
+boundary.
+
+| Page | Prefix | File | Resolution | DAR | Duration (playlist) | Residue |
+| --- | --- | --- | --- | --- | --- | --- |
+| `VKAVGKVBP` | `/news/v/` | 3.4 MB | 1280×720 | 16:9 | 44.20s (43.96s) | 0.24s |
+| `VX92E7HC1` | `/news/v/` | 6.0 MB | 1440×1080 | 4:3 | 40.24s (40.00s) | 0.24s |
+| `VRB0KKUPI` | `/news/v/` | 33.8 MB | 1920×1080 | 16:9 | 251.79s (251.16s) | 0.63s |
+| `VX90A5AE9` | `/news/sv/` | 31.8 MB | 720×1280 | 9:16 | 231.99s (231.36s) | 0.63s |
+
+What this settles:
+
+- **Aspect ratio is arbitrary.** 16:9, 4:3 and 9:16 all remux cleanly; do not
+  assume landscape or a fixed DAR when reasoning about the output.
+- **`/SD/` is still not a resolution.** All four sit under the same `/SD/`
+  segment and span 720×1280 to 1920×1080.
+- **The URL prefix does not matter.** `/news/sv/` behaves exactly like
+  `/news/v/`: `NeteaseAdapter.matches()` only checks the hostname (`163.com` or
+  any `*.163.com`) and the stream comes from a `data-(m3u8|mp4|hls|video-url)`
+  attribute, so a new prefix needs no adapter change. Do not add a path check.
+
 The player markup:
 
 ```html
@@ -21,8 +48,12 @@ The player markup:
 ```
 
 Two traps: the value is often **protocol-relative** (`//flv0…`), and
-`data-mp4` may exist with the literal value `"undefined"` while `data-m3u8`
-holds the real address.
+`data-mp4` is not a second stream. Measured on three pages on 2026-11-18, it held
+the **same `.m3u8` address** as `data-m3u8` in 3/3 cases; an earlier session also
+saw the literal string `"undefined"`. So the container must be derived from the
+URL (`.m3u8` → `application/x-mpegURL`), never from the attribute name —
+otherwise an HLS playlist gets written into a file named `.mp4`. Deduplication
+then collapses the two attributes into one candidate.
 
 ## Article page: `www.163.com/news/a/<ID>.html` and `dy/article/`
 
@@ -53,8 +84,8 @@ linked a `news/v/` page. Two consequences:
 
 ## Why curl instead of the extractor
 
-A `news/v/` page has no article body, so the extractor's quality gate rejects it
-before producing any video field. The adapter therefore fetches the page itself
-(desktop UA, byte-capped) and scans the raw HTML. Only URLs ending in
-`.m3u8`/`.mp4` count, which keeps recommendation-rail links from being mistaken
-for the subject video.
+A `news/v/` (or `news/sv/`) page has no article body, so the extractor's quality
+gate rejects it before producing any video field. The adapter therefore fetches
+the page itself (desktop UA, byte-capped) and scans the raw HTML. Only URLs
+ending in `.m3u8`/`.mp4` count, which keeps recommendation-rail links from being
+mistaken for the subject video.
