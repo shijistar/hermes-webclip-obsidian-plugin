@@ -32,6 +32,17 @@ def _segment_name(index: int, url: str) -> str:
     return f"seg-{index:06d}{suffix}"
 
 
+def _claim_output(destination: Path) -> None:
+    """Create *destination* exclusively before ffmpeg is allowed to write it.
+
+    ffmpeg opens its output with ``fopen()`` and ``-y``: that follows a symlink
+    and truncates its target. Claiming the name here makes ffmpeg truncate the
+    inode created by this call instead of whatever a pre-placed symlink pointed
+    at, and a symlink that already exists fails the candidate outright.
+    """
+    os.close(os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
+
+
 def _concat_line(path: Path) -> str:
     # ffmpeg's concat parser treats single quotes specially inside `file '...'`.
     escaped = str(path).replace("'", "'\\''")
@@ -97,9 +108,7 @@ def download_hls(
         # and truncates its target. Claiming the name exclusively first makes
         # ffmpeg truncate the inode created here instead of whatever a
         # pre-placed symlink pointed at.
-        os.close(
-            os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        )
+        _claim_output(destination)
         run_ffmpeg(
             [
                 "-protocol_whitelist",

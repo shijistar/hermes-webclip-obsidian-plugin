@@ -16,6 +16,7 @@ import web_to_obsidian as clip
 from _webclip import netguard
 from _webclip.article import _validate_videos
 from _webclip.video import naming, probe, report, store
+from _webclip.video.download.hls import _claim_output
 
 
 def _proc_alive(pid: int) -> bool:
@@ -598,6 +599,21 @@ class SaveVideoSecurityTests(unittest.TestCase):
             (vault / "videos").symlink_to(Path(out), target_is_directory=True)
             with self.assertRaises(netguard.ClipError):
                 store.resolve_destination(vault, "videos")
+
+    def test_an_hls_merge_cannot_be_redirected_through_a_symlink(self):
+        # ffmpeg is started with `-y` and follows symlinks, so the output name
+        # has to be claimed before it runs. A pre-placed link must fail the
+        # candidate rather than let the merge overwrite its target.
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside.bin"
+            outside.write_bytes(b"ORIGINAL")
+            target = Path(tmp) / "clip.mp4"
+            target.symlink_to(outside)
+
+            with self.assertRaises(FileExistsError):
+                _claim_output(target)
+
+            self.assertEqual(outside.read_bytes(), b"ORIGINAL")
 
     def test_the_collector_limits_are_accepted_by_the_python_validator(self):
         # The Node collector clamps to exactly these bounds. If the two sets of
