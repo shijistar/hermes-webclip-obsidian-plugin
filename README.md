@@ -79,7 +79,7 @@ optional). A `webclip_id` target requires `--favorite` or `--unfavorite`.
 
 | Command | Flag | Effect |
 | --- | --- | --- |
-| both | `--no-browser` | Disable the Playwright fallback in the extractor. |
+| both&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `--no-browser` | Disable the Playwright fallback in the extractor. |
 | `/webclip` | `--refresh` | Update changed managed content, preserving the manual section. |
 | `/webclip` | `--no-git` | Skip Git preflight, commit, and push for this run. |
 | `/webclip` | `--save-images yes\|no\|ask` | Download images, keep remote URLs, or ask (default). |
