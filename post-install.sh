@@ -268,10 +268,13 @@ if [[ "$INSTALL_YTDLP" -eq 1 ]]; then
         YTDLP_EXPECTED="$(awk -v a="$YTDLP_ASSET" '$2 == a { print $1; exit }' "$YTDLP_TMP/SHA2-256SUMS")"
         YTDLP_ACTUAL="$(_sha256 "$YTDLP_TMP/$YTDLP_ASSET" || true)"
         if [[ -n "$YTDLP_EXPECTED" && "$YTDLP_EXPECTED" == "$YTDLP_ACTUAL" ]]; then
-          mkdir -p "$YTDLP_DIR"
-          install -m 0755 "$YTDLP_TMP/$YTDLP_ASSET" "$YTDLP_BIN"
-          printf '%s\n' "$YTDLP_VERSION" > "$YTDLP_DIR/VERSION"
-          ok "yt-dlp $YTDLP_VERSION installed at $YTDLP_BIN"
+          if mkdir -p "$YTDLP_DIR" \
+            && install -m 0755 "$YTDLP_TMP/$YTDLP_ASSET" "$YTDLP_BIN" \
+            && printf '%s\n' "$YTDLP_VERSION" > "$YTDLP_DIR/VERSION"; then
+            ok "yt-dlp $YTDLP_VERSION installed at $YTDLP_BIN"
+          else
+            warn "Verified yt-dlp but could not write $YTDLP_BIN; YouTube downloads stay unavailable"
+          fi
         else
           warn "yt-dlp checksum mismatch (expected ${YTDLP_EXPECTED:-<missing>}, got ${YTDLP_ACTUAL:-<unavailable>}); YouTube downloads stay unavailable"
           warn "Retry with: ./post-install.sh --force-ytdlp"

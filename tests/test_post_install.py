@@ -364,6 +364,28 @@ def test_no_youtube_skips_the_download_entirely(hermes_env):
     assert not (hermes_home / "tools" / "yt-dlp" / "yt-dlp").exists()
 
 
+def test_an_unwritable_tools_dir_warns_but_does_not_fail(tmp_path, hermes_env):
+    hermes_home, bin_dir = hermes_env
+    base = _fake_release(tmp_path)
+    tools = hermes_home / "tools"
+    tools.mkdir()
+    tools.chmod(0o555)
+    try:
+        result = _run_install(
+            hermes_home,
+            bin_dir,
+            "--install-plugin",
+            youtube=True,
+            env_extra={"YTDLP_RELEASE_BASE": base},
+        )
+    finally:
+        tools.chmod(0o755)
+
+    assert result.returncode == 0, result.stderr
+    assert "could not write" in result.stdout + result.stderr
+    assert not (hermes_home / "tools" / "yt-dlp" / "yt-dlp").exists()
+
+
 def test_a_second_run_is_idempotent(tmp_path, hermes_env):
     hermes_home, bin_dir = hermes_env
     base = _fake_release(tmp_path)
