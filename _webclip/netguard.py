@@ -44,7 +44,9 @@ CHUNK_BYTES = 64 * 1024
 
 _POLICY_MESSAGE = "The video address is blocked by network policy."
 _TOO_LARGE_MESSAGE = "The video is larger than the configured size limit."
-_TRUNCATED_MESSAGE = "The video server ended the response before its declared length."
+_TRUNCATED_MESSAGE = (
+    "The video server ended the response early, so the download is incomplete."
+)
 _REDIRECT_LIMIT_MESSAGE = "The video address redirected too many times."
 _BAD_REDIRECT_MESSAGE = "The video address returned an invalid redirect."
 
@@ -206,13 +208,22 @@ def fetch_bytes(
             if _declared_size_exceeds(response, max_bytes):
                 raise ClipError(_TOO_LARGE_MESSAGE)
             payload = bytearray()
-            while True:
-                chunk = response.read(min(CHUNK_BYTES, max_bytes + 1 - len(payload)))
-                if not chunk:
-                    break
-                payload.extend(chunk)
-                if len(payload) > max_bytes:
-                    raise ClipError(_TOO_LARGE_MESSAGE)
+            try:
+                while True:
+                    chunk = response.read(
+                        min(CHUNK_BYTES, max_bytes + 1 - len(payload))
+                    )
+                    if not chunk:
+                        break
+                    payload.extend(chunk)
+                    if len(payload) > max_bytes:
+                        raise ClipError(_TOO_LARGE_MESSAGE)
+            except http.client.HTTPException as exc:
+                # A chunked body that stops mid-chunk raises `IncompleteRead` from
+                # `read()`. It is an `HTTPException`, not an `OSError` and not a
+                # `ClipError`, so without this it escaped every handler and
+                # aborted the whole batch instead of failing one candidate.
+                raise ClipError(_TRUNCATED_MESSAGE) from exc
             # `read(amt)` returns b"" instead of raising IncompleteRead when the
             # peer closes early (measured: 10 bytes of a declared 100), so a
             # short body would otherwise look complete.
@@ -261,17 +272,26 @@ def download_to_file(
             # pre-placed symlink must make the create fail rather than redirect
             # the write outside the destination directory.
             fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-            with os.fdopen(fd, "wb") as handle:
-                while True:
-                    chunk = response.read(CHUNK_BYTES)
-                    if not chunk:
-                        break
-                    written += len(chunk)
-                    # Content-Length is advisory: chunked responses and lying
-                    # headers both exist, so the cap is enforced while writing.
-                    if written > max_bytes:
-                        raise ClipError(_TOO_LARGE_MESSAGE)
-                    handle.write(chunk)
+            try:
+                with os.fdopen(fd, "wb") as handle:
+                    while True:
+                        try:
+                            chunk = response.read(CHUNK_BYTES)
+                        except http.client.HTTPException as exc:
+                            # Same reason as in `fetch_bytes`: `IncompleteRead` is
+                            # not a `ClipError`, so it would abort the batch.
+                            raise ClipError(_TRUNCATED_MESSAGE) from exc
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        # Content-Length is advisory: chunked responses and lying
+                        # headers both exist, so the cap is enforced while writing.
+                        if written > max_bytes:
+                            raise ClipError(_TOO_LARGE_MESSAGE)
+                        handle.write(chunk)
+            except ClipError:
+                destination.unlink(missing_ok=True)
+                raise
             if declared is not None and written != declared:
                 destination.unlink(missing_ok=True)
                 raise ClipError(_TRUNCATED_MESSAGE)

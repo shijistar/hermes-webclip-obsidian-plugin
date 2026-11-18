@@ -1,4 +1,5 @@
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,9 @@ from unittest import mock
 import yaml
 
 import web_to_obsidian as clip
+from _webclip import netguard
+from _webclip.article import _validate_videos
+from _webclip.video import naming, probe, report, store
 
 
 def _proc_alive(pid: int) -> bool:
@@ -512,6 +516,108 @@ class RenderOnlyRefreshRegressionTests(unittest.TestCase):
             )
             metadata = clip._frontmatter_from_text(target.read_text(encoding="utf-8"))
             self.assertNotIn("favorite", metadata or {})
+
+
+class SaveVideoSecurityTests(unittest.TestCase):
+    """Regressions for `/save-video`, where every field comes from the page."""
+
+    class _Connection:
+        def close(self):
+            pass
+
+    class _Response:
+        """Minimal stand-in for `http.client.HTTPResponse`."""
+
+        status = 200
+
+        def __init__(self, read):
+            self._read = read
+
+        def getheader(self, name):
+            return None
+
+        def read(self, size=-1):
+            return self._read()
+
+    def _patched(self, response):
+        approved = mock.Mock(url="https://cdn.example.com/a")
+        return mock.patch.object(
+            netguard, "_open_pinned", return_value=(approved, self._Connection(), response)
+        )
+
+    def test_a_chunked_body_that_stops_mid_chunk_is_a_clip_error(self):
+        def truncated():
+            raise http.client.IncompleteRead(b"#EXTM3U", 4096)
+
+        with self._patched(self._Response(truncated)):
+            # `IncompleteRead` is an `HTTPException`, not an `OSError`: uncaught
+            # it escaped the per-candidate handler and aborted the whole batch.
+            with self.assertRaises(netguard.ClipError):
+                netguard.fetch_bytes("https://cdn.example.com/a")
+
+    def test_a_truncated_download_leaves_no_partial_file(self):
+        def truncated():
+            raise http.client.IncompleteRead(b"\x00" * 16, 8192)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "clip.mp4"
+            with self._patched(self._Response(truncated)):
+                with self.assertRaises(netguard.ClipError):
+                    netguard.download_to_file("https://cdn.example.com/a", target)
+            self.assertFalse(target.exists())
+
+    def test_a_keyformat_value_cannot_mask_the_encryption_method(self):
+        playlist = (
+            "#EXTM3U\n#EXT-X-TARGETDURATION:10\n"
+            '#EXT-X-KEY:KEYFORMAT="METHOD=NONE",METHOD=AES-128,URI="key.bin"\n'
+            "#EXTINF:10,\nsegment.ts\n#EXT-X-ENDLIST\n"
+        )
+        info = probe.parse_playlist(playlist, url="https://cdn.example.com/a.m3u8")
+        self.assertTrue(info.encrypted)
+
+    def test_a_page_url_cannot_smuggle_a_media_tag(self):
+        # The gateway honours `MEDIA:` at any offset, so a word boundary is not
+        # enough: `xMEDIA:` must be neutralised too.
+        rendered = report._text("https://cdn.example.com/xMEDIA:/tmp/report.pdf")
+        self.assertNotIn("MEDIA:", rendered.upper())
+        self.assertIn("\u2044tmp", rendered)
+
+    def test_a_page_supplied_subtype_cannot_choose_the_extension(self):
+        for subtype in ("md", "exe", "html", "x" * 64):
+            with self.subTest(subtype=subtype):
+                chosen = naming.extension_for(
+                    f"video/{subtype}", "https://cdn.example.com/clip"
+                )
+                self.assertNotEqual(chosen, f".{subtype}")
+                self.assertTrue(chosen.startswith("."))
+
+    def test_a_relative_destination_cannot_escape_the_vault_through_a_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as out:
+            vault = Path(tmp) / "vault"
+            vault.mkdir()
+            (vault / "videos").symlink_to(Path(out), target_is_directory=True)
+            with self.assertRaises(netguard.ClipError):
+                store.resolve_destination(vault, "videos")
+
+    def test_the_collector_limits_are_accepted_by_the_python_validator(self):
+        # The Node collector clamps to exactly these bounds. If the two sets of
+        # limits drift apart, a page near the edge makes the validator raise and
+        # the whole page fails to extract — the failure mode the clamp exists to
+        # prevent, so the pair is asserted here rather than in either unit alone.
+        base = "https://example.com/"
+        items = [
+            {
+                "src": base + "a" * (8192 - len(base)),
+                "type": "video/" + "x" * 250,
+                "title": "t" * 10_000,
+                "poster": base + "p" * (8192 - len(base)),
+                "origin": "o" * 64,
+                "width": 100_000,
+                "height": 0,
+            }
+        ]
+
+        self.assertEqual(len(_validate_videos(items)), 1)
 
 
 if __name__ == "__main__":

@@ -19,7 +19,10 @@ MEDIA_ATTACH_LIMIT_BYTES = 50 * 1024 * 1024
 STATUS_OK = "OK"
 STATUS_FAILED = "FAILED"
 
-_DIRECTIVE_RE = re.compile(r"(?i)\bmedia\s*:")
+# No word boundary: the directive is honoured by the gateway at any offset, so a
+# page that writes `.../xMEDIA:/tmp/report.pdf` still produces a `MEDIA:` tag
+# after `x`. `\bmedia` misses exactly that case.
+_DIRECTIVE_RE = re.compile(r"(?i)media\s*:")
 # An absolute path the platform would treat as a deliverable attachment. The
 # guard skips a slash preceded by `:` or another slash so URLs survive intact.
 _PATH_LIKE_RE = re.compile(r"(?<![\w:/])/(?:[\w.-]+/)*[\w.-]+")

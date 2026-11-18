@@ -17,11 +17,10 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import secrets
-import tomllib
 from typing import Mapping
 from urllib.parse import urlsplit
 
-from ..config import VideoConfig, parse_save_video_args
+from ..config import ClipConfig, VideoConfig, parse_save_video_args
 from ..core import ClipError
 from ..extract import run_extractor
 from ..git_sync import VaultLock
@@ -32,8 +31,6 @@ from .models import DownloadPlan, VideoCandidate, VideoOutcome, VideoReport
 from .naming import build_filename, unique_path
 from .report import render_report
 from .store import commit_gitignore, ensure_gitignore, resolve_destination
-
-DEFAULT_VAULT = "~/obsidian/shijistar"
 
 
 def _is_hls(candidate: VideoCandidate) -> bool:
@@ -51,44 +48,22 @@ class VideoService:
     def _settings(self) -> VideoConfig:
         return VideoConfig.from_file(self.plugin_root / "config.toml")
 
-    def _clip_section(self) -> dict:
-        """``[clip]`` values, read leniently.
+    def _clip_config(self) -> ClipConfig:
+        """The vault and the lock, resolved exactly as ``/webclip`` resolves them.
 
-        The video command must not fail because some *other* part of the clip
-        configuration is broken — it only needs the vault location and the lock
-        file to agree with ``/webclip``.
-
-        When ``config.toml`` is absent, ``/webclip`` falls back to the
-        environment (``ClipConfig.from_env``); the vault and the lock have to
-        come from the same place or the two commands work on different vaults
-        and stop excluding each other.
+        Both commands write into the same vault under the same lock, so they
+        must read the configuration through the same entry point. Reading
+        ``config.toml`` leniently here disagreed with ``ClipConfig.from_file``
+        the moment the table existed but omitted a key: `/webclip` fell back to
+        a built-in default while this command picked up the environment, and the
+        two stopped excluding each other.
         """
-        section: dict = {}
-        config_path = self.plugin_root / "config.toml"
-        if config_path.is_file():
-            try:
-                data = tomllib.loads(config_path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, tomllib.TOMLDecodeError):
-                data = {}
-            found = data.get("clip")
-            if isinstance(found, dict):
-                section = dict(found)
-        env = self.env if self.env is not None else os.environ
-        if "vault" not in section and env.get("WEB_TO_OBSIDIAN_VAULT"):
-            section["vault"] = env["WEB_TO_OBSIDIAN_VAULT"]
-        if "lock_file" not in section and env.get("WEB_TO_OBSIDIAN_LOCK_FILE"):
-            section["lock_file"] = env["WEB_TO_OBSIDIAN_LOCK_FILE"]
-        return section
+        if self.env is not None:
+            return ClipConfig.from_env(self.env)
+        return ClipConfig.from_file(self.plugin_root / "config.toml")
 
     def _vault(self) -> Path:
-        raw = DEFAULT_VAULT
-        value = self._clip_section().get("vault")
-        if isinstance(value, str) and value.strip():
-            raw = value.strip()
-        vault = Path(raw).expanduser().resolve()
-        if not vault.is_dir():
-            raise ClipError("The configured Obsidian vault does not exist.")
-        return vault
+        return self._clip_config().vault
 
     def _lock_path(self) -> Path:
         """The same lock ``/webclip`` uses.
@@ -98,11 +73,7 @@ class VideoService:
         ``/save-video`` commit a ``.gitignore`` while ``/webclip`` is staging a
         note, and a single ``git commit`` would sweep both into one commit.
         """
-        raw = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
-        value = self._clip_section().get("lock_file")
-        if isinstance(value, str) and value.strip():
-            raw = value.strip()
-        return Path(raw).expanduser()
+        return self._clip_config().lock_file
 
     def run(self, raw_args: str) -> VideoReport:
         options = parse_save_video_args(raw_args)

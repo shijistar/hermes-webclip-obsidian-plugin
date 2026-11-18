@@ -30,10 +30,23 @@ test('responsive image sources cannot displace the video candidate', () => {
   const found = collect(`
     <html><body>
       <picture>${sources}</picture>
-      <video src="/clip.mp4"></video>
+      <video><source src="/clip.mp4"></video>
     </body></html>`);
 
   assert.deepEqual(found.map(item => item.src), ['https://example.com/clip.mp4']);
+});
+
+test('a source URL over the byte budget is skipped, not passed on', () => {
+  // The Python validator rejects a `src` beyond MAX_SRC_BYTES, and a rejected
+  // candidate used to fail the whole extraction; the collector must drop it.
+  const huge = `https://example.com/${'a'.repeat(9000)}.mp4`;
+  const found = collect(`
+    <html><body>
+      <video><source src="${huge}"></video>
+      <video><source src="/ok.mp4"></video>
+    </body></html>`);
+
+  assert.deepEqual(found.map(item => item.src), ['https://example.com/ok.mp4']);
 });
 
 test('collects a plain video[src] with its caption, poster and dimensions', () => {

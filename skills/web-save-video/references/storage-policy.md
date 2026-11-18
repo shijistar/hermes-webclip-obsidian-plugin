@@ -24,9 +24,9 @@ ytdlp = ""
 
 `~/obsidian/shijistar/attachments/video` is an **absolute** path that lives
 **inside** the vault; `attachments/video` is relative and also inside; a
-relative path through a symlink that points outside is **outside**. The check
-resolves the path and compares it with the vault root — never "does it start
-with `~`".
+relative path through a symlink that points outside is **rejected** — only an
+absolute destination may leave the vault. The check resolves the path and
+compares it with the vault root — never "does it start with `~`".
 
 ## The Git interaction that must not be missed
 

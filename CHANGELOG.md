@@ -4,6 +4,35 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-18
+
+### Fixed
+
+- `netguard`: a chunked response that stops mid-body raises `http.client.IncompleteRead`,
+  which is neither an `OSError` nor a `ClipError`. It escaped the per-candidate handler and
+  aborted the whole `/save-video` batch instead of failing one candidate; both readers now
+  convert it, and a truncated download removes its partial file.
+- `probe`: the HLS encryption check searched the raw attribute list for `METHOD=`, so
+  `#EXT-X-KEY:KEYFORMAT="METHOD=NONE",METHOD=AES-128,…` reported an AES-128 stream as plain
+  and downloaded it into an unplayable file. The attribute list is parsed now, so quoted
+  values cannot impersonate a key.
+- `service`: `/save-video` read `[clip]` leniently while `/webclip` used
+  `ClipConfig.from_file`, so a table without `lock_file` (or `vault`) sent the two commands
+  to different locks and vaults. Both resolve through the same entry point.
+- `report`: the `MEDIA:` neutraliser required a word boundary, so a page-supplied
+  `https://…/xMEDIA:/tmp/report.pdf` survived as a live directive. It is neutralised at any
+  offset now, which also lets the path-separator rewrite cover it.
+- `download/hls`: ffmpeg opens its output with `fopen()` and `-y`, which follows a symlink
+  and truncates its target. The merge output is claimed with `O_EXCL` first, so a pre-placed
+  symlink fails the candidate instead of redirecting the write.
+
+### Docs
+
+- `skills/web-save-video/references/storage-policy.md`: a relative destination that escapes
+  the vault through a symlink is rejected, not treated as "outside".
+- `/save-video` security regressions moved into `tests/test_security_regressions.py`, where
+  `AGENTS.md` requires them.
+
 ## 2026-11-17
 
 ### Added

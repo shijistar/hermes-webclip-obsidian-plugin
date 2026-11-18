@@ -10,6 +10,7 @@ local files with ``-protocol_whitelist file``.
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import tempfile
 from urllib.parse import urlsplit
 
@@ -92,6 +93,13 @@ def download_hls(
 
         list_file = Path(tmp) / "segments.txt"
         list_file.write_text("".join(_concat_line(part) for part in parts), encoding="utf-8")
+        # ffmpeg opens its output with fopen() and `-y`: that follows a symlink
+        # and truncates its target. Claiming the name exclusively first makes
+        # ffmpeg truncate the inode created here instead of whatever a
+        # pre-placed symlink pointed at.
+        os.close(
+            os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        )
         run_ffmpeg(
             [
                 "-protocol_whitelist",

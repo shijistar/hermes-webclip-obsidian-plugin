@@ -88,17 +88,32 @@ def _variants(text: str, *, url: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-_URI_ATTR_RE = re.compile(r'URI\s*=\s*"[^"]*"', re.IGNORECASE)
-_METHOD_ATTR_RE = re.compile(r'METHOD\s*=\s*"?([A-Za-z0-9-]+)"?', re.IGNORECASE)
+_ATTRIBUTE_RE = re.compile(r'([A-Za-z0-9-]+)\s*=\s*("[^"]*"|[^,]*)')
+
+
+def _attributes(raw: str) -> dict[str, str]:
+    """Parse an HLS attribute list (``KEY=VALUE,KEY="VALUE,WITH,COMMAS"``).
+
+    The list is parsed rather than searched: a quoted value can contain both
+    commas and `KEY=` text, so `re.search(r'METHOD=')` matches
+    `KEYFORMAT="METHOD=NONE"` and reports an encrypted playlist as plain.
+    """
+    attributes: dict[str, str] = {}
+    for match in _ATTRIBUTE_RE.finditer(raw):
+        value = match.group(2)
+        if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+            value = value[1:-1]
+        attributes[match.group(1).upper()] = value.strip()
+    return attributes
 
 
 def _is_encrypted(text: str) -> bool:
     for match in _KEY_RE.finditer(text):
-        # Drop the URI first: it can itself contain `METHOD=NONE`
-        # (`…?METHOD=NONE`), which would make an encrypted stream look plain.
-        attributes = _URI_ATTR_RE.sub("", match.group(1))
-        method = _METHOD_ATTR_RE.search(attributes)
-        if method is None or method.group(1).upper() != "NONE":
+        method = _attributes(match.group(1)).get("METHOD", "").upper()
+        # A missing METHOD is treated as encrypted: the session-key form
+        # (`skd://`, Widevine) does not always spell one out, and guessing
+        # "plain" there would download DRM bytes into an unplayable file.
+        if method != "NONE":
             return True
     return False
 
