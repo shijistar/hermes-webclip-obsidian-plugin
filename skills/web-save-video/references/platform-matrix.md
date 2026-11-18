@@ -29,7 +29,7 @@ Re-measure before trusting any of these after a site change.
 | YouTube extraction | works; yt-dlp logs `[jsc:deno] Solving JS challenges using deno` |
 | YouTube `m3u8_native` formats | `HTTP 403` on every attempt (the default format order picks these) |
 | YouTube `protocol=https` formats | download and merge fine; 1080p avc1 + m4a ≈ 80 MB for 3:33 |
-| YouTube throughput | varies widely between runs: 84 MB took 69 s one run and 267 s another (~0.3–1.2 MB/s) |
+| YouTube throughput | varies widely between runs: the same 84 MB clip took 69 s, 83 s, 267 s and 386 s across four runs (~0.2–1.2 MB/s) |
 | yt-dlp | `2026.10.26` at `/opt/homebrew/bin/yt-dlp`, installed with `deno` (131 MB) |
 
 ## Rules that follow from those facts

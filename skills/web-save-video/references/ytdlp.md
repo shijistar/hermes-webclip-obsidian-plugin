@@ -46,6 +46,7 @@ a traceback and never a silent zero.
 - `-f "160+140"` → merged `5.3 MB`, both `protocol=https`.
 - `-f 18` (progressive 360p) → `11.28 MiB` in 7 s; keep it as the `b` fallback.
 - The `ios` player client did not help: `Requested format is not available`.
-- Throughput varies a lot between runs here: the same 1080p 3:33 clip took 69 s
-  once and 267 s another time (~0.3–1.2 MB/s). Budget for minutes, and do not
-  read a slow run as a hang — the socket timeout is what distinguishes the two.
+- Throughput varies a lot between runs here: the same 1080p 3:33 clip took 69 s,
+  83 s, 267 s and 386 s across four runs (~0.2–1.2 MB/s). Budget for minutes,
+  and do not read a slow run as a hang — the socket timeout is what tells the
+  two apart.

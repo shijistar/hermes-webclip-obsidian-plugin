@@ -66,9 +66,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 - Bilibili's anonymous ceiling is 720P; HD needs cookies, which this plugin does
   not inject on purpose.
-- YouTube throughput from this machine swings between roughly 0.3 and 1.2 MB/s
-  for the same video, so budget minutes rather than seconds. The 1800 s cap is
-  sized for the slow end, not for a fast link.
+- YouTube throughput from this machine swings between roughly 0.2 and 1.2 MB/s
+  for the same video (69 s to 386 s for one 84 MB clip), so budget minutes
+  rather than seconds. The 1800 s cap is sized for the slow end, not for a fast
+  link.
 
 ## 2026-11-18
 
