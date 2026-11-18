@@ -202,8 +202,12 @@ output: it never writes a note.
   counts as inside the vault is decided by resolving it, not by how it is
   written: an absolute path may land inside, and a relative path must not
   escape.
-- A single file over `[video].max_size_mb` (500 MB) is refused before the
-  download starts.
+- A single file over `[video].max_size_mb` (500 MB) is refused, but when the
+  check happens depends on the source. A direct response declaring a larger
+  `Content-Length` is refused before its body is read. Without a declared
+  length the limit is enforced as bytes are written and the partial file is
+  deleted. An HLS stream is checked against the running total across segments,
+  so it can stop partway through a playlist rather than before it starts.
 - Default `[video].destination` is `~/Movies/Videos/webclip`, outside the
   vault. A destination inside the vault gets a managed `.gitignore` block that is
   written **and committed**, so the next `/webclip` still passes its

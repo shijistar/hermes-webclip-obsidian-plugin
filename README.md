@@ -40,7 +40,7 @@ credentials, password-manager integration.
 
 ```bash
 hermes plugins install <repo-url>
-cd "$HERMES_HOME/plugins/webclip-obsidian"
+cd "${HERMES_HOME:-$HOME/.hermes}/plugins/webclip-obsidian"
 ./post-install.sh
 ```
 

@@ -19,9 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- **Plugin 1.0.0, extractor 1.0.0.** There is no breaking change: 1.0.0 freezes
-  the contract described above. The skills move to `web-clip-to-obsidian` 1.14.0
-  and `web-save-video` 1.0.4.
+- **Plugin 1.0.0, extractor 1.0.0.** No part of the public API breaks: 1.0.0
+  freezes the contract described above and carries no migration steps. The
+  built-in defaults did move, though — see the next two entries — so an
+  installation without a `config.toml` should confirm or create its vault
+  before upgrading. The skills move to `web-clip-to-obsidian` 1.14.0 and
+  `web-save-video` 1.0.4.
 - `config.example.toml` is a neutral template now: it targets a `~/Obsidian`
   vault and an `inbox` destination, carries a comment on every key, and no
   longer documents `ytdlp` (the key is still accepted for existing configs).

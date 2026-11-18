@@ -50,8 +50,10 @@ node src/cli.mjs <url> [--no-browser] [--with-videos]
 - `<url>` — exactly one `http://` or `https://` URL.
 - `--no-browser` — skip the Chromium fallback; fail with `QUALITY_GATE` if the
   static pass yields no substantial article.
-- `--with-videos` — accept a page whose only content is a video player, by
-  widening the quality gate. The `videos` array is collected either way.
+- `--with-videos` — widen the quality gate so a page whose only content is a
+  video player can pass. The exception is narrow: the result still needs a
+  meaningful title *and* at least one collected video candidate; otherwise the
+  usual 200-character rule applies. The `videos` array is collected either way.
 
 Output is a single JSON line on stdout. On success:
 
@@ -68,8 +70,10 @@ Output is a single JSON line on stdout. On success:
 (Chromium fallback). `videos` is always present and may be empty; every entry has
 `src`, and `type` / `title` / `poster` / `width` / `height` / `origin` are
 best-effort — an attribute the page omits arrives as an empty string or `0`, not
-as an error. Duplicate `src` values are dropped and the array is capped. On
-failure, exit code is `1` and stdout carries:
+as an error. `title` is the exception: a player without its own title falls back
+to its `<figcaption>`, then to the page title, so an empty `title` means the
+page had none either. Duplicate `src` values are dropped and the array is
+capped. On failure, exit code is `1` and stdout carries:
 
 ```json
 { "ok": false, "error": "<user-facing message>", "code": "<CODE>" }
@@ -105,7 +109,9 @@ failure, exit code is `1` and stdout carries:
    canonicalizes the URL, then runs Defuddle to produce Markdown. No page
    scripts execute and Defuddle network fallbacks are disabled.
 2. **Quality gate** — a result passes only if it has a meaningful non-generic
-   title and ≥ 200 Markdown characters (`MIN_MARKDOWN_CHARS`).
+   title and ≥ 200 Markdown characters (`MIN_MARKDOWN_CHARS`). With
+   `--with-videos` the character rule is waived for a page that has a
+   meaningful title and at least one collected video candidate.
 3. **Playwright fallback** (unless `--no-browser`) — if the static pass fails
    the quality gate, an isolated headless Chromium re-renders the page. All
    browser HTTP(S) is deferred to the pinned Node fetch layer via

@@ -75,11 +75,11 @@ ClipError: Git protection requires an entirely clean worktree.
 cd ~/Obsidian && git status --short
 ```
 
-- If the output only lists generated paths under `Inbox/` and `images/` (failed-clip residue), clean *only* those known generated paths, verifying each path before discarding:
+- If the output only lists generated paths under `inbox/` and `images/` (failed-clip residue), clean *only* those known generated paths, verifying each path before discarding:
   ```bash
   git status --short | awk '{print $2}'  # review the exact list first
   # then, only after confirming everything listed is generated content:
-  git checkout -- Inbox/ images/
+  git checkout -- inbox/ images/
   ```
 - If the output contains anything else (a manual note edit, a new untracked file outside these dirs), **stop** — the vault has user changes. Commit or stash them manually, or fix the failing clip, rather than discarding them.
 
@@ -158,14 +158,14 @@ from pathlib import Path
 from web_to_obsidian import ClipService
 
 service = ClipService(Path('.'))
-vault = Path.home() / 'obsidian' / 'shijistar'
+vault = Path.home() / 'Obsidian'  # same as [clip].vault in config.toml
 
 def clean_vault() -> bool:
     """Return True when the vault is clean; never blanket-discard user edits.
 
     If the worktree is dirty, list the paths and refuse: committing/stashing
     or fixing the failed clip is up to the operator. Generated residue under
-    Inbox/ and images/ may be cleaned explicitly after review.
+    inbox/ and images/ may be cleaned explicitly after review.
     """
     out = subprocess.run(
         ['git', 'status', '--short'], cwd=str(vault), capture_output=True, text=True
@@ -173,11 +173,11 @@ def clean_vault() -> bool:
     if not out:
         return True
     paths = [line.split(maxsplit=1)[1] for line in out.splitlines() if line.strip()]
-    allowed_prefixes = ('Inbox/', 'images/')
+    allowed_prefixes = ('inbox/', 'images/')
     if all(p.startswith(allowed_prefixes) for p in paths):
         # Only failed-clip generated residue — safe to clean.
         subprocess.run(
-            ['git', 'checkout', '--', 'Inbox/', 'images/'],
+            ['git', 'checkout', '--', 'inbox/', 'images/'],
             cwd=str(vault), capture_output=True,
         )
         return True
@@ -254,8 +254,8 @@ If the user wants a different title than what was auto-extracted:
 
 ```bash
 cd ~/Obsidian
-git mv "Inbox/old-filename.md" "Inbox/new-filename.md"
-sed -i 's/^title: .*$/title: New Title/' "Inbox/new-filename.md"
+git mv "inbox/old-filename.md" "inbox/new-filename.md"
+sed -i 's/^title: .*$/title: New Title/' "inbox/new-filename.md"
 git add -A && git commit -m "clip: New Title" && git push
 ```
 
