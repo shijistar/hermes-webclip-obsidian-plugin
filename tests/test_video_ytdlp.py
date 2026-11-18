@@ -37,6 +37,22 @@ class FindExecutableTests(unittest.TestCase):
         with mock.patch.object(ytdlp_module.shutil, "which", return_value="/opt/bin/yt-dlp"):
             self.assertEqual(find_ytdlp(), "/opt/bin/yt-dlp")
 
+    def test_the_managed_copy_is_used_when_path_and_prefixes_have_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            binary = Path(tmp) / "yt-dlp"
+            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+            binary.chmod(0o755)
+            with mock.patch.object(ytdlp_module.shutil, "which", return_value=None), \
+                 mock.patch.object(ytdlp_module, "_MANAGED", binary), \
+                 mock.patch.object(ytdlp_module, "_CANDIDATE_DIRS", ()):
+                self.assertEqual(find_ytdlp(), str(binary))
+
+    def test_path_still_beats_the_managed_copy(self):
+        # A user's own install is an explicit choice; ours is the fallback.
+        with mock.patch.object(ytdlp_module.shutil, "which", return_value="/opt/bin/yt-dlp"), \
+             mock.patch.object(ytdlp_module, "_MANAGED", Path("/tmp/would-not-be-used")):
+            self.assertEqual(find_ytdlp(), "/opt/bin/yt-dlp")
+
     def test_the_homebrew_prefix_is_used_when_path_lacks_it(self):
         # The gateway inherits a different PATH than an interactive shell; this
         # is the regression that would otherwise report "not enabled" wrongly.
@@ -45,16 +61,18 @@ class FindExecutableTests(unittest.TestCase):
             binary.write_text("#!/bin/sh\n", encoding="utf-8")
             binary.chmod(0o755)
             with mock.patch.object(ytdlp_module.shutil, "which", return_value=None), \
+                 mock.patch.object(ytdlp_module, "_MANAGED", Path(tmp) / "absent"), \
                  mock.patch.object(ytdlp_module, "_CANDIDATE_DIRS", (tmp,)):
                 self.assertEqual(find_ytdlp(), str(binary))
 
     def test_a_missing_binary_explains_how_to_install_it(self):
         with mock.patch.object(ytdlp_module.shutil, "which", return_value=None), \
+             mock.patch.object(ytdlp_module, "_MANAGED", Path("/nonexistent/yt-dlp")), \
              mock.patch.object(ytdlp_module, "_CANDIDATE_DIRS", ()):
             with self.assertRaises(ClipError) as raised:
                 find_ytdlp()
         message = str(raised.exception)
-        self.assertIn("not enabled", message)
+        self.assertIn("post-install.sh --force-ytdlp", message)
         self.assertIn("brew install yt-dlp", message)
 
 
@@ -100,6 +118,19 @@ class DownloadTests(unittest.TestCase):
         self.assertIn("--merge-output-format", command)
         self.assertEqual(command[command.index("--") + 1], PLAN.urls[0])
         self.assertEqual(command[-1], PLAN.urls[0])
+
+    def test_a_node_runtime_is_named_so_deno_is_not_required(self):
+        with mock.patch.object(ytdlp_module, "find_js_runtime", return_value="/opt/node"):
+            _result, captured = self._run()
+        command = captured["command"]
+        self.assertEqual(command[command.index("--js-runtimes") + 1], "node:/opt/node")
+
+    def test_the_runtime_flag_is_omitted_when_no_node_exists(self):
+        # yt-dlp still has deno as a default; passing `node:` with an empty path
+        # would be an error, so the flag must be absent rather than empty.
+        with mock.patch.object(ytdlp_module, "find_js_runtime", return_value=""):
+            _result, captured = self._run()
+        self.assertNotIn("--js-runtimes", captured["command"])
 
     def test_the_guard_flags_carry_the_values_they_are_supposed_to(self):
         _result, captured = self._run()

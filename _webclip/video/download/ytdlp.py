@@ -52,6 +52,10 @@ _RENDERED_SUFFIXES = {".mp4", ".mkv", ".webm"}
 #: The gateway inherits a different PATH than an interactive shell, and the
 #: binary lands here on the two supported platforms.
 _CANDIDATE_DIRS = ("/opt/homebrew/bin", "/usr/local/bin")
+#: Where `post-install.sh` puts the standalone binary. Deliberately not a
+#: versioned directory: `yt-dlp -U` updates this file in place, and a pinned
+#: version goes stale within weeks because YouTube keeps changing.
+_MANAGED = Path.home() / ".hermes" / "tools" / "yt-dlp" / "yt-dlp"
 _PASSTHROUGH_ENV = (
     "PATH",
     "HOME",
@@ -69,13 +73,14 @@ _PASSTHROUGH_ENV = (
     "no_proxy",
 )
 _NOT_ENABLED = (
-    "YouTube downloads need yt-dlp, which is not enabled. Install it with "
+    "YouTube downloads need yt-dlp, which is not installed. Re-run "
+    "`./post-install.sh --force-ytdlp` (it fetches the official binary), or "
     "`brew install yt-dlp`, or point [video].ytdlp at the binary."
 )
 
 
 def find_ytdlp(configured: str = "") -> str:
-    """Locate the binary: explicit config, then PATH, then the usual prefixes."""
+    """Locate the binary: explicit config, then PATH, then the managed copy, then the usual prefixes."""
     if configured:
         path = Path(configured).expanduser()
         if path.is_file() and os.access(path, os.X_OK):
@@ -86,11 +91,33 @@ def find_ytdlp(configured: str = "") -> str:
     found = shutil.which("yt-dlp")
     if found:
         return found
+    # PATH wins because an explicit user setup should beat ours; the managed copy
+    # is the one `post-install.sh` fetched, so it comes before the bare prefixes.
+    if _MANAGED.is_file() and os.access(_MANAGED, os.X_OK):
+        return str(_MANAGED)
     for directory in _CANDIDATE_DIRS:
         candidate = Path(directory) / "yt-dlp"
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
     raise ClipError(_NOT_ENABLED)
+
+
+def find_js_runtime() -> str:
+    """A JavaScript runtime yt-dlp can use for YouTube's JS challenges.
+
+    deno is yt-dlp's default, but node does the job (measured: `[jsc:node]` with
+    deno absent from PATH) and Hermes already ships one for the extractor. Using
+    it keeps deno's 131 MB out of the install.
+    """
+    node = shutil.which("node")
+    if node:
+        return node
+    tools = Path.home() / ".hermes" / "tools"
+    if tools.is_dir():
+        for candidate in sorted(tools.glob("node-*/bin/node"), reverse=True):
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+    return ""
 
 
 def _environment() -> dict[str, str]:
@@ -152,6 +179,13 @@ def download_ytdlp(
             "20",
             "--retries",
             "2",
+        ]
+        # deno is yt-dlp's default JS runtime; naming node explicitly keeps
+        # YouTube's challenge solving working on a machine without deno.
+        runtime = find_js_runtime()
+        if runtime:
+            command += ["--js-runtimes", f"node:{runtime}"]
+        command += [
             "--max-filesize",
             str(max_bytes),
             "-f",

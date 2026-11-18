@@ -25,10 +25,27 @@ its own SSRF-guarded downloader for everything else and delegates only this site
 | `--ffmpeg-location <found ffmpeg>` | the gateway PATH is not the shell PATH; the merge step would fail |
 | 1800 s timeout | `download_timeout_s` is a per-request ceiling and kills long videos |
 
+## Install and update
+
+`./post-install.sh` fetches the official standalone binary for this platform into
+`<HERMES_HOME>/tools/yt-dlp/yt-dlp` and verifies it against the release's
+`SHA2-256SUMS`. Prefer that over `brew install yt-dlp`: brew is macOS-only and
+pulls in deno (131 MB), while the standalone binary carries the EJS challenge
+solver itself and can use the `node` Hermes already ships.
+
+- Skip it: `./post-install.sh --no-youtube`
+- Re-fetch after a bad download: `./post-install.sh --force-ytdlp`
+- Update in place (YouTube changes weekly): `~/.hermes/tools/yt-dlp/yt-dlp -U`
+
+The pip package (`pip install yt-dlp`) is **not** equivalent: measured on
+2026-11-18 it logged `Signature solving failed` / `n challenge solving failed`
+until `yt-dlp-ejs` was added, because the wheel does not bundle the solver.
+
 ## Locating the binary
 
-Order: `[video].ytdlp` → `PATH` → `/opt/homebrew/bin/yt-dlp` → `/usr/local/bin/yt-dlp`.
-A missing binary is reported as "not enabled" with the install command; it is never
+Order: `[video].ytdlp` → `PATH` → `<HERMES_HOME>/tools/yt-dlp/yt-dlp` →
+`/opt/homebrew/bin/yt-dlp` → `/usr/local/bin/yt-dlp`.
+A missing binary is reported as "not installed" with the install command; it is never
 a traceback and never a silent zero.
 
 ## Failure messages

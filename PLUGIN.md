@@ -87,7 +87,14 @@ walking up from its own location to the nearest `.hermes` directory:
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
 ./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
+./post-install.sh --no-youtube        # skip the yt-dlp download (Bilibili etc. still work)
+./post-install.sh --force-ytdlp       # re-fetch yt-dlp even if present
 ```
+
+The script also fetches yt-dlp for YouTube: the official standalone binary
+(~36 MB, checksum-verified against the release's `SHA2-256SUMS`) goes to
+`<HERMES_HOME>/tools/yt-dlp/yt-dlp`. No Homebrew and no deno are required —
+yt-dlp is pointed at the machine's existing `node` for YouTube's JS challenges.
 
 Manual steps (what `./post-install.sh` automates), for a git checkout using Hermes'
 plugin manager:

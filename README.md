@@ -130,8 +130,11 @@ inside the vault gets a managed `.gitignore` block that is written **and
 committed**, so the next `/webclip` still passes its clean-worktree preflight.
 
 Supported in this release: generic HTML5 pages, Netease, Bilibili and YouTube.
-Bilibili is capped at 720P anonymously; YouTube needs `yt-dlp` on the machine
-(`brew install yt-dlp`), and says so when it is missing. Platform matrix, HLS
+Bilibili is capped at 720P anonymously. YouTube needs `yt-dlp`, which
+`./post-install.sh` fetches for you (the official standalone binary, ~36 MB,
+checksum-verified, into `~/.hermes/tools/yt-dlp/`); no Homebrew or deno needed.
+It updates in place with `~/.hermes/tools/yt-dlp/yt-dlp -U`, and the command
+says what to do when the binary is missing. Platform matrix, HLS
 details and the storage policy:
 [`skills/web-save-video/SKILL.md`](skills/web-save-video/SKILL.md).
 

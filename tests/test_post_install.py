@@ -6,7 +6,9 @@ home. A ``hermes`` shim on PATH simulates ``hermes plugins install`` and
 the fake payload omits ``extractor/`` so the npm-install step is skipped.
 """
 
+import hashlib
 import os
+import platform
 import re
 import shutil
 import stat
@@ -69,15 +71,26 @@ def _write_shim(bin_dir: Path) -> Path:
 
 
 def _run_install(
-    hermes_home: Path, bin_dir: Path, *args: str, readonly: bool = False
+    hermes_home: Path,
+    bin_dir: Path,
+    *args: str,
+    readonly: bool = False,
+    youtube: bool = False,
+    env_extra: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["HERMES_HOME"] = str(hermes_home)
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    # Keep the suite hermetic: without this the yt-dlp step would reach GitHub.
+    # Tests that exercise the download override this with their own release dir.
+    env.setdefault("YTDLP_RELEASE_BASE", "file:///nonexistent-ytdlp-release")
+    if env_extra:
+        env.update(env_extra)
     if readonly:
         env["FAKE_HERMES_READONLY"] = "1"
+    flags = [] if youtube else ["--no-youtube"]
     return subprocess.run(
-        ["bash", str(POST_INSTALL), "--hermes-home", str(hermes_home), *args],
+        ["bash", str(POST_INSTALL), "--hermes-home", str(hermes_home), *flags, *args],
         capture_output=True,
         text=True,
         env=env,
@@ -209,12 +222,16 @@ def _run_from_plugin_dir(
     env = os.environ.copy()
     env["HERMES_HOME"] = str(hermes_home)
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    # These tests are about profile/config resolution, not the download; without
+    # this they would fetch 36 MB from GitHub on every run.
+    env.setdefault("YTDLP_RELEASE_BASE", "file:///nonexistent-ytdlp-release")
     return subprocess.run(
         [
             "bash",
             str(plugin_dir / "post-install.sh"),
             "--hermes-home",
             str(hermes_home),
+            "--no-youtube",
             *args,
         ],
         capture_output=True,
@@ -271,3 +288,101 @@ def test_hermes_home_wins_over_plugin_dir_from_another_home(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (requested_plugin / "config.toml").is_file()
     assert not (source_plugin / "config.toml").exists()
+
+
+# --------------------------------------------------------------- yt-dlp step
+
+
+def _ytdlp_asset_name() -> str:
+    system = platform.system()
+    machine = platform.machine().lower()
+    if system == "Darwin":
+        return "yt-dlp_macos"
+    if system == "Linux":
+        return "yt-dlp_linux_aarch64" if machine in {"aarch64", "arm64"} else "yt-dlp_linux"
+    pytest.skip(f"post-install.sh does not fetch yt-dlp on {system}")
+    raise AssertionError("unreachable")  # keeps the return type honest for checkers
+
+
+def _fake_release(root: Path, *, correct: bool = True) -> str:
+    """A file:// release tree shaped like a GitHub release, with a SUMS file."""
+    asset = _ytdlp_asset_name()
+    release = root / "release" / "2026.10.26"
+    release.mkdir(parents=True)
+    payload = b"#!/bin/sh\necho fake-yt-dlp\n"
+    (release / asset).write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest() if correct else "0" * 64
+    (release / "SHA2-256SUMS").write_text(f"{digest}  {asset}\n", encoding="utf-8")
+    return (root / "release").as_uri()
+
+
+def test_ytdlp_binary_is_fetched_and_checksum_verified(tmp_path, hermes_env):
+    hermes_home, bin_dir = hermes_env
+    base = _fake_release(tmp_path)
+
+    result = _run_install(
+        hermes_home,
+        bin_dir,
+        "--install-plugin",
+        youtube=True,
+        env_extra={"YTDLP_RELEASE_BASE": base},
+    )
+
+    assert result.returncode == 0, result.stderr
+    binary = hermes_home / "tools" / "yt-dlp" / "yt-dlp"
+    assert binary.is_file()
+    assert os.access(binary, os.X_OK)
+    version = (hermes_home / "tools" / "yt-dlp" / "VERSION").read_text().strip()
+    assert version == "2026.10.26"
+    assert "checksum mismatch" not in result.stdout + result.stderr
+
+
+def test_a_bad_checksum_warns_but_does_not_fail_the_install(tmp_path, hermes_env):
+    hermes_home, bin_dir = hermes_env
+    base = _fake_release(tmp_path, correct=False)
+
+    result = _run_install(
+        hermes_home,
+        bin_dir,
+        "--install-plugin",
+        youtube=True,
+        env_extra={"YTDLP_RELEASE_BASE": base},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "checksum mismatch" in result.stdout + result.stderr
+    assert not (hermes_home / "tools" / "yt-dlp" / "yt-dlp").exists()
+
+
+def test_no_youtube_skips_the_download_entirely(hermes_env):
+    hermes_home, bin_dir = hermes_env
+
+    result = _run_install(hermes_home, bin_dir, "--install-plugin")
+
+    assert result.returncode == 0, result.stderr
+    assert "Skipping yt-dlp" in result.stdout
+    assert not (hermes_home / "tools" / "yt-dlp" / "yt-dlp").exists()
+
+
+def test_a_second_run_is_idempotent(tmp_path, hermes_env):
+    hermes_home, bin_dir = hermes_env
+    base = _fake_release(tmp_path)
+    first = _run_install(
+        hermes_home,
+        bin_dir,
+        "--install-plugin",
+        youtube=True,
+        env_extra={"YTDLP_RELEASE_BASE": base},
+    )
+    assert first.returncode == 0, first.stderr
+
+    second = _run_install(
+        hermes_home,
+        bin_dir,
+        "--install-plugin",
+        youtube=True,
+        env_extra={"YTDLP_RELEASE_BASE": base},
+    )
+
+    assert second.returncode == 0, second.stderr
+    assert "already installed" in second.stdout

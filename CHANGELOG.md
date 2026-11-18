@@ -20,9 +20,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   that enables it, and the subprocess always runs with `--ignore-config`,
   `--no-playlist`, `--max-filesize`, `--no-progress`, `--ffmpeg-location` and a
   1800 s budget of its own.
-- `[video].ytdlp` is documented and wired: an explicit path, `PATH`, then
-  `/opt/homebrew/bin` and `/usr/local/bin`. A missing binary reports "not enabled"
-  with the install command instead of a traceback.
+- `[video].ytdlp` is documented and wired: an explicit path, `PATH`, then the
+  managed copy from `post-install.sh`, then `/opt/homebrew/bin` and
+  `/usr/local/bin`. A missing binary reports how to install it instead of a
+  traceback.
+- `post-install.sh` now fetches yt-dlp itself: the official standalone binary
+  (~36 MB macOS / 39 MB Linux), verified against the release's `SHA2-256SUMS`,
+  into `<HERMES_HOME>/tools/yt-dlp/`. `--no-youtube` skips it, `--force-ytdlp`
+  re-fetches, and a failed download or checksum only warns — Bilibili, Netease
+  and the generic path never depended on it. No Homebrew, no Python coupling and
+  no deno: the plugin points yt-dlp at the machine's existing `node` via
+  `--js-runtimes` (measured: `[jsc:node]` solves YouTube's challenges with deno
+  absent from `PATH`). The path is deliberately not versioned so
+  `yt-dlp -U` can update it in place.
 - `skills/web-save-video/references/ytdlp.md`: the flag contract, the 403
   behaviour of `m3u8_native`, and the measured throughput.
 
