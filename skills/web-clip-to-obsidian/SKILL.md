@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.13.0
+version: 1.14.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -48,8 +48,8 @@ Default config:
 
 ```toml
 [clip]
-vault = "~/obsidian/shijistar"
-destination = "Inbox"
+vault = "~/Obsidian"
+destination = "inbox"
 images = "images"
 sync_branch = "master"
 lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
@@ -324,7 +324,7 @@ live in `references/` and are linked from the rule they belong to.
 - **Vault lock**: writes take a file lock; a concurrent clip blocks until it is released.
 - **Image confirmation is opt-in**: the agent default is `--save-images no`, so a plain clip writes the note immediately with `image_mode: remote` and never returns `PendingClipResult`. Only `--save-images ask` returns `PendingClipResult`, and in that mode nothing is saved until `resume_pending('yes'|'no')` runs — ask via a `clarify` card with two lettered options (labels in the user's language, A = remote, B = local), then map A→`'no'` and B→`'yes'`.
 - **Always return the GitHub URL**: after a save, report `ClipResult.github_url` so the user can preview the note. The URL may already carry the `preview_url_params` query parameters configured in `config.toml`; do not strip or duplicate them (see `docs/preview-link-params.md`).
-- **Pre-clip repo hygiene (both repos)**: before clipping, confirm the vault (`~/obsidian/shijistar`) and the plugin source repo are both on a clean `master`; a leftover feature branch would take the clip commit. Run `git switch master && git pull --ff-only` and `git status --short` in each repo.
+- **Pre-clip repo hygiene (both repos)**: before clipping, confirm the vault (`~/Obsidian`) and the plugin source repo are both on a clean `master`; a leftover feature branch would take the clip commit. Run `git switch master && git pull --ff-only` and `git status --short` in each repo.
 - **Dry-run preflight**: run `node extractor/src/cli.mjs <url> --no-browser` once and check `ok:true`, a non-empty `author` and a sane markdown length before `service.run()`; this catches 404s and anti-bot walls early.
 - **Hash protection on re-clip**: an existing note whose content changed raises `The saved page changed; rerun with --refresh to update it.` Check whether the note already exists and ask keep-vs-refresh instead of overwriting; `--refresh --save-images yes` refreshes and localizes.
 - **Image policy**: always pass `--save-images no` unless the user asked for local images (`yes`) or asked to be prompted (`ask`); never ask the user which mode to use. In a batch, every spec that extracts a page must carry an explicit `yes` or `no` — `ask` is rejected because one pending confirmation cannot represent several articles; marker-only specs are exempt. See `references/batch-processing.md`.

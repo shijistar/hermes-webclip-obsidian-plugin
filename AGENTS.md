@@ -157,14 +157,22 @@ bump, but a CHANGELOG entry is encouraged when user-visible.
 ### 2.1 Git tags for module versions
 
 Every module version bump MUST also create a git tag of the form
-`<type>@<version>` on the merge commit in `master`, so each published module
-version is addressable by tag:
+`<type>@<version>` — `skill@<name>@<version>` for skills — on the merge commit
+in `master`, so each published module version is addressable by tag:
 
-| Module    | Tag prefix            | Example                    |
-| --------- | --------------------- | -------------------------- |
-| plugin    | `plugin@`             | `plugin@0.10.0`            |
-| extractor | `web-clip-extractor@` | `web-clip-extractor@0.3.0` |
-| skill     | `skill@`              | `skill@1.4.2`              |
+| Module    | Tag format                     | Example                      |
+| --------- | ------------------------------ | ---------------------------- |
+| plugin    | `plugin@<version>`             | `plugin@1.0.0`               |
+| extractor | `web-clip-extractor@<version>` | `web-clip-extractor@1.0.0`   |
+| skill     | `skill@<name>@<version>`       | `skill@web-save-video@1.0.4` |
+
+- **Skill tags carry the skill name.** The flat `skill@<version>` form was
+  ambiguous once a second skill existed: `skill@1.13.0` and `skill@1.0.3` are
+  different skills, and nothing in the tag says which.
+- **Historical flat tags stay as they are.** Do not delete or re-point them; their
+  owner is decided by the commit they sit on. `git tag -l 'skill@*'` lists both
+  forms, so a script matching skill tags must match the new full shape
+  (`skill@<name>@<version>`) rather than the prefix alone.
 
 - The version value comes from the module's version field
   (`plugin.yaml`, `extractor/package.json`, `skills/*/SKILL.md` frontmatter).

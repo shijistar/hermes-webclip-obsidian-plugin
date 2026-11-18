@@ -16,13 +16,11 @@ gitignore = true
 max_size_mb = 500
 max_per_run = 10
 download_timeout_s = 300
-# optional; empty means auto-detect
-ytdlp = ""
 ```
 
 ## "Inside the vault" is decided by resolution, not by syntax
 
-`~/obsidian/shijistar/attachments/video` is an **absolute** path that lives
+`~/Obsidian/attachments/video` is an **absolute** path that lives
 **inside** the vault; `attachments/video` is relative and also inside; a
 relative path through a symlink that points outside is **rejected** — only an
 absolute destination may leave the vault. The check resolves the path and

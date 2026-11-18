@@ -22,6 +22,53 @@ See [`CHANGELOG.md`](CHANGELOG.md) for version history.
 - Playwright Chromium (installed by the extractor `prepare` hook) for dynamic
   fallback.
 
+## Compatibility
+
+Starting with 1.0.0 this plugin publishes what it will not break. The list is
+deliberately narrow: anything not named here may change in a minor release.
+
+| Tier | Meaning |
+| --- | --- |
+| **L1** | A breaking change needs a major version. Additive changes — a new flag, a new frontmatter field, a new extractor field — do not. |
+| **L2** | Best effort. May change in a minor release when it buys a correctness fix, and the change is recorded in `CHANGELOG.md`. |
+| **L3** | Not a contract. Do not build tooling on it. |
+| **Frozen** | Byte-for-byte. Changing one of these is a data-loss bug, not a version bump. |
+
+### Surface
+
+| Surface | Tier | What is promised |
+| --- | --- | --- |
+| `/webclip` flags | L1 | `--refresh`, `--no-browser`, `--no-git`, `--save-images yes\|no\|ask`, `--favorite`, `--unfavorite` keep their names and meanings. |
+| `/save-video` flags | L1 | `--overwrite`, `--no-browser`, `--name`, `--to` keep their names and meanings. |
+| `[clip]` keys | L1 | The seven keys keep their names, types and default meanings; an unknown key is rejected. |
+| `[video]` keys | L1 | `destination`, `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`. `ytdlp` is still accepted but is not part of the documented surface. |
+| Environment variables | L1 | The `WEB_TO_OBSIDIAN_*` names. Precedence is all-or-nothing: when `config.toml` exists the environment takes no part, for any key; when it is absent the environment is read and the built-in defaults fill the gaps. |
+| Note filename | L2 | `YYYY-MM-DD-<title-derived>.md`. The cleaned characters are not promised, because sanitising rules may change. |
+| Note frontmatter | L1 | `title`, `url`, `original_url`, `original_host`, `author`, `site`, `description`, `keywords`, `tags`, `published`, `created`, `status`, `category`, `favorite` keep their names and meanings. |
+| Note frontmatter (derived) | L2 | `word_count`, `image_mode`, `fetched_url`. |
+| Note frontmatter (internal) | L3 | `webclip_id`, `source_content_hash`, `content_hash`, `extraction_method`. Only the *selector form* of `webclip_id` is L1: 64 hex characters, `sha256:` prefix optional. |
+| Note body boundaries | **Frozen** | `<!-- webclip:managed:start -->`, `<!-- webclip:managed:end -->`, `<!-- webclip:manual:start -->`, `<!-- webclip:manual:end -->`. |
+| Frontmatter fence | **Frozen** | The `---` fence and the `sha256:` value format the selector parses. |
+| Localized images | L2 | A Markdown reference resolves to a local file. File names and hashes are not promised. |
+| Ignore block in the vault | L2 | Written when `[video].destination` resolves inside the vault **and** `[video].gitignore` is true. Its contents are not promised. |
+| Extractor output | L1 | `ok`, `error`, `code`, plus `url`, `title`, `author`, `published`, `description`, `site`, `canonicalUrl`, `keywords`, `markdown`, `wordCount`, `method` and `videos` keep their names. |
+| `videos` entries | L2 | The field set inside each entry. The array is always present and may be empty; `--with-videos` only widens the quality gate so a page whose content is just a video player still extracts. |
+| Extractor error codes | L2 | The set of `code` values may grow. |
+| Programmatic entry points | L2 | `build_handler` and `resume_pending` keep their signatures. |
+| Skill names and triggers | L1 | `webclip-obsidian:web-clip-to-obsidian`, `webclip-obsidian:web-save-video`, and the phrases that load them. |
+| Tool names | L1 | The `provides_tools` name in `plugin.yaml`; renaming it breaks agent sessions already in flight. |
+| `/save-video` batch behaviour | L2 | Up to 10 URLs per call, a failed candidate does not abort the rest, a duplicate gets a `-1` suffix, then `-2`. |
+
+Not promised at all: the `.part` suffix, log and receipt wording, module layout,
+error message text, and frontmatter key order.
+
+### Known limitation: the note is not entirely yours
+
+`refresh` regenerates the frontmatter and the managed section. Anything added to
+the frontmatter, or changed in `tags` / `status` / the managed section, is lost
+on the next refresh. The manual section is the supported place for your own
+content.
+
 ## Install
 
 The recommended way is the one-shot installer bundled in this repository
@@ -35,7 +82,7 @@ walking up from its own location to the nearest `.hermes` directory:
 
 ```bash
 # Run without flags from the *installed* plugin dir. From a source checkout
-# pass --hermes-home (unless thee checkout already sits beneath a .hermes dir,,
+# pass --hermes-home (unless the checkout already sits beneath a .hermes dir,
 # in which case the walk-up finds it automatically):
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
@@ -76,8 +123,8 @@ follow-up steps.
 
 ```toml
 [clip]
-vault = "~/obsidian/shijistar"
-destination = "Inbox"
+vault = "~/Obsidian"
+destination = "inbox"
 images = "images"
 sync_branch = "master"
 lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
@@ -88,7 +135,9 @@ pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 preview_url_params = ""
 ```
 
-- `vault` — the Obsidian vault root.
+- `vault` — the Obsidian vault root. It must already exist; with Git sync
+  enabled it must also be a Git repository on `sync_branch`, otherwise every
+  `/webclip` needs `--no-git`.
 - `destination` — note destination subdirectory inside the vault.
 - `images` — directory inside the vault for localized images.
 - `sync_branch` — the Git branch the vault must be on for automatic sync.
@@ -100,7 +149,7 @@ preview_url_params = ""
   [`docs/preview-link-params.md`](docs/preview-link-params.md) for per-platform
   parameters and examples.
 
-When `config.toml` is absent, the legacy `WEB_TO_OBSIDIAN_VAULT`,
+When `config.toml` is absent, the `WEB_TO_OBSIDIAN_VAULT`,
 `WEB_TO_OBSIDIAN_DEST`, `WEB_TO_OBSIDIAN_IMAGES`, `WEB_TO_OBSIDIAN_SYNC_BRANCH`,
 `WEB_TO_OBSIDIAN_LOCK_FILE`, `WEB_TO_OBSIDIAN_PENDING_ROOT`, and
 `WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variables are accepted as a
@@ -148,6 +197,17 @@ output: it never writes a note.
 
 - Up to 10 URLs per command; each page may contribute several videos, which get
   `-1`/`-2` suffixes on a shared base name.
+- `--name <name>` overrides the filename stem; the page title is used otherwise.
+  `--to <dir>` overrides `[video].destination` for this run. Whether the target
+  counts as inside the vault is decided by resolving it, not by how it is
+  written: an absolute path may land inside, and a relative path must not
+  escape.
+- A single file over `[video].max_size_mb` (500 MB) is refused, but when the
+  check happens depends on the source. A direct response declaring a larger
+  `Content-Length` is refused before its body is read. Without a declared
+  length the limit is enforced as bytes are written and the partial file is
+  deleted. An HLS stream is checked against the running total across segments,
+  so it can stop partway through a playlist rather than before it starts.
 - Default `[video].destination` is `~/Movies/Videos/webclip`, outside the
   vault. A destination inside the vault gets a managed `.gitignore` block that is
   written **and committed**, so the next `/webclip` still passes its
@@ -212,7 +272,7 @@ Behavior rules:
 With the Dataview community plugin:
 
 ```dataview
-LIST FROM "Inbox" WHERE favorite = true
+LIST FROM "inbox" WHERE favorite = true
 ```
 
 Without Dataview:
