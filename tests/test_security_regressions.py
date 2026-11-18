@@ -4,7 +4,9 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
+import subprocess
 import tempfile
 import time
 import unittest
@@ -15,8 +17,12 @@ import yaml
 import web_to_obsidian as clip
 from _webclip import netguard
 from _webclip.article import _validate_videos
+from _webclip.config import ClipConfig
 from _webclip.video import naming, probe, report, store
+from _webclip.video.download import direct as direct_module
 from _webclip.video.download.hls import _claim_output
+from _webclip.video.models import DownloadPlan
+from _webclip.video.service import VideoService
 
 
 def _proc_alive(pid: int) -> bool:
@@ -615,6 +621,81 @@ class SaveVideoSecurityTests(unittest.TestCase):
 
             self.assertEqual(outside.read_bytes(), b"ORIGINAL")
 
+    def test_a_partial_clip_table_does_not_split_the_vault_or_the_lock(self):
+        # `/webclip` resolves `[clip]` through `ClipConfig.from_file`, which
+        # never reads `os.environ`. Reading the environment here for the keys the
+        # table omits gave the two commands different locks on the same vault.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "plugin"
+            root.mkdir()
+            vault = Path(tmp) / "vault"
+            vault.mkdir()
+            elsewhere = Path(tmp) / "elsewhere.lock"
+            (root / "config.toml").write_text(
+                f'[clip]\nvault = "{vault}"\n', encoding="utf-8"
+            )
+
+            with mock.patch.dict(
+                os.environ, {"WEB_TO_OBSIDIAN_LOCK_FILE": str(elsewhere)}
+            ):
+                expected = ClipConfig.from_file(root / "config.toml")
+                service = VideoService(root)
+                self.assertEqual(service._vault(), expected.vault)
+                self.assertEqual(service._lock_path(), expected.lock_file)
+                self.assertNotEqual(service._lock_path(), elsewhere.resolve())
+
+    def test_without_a_config_file_both_commands_read_the_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "plugin"
+            root.mkdir()
+            vault = Path(tmp) / "vault"
+            vault.mkdir()
+            shared = Path(tmp) / "shared.lock"
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "WEB_TO_OBSIDIAN_VAULT": str(vault),
+                    "WEB_TO_OBSIDIAN_LOCK_FILE": str(shared),
+                },
+            ):
+                expected = ClipConfig.from_file(root / "config.toml")
+                service = VideoService(root)
+                self.assertEqual(service._vault(), expected.vault)
+                self.assertEqual(service._lock_path(), expected.lock_file)
+                self.assertEqual(service._lock_path(), shared.resolve())
+
+    def test_a_truncated_url_falls_through_to_the_next_candidate(self):
+        # The point of converting `IncompleteRead` was to keep the batch going,
+        # not merely to change the exception type: `download_direct` has to move
+        # on to the next URL instead of re-raising.
+        plan = DownloadPlan(
+            urls=("https://cdn.example.com/a", "https://cdn.example.com/b"),
+            kind="direct",
+            headers={},
+            title="clip",
+        )
+        attempts = []
+
+        def fake(url, destination, **kwargs):
+            attempts.append(url)
+            if url.endswith("/a"):
+                raise netguard.ClipError("the response ended early")
+            destination.write_bytes(b"\x00" * 4096)
+            return url, 4096
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(
+                direct_module, "download_to_file", side_effect=fake
+            ), mock.patch.object(direct_module, "probe_duration", return_value=1.0):
+                result = direct_module.download_direct(plan, Path(tmp) / "out.mp4")
+
+            self.assertEqual(
+                attempts,
+                ["https://cdn.example.com/a", "https://cdn.example.com/b"],
+            )
+            self.assertEqual(result.bytes_written, 4096)
+
     def test_the_collector_limits_are_accepted_by_the_python_validator(self):
         # The Node collector clamps to exactly these bounds. If the two sets of
         # limits drift apart, a page near the edge makes the validator raise and
@@ -634,6 +715,61 @@ class SaveVideoSecurityTests(unittest.TestCase):
         ]
 
         self.assertEqual(len(_validate_videos(items)), 1)
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class CollectorContractTests(unittest.TestCase):
+    """The collector's real output has to satisfy the Python validator.
+
+    A hand-built candidate cannot catch this: it asserts what the validator
+    accepts, not what the collector produces. Only running `collectVideos` and
+    feeding its output to `_validate_videos` fails when one side's limits move
+    without the other.
+    """
+
+    EXTRACTOR = Path(__file__).resolve().parents[1] / "extractor"
+
+    def _collect(self, html: str) -> list[dict]:
+        script = (
+            "import { parseHTML } from 'linkedom';\n"
+            "import { collectVideos } from './src/video-collect.mjs';\n"
+            f"const {{ document }} = parseHTML({json.dumps(html)});\n"
+            "process.stdout.write(JSON.stringify("
+            "collectVideos(document, 'https://example.com/a')));\n"
+        )
+        completed = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            cwd=self.EXTRACTOR,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr[:800])
+        return json.loads(completed.stdout)
+
+    def test_a_page_at_every_limit_passes_python_validation(self):
+        if not (self.EXTRACTOR / "node_modules" / "linkedom").is_dir():
+            self.skipTest("extractor dependencies are not installed")
+
+        oversized = "https://example.com/" + "a" * 8200 + ".mp4"
+        html = (
+            "<html><head><title>" + "t" * 20000 + "</title></head><body>"
+            '<video width="100001" height="-5">'
+            '<source src="/clip.mp4" type="video/mp4"></video>'
+            f'<video><source src="{oversized}"></video>'
+            "</body></html>"
+        )
+
+        items = self._collect(html)
+
+        # The 8200-byte source is dropped by the collector, and whatever survives
+        # is accepted by the validator. Either limit moving alone breaks this.
+        self.assertEqual(
+            [item["src"] for item in items], ["https://example.com/clip.mp4"]
+        )
+        self.assertEqual(len(_validate_videos(items)), 1)
+        self.assertLessEqual(items[0]["width"], 100_000)
+        self.assertGreaterEqual(items[0]["height"], 0)
 
 
 if __name__ == "__main__":
