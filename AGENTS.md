@@ -187,19 +187,87 @@ in `master`, so each published module version is addressable by tag:
   on the new commit (local rewrite; see also Git workflow below on force
   pushes — tag replacement is allowed, do not force-push branches).
 
-### 2.2 Date tags for changelog releases
+### 2.2 Date tags and their GitHub releases
 
-When a new `## YYYY-MM-DD` entry is added to `CHANGELOG.md`, also create a
-date tag of the form `vYYYY-MM-DD` on the merge commit in `master` (matching
-the changelog heading), e.g. `v2026-09-06`.
+When a new `## YYYY-MM-DD` entry is added to `CHANGELOG.md`, create a date tag
+of the form `vYYYY-MM-DD` on the merge commit in `master` (matching the
+changelog heading, e.g. `v2026-09-06`) **and** the GitHub release of the same
+name. The tag marks the repository state at the end of that date's release
+history; the release is what makes that entry readable without cloning.
 
-- **Date tags MUST also be created on `master` after the PR is merged**, not
-  on the feature branch.
+- **Both are created on `master` after the PR is merged**, not on the feature
+  branch.
 - If a tag for that date already exists, **delete the old tag and create the
   new one** pointing at the latest merge commit (a date may have multiple
-  version changes; only the newest tag survives).
-- This tag marks the repository state at the end of that date's release
-  history.
+  version changes; only the newest tag survives). Re-point the release with it
+  — see [Re-pointing a date tag](#re-pointing-a-date-tag).
+- A date tag without a release is an incomplete release: the entry is invisible
+  from the repository's Releases page and cannot be subscribed to.
+
+Release fields:
+
+| Field              | Value                                                                         |
+| ------------------ | ----------------------------------------------------------------------------- |
+| tag                | `vYYYY-MM-DD`; it must already exist, which `--verify-tag` enforces           |
+| name               | the tag itself, e.g. `v2026-11-18`                                            |
+| body               | the date's `CHANGELOG.md` section without its heading, plus the compare link  |
+| draft / prerelease | `false`                                                                       |
+
+```bash
+# notes/vYYYY-MM-DD.md holds the changelog section for that date, heading removed
+gh release create "v$DATE" --title "v$DATE" --notes-file "notes/v$DATE.md" --verify-tag
+```
+
+The compare link points at the **previous date that has a tag**, not at the
+previous line of the changelog: the changelog contains dates with no tag, and a
+compare against a missing tag renders as an error.
+
+```
+**Full Changelog**: https://github.com/<owner>/<repo>/compare/v<PREV>...v<DATE>
+```
+
+The oldest date tag has no predecessor — omit the link there rather than
+comparing against the first commit, which would list the entire history.
+
+Verify every release after creating it; a wrong `name` or an accidental draft
+is only visible from the API:
+
+```bash
+gh release view "v$DATE" --json tagName,name,isDraft,isPrerelease
+```
+
+`name` MUST equal the tag, and neither flag may be `true`.
+
+#### Re-pointing a date tag
+
+A re-pointed tag must not leave a stale release behind. Delete the release
+first — `--cleanup-tag=false` keeps the tag alive for the re-point — then
+recreate both:
+
+```bash
+gh release delete "v$DATE" --yes --cleanup-tag=false
+git tag -d "v$DATE"
+git push origin ":refs/tags/v$DATE"
+git tag "v$DATE" <new-commit>
+git push origin "v$DATE"
+gh release create "v$DATE" --title "v$DATE" --notes-file "notes/v$DATE.md" --verify-tag
+```
+
+If only the changelog section changed and the tag still points at the right
+commit, skip the tag steps and update the body in place:
+
+```bash
+gh release edit "v$DATE" --notes-file "notes/v$DATE.md"
+```
+
+#### Backfilling early dates
+
+Early `## YYYY-MM-DD` entries predate this rule, so their tags may be missing
+entirely. When backfilling, point the tag at the last `master` commit before
+that date's `23:59:59` in the changelog's timezone (`+08:00`). Some of those
+sections were written after the fact, so the tagged commit does not contain the
+section it is named after — which is why the release body is generated from
+`CHANGELOG.md` rather than from the tag's tree.
 
 ### 3. Language: English for docs, code comments, and commits
 
