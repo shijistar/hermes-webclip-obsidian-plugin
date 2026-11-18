@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## 2026-11-18
 
+### Added
+
+- `PLUGIN.md#compatibility`: the published contract surface for 1.0.0 — command
+  flags, configuration keys, the frontmatter fields you can query, extractor
+  output fields, and the note-body boundaries, each assigned to a promise tier
+  (L1 needs a major version to break, L2 best-effort, L3 not a contract, Frozen).
+- `README.md`: `/save-video` usage, a video quick start, and Documentation map
+  entries for the video command and its skill.
+- `extractor/README.md`: the `videos` array and the `--with-videos` flag, neither
+  of which was documented.
+
+### Changed
+
+- **Plugin 1.0.0, extractor 1.0.0.** There is no breaking change: 1.0.0 freezes
+  the contract described above. The skills move to `web-clip-to-obsidian` 1.14.0
+  and `web-save-video` 1.0.4.
+- `config.example.toml` is a neutral template now: it targets a `~/Obsidian`
+  vault and an `inbox` destination, carries a comment on every key, and no
+  longer documents `ytdlp` (the key is still accepted for existing configs).
+- Built-in defaults follow the template — `~/Obsidian` and `inbox` instead of one
+  machine's `~/obsidian/shijistar` and `Inbox`.
+- The configuration precedence is stated explicitly, in `PLUGIN.md` and in the
+  README: while `config.toml` exists the `WEB_TO_OBSIDIAN_*` environment
+  variables take no part, for any key; when it is absent they are read.
+- Skill tags carry the skill name, `skill@<name>@<version>`. Historical flat
+  `skill@<version>` tags stay as they are; their owner is decided by the commit
+  they sit on.
+- `README.md` is 25 lines shorter despite gaining the video sections: the
+  favorite-marker rules and the configuration table now point at
+  `PLUGIN.md` and `config.example.toml` instead of repeating them.
+
 ### Fixed
 
 - `netguard`: a chunked response that stops mid-body raises `http.client.IncompleteRead`,

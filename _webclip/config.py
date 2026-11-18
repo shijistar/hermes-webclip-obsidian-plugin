@@ -43,13 +43,13 @@ class ClipConfig:
     def from_env(cls, env: Mapping[str, str] | None = None) -> "ClipConfig":
         values = os.environ if env is None else env
         vault = Path(
-            values.get("WEB_TO_OBSIDIAN_VAULT", "~/obsidian/shijistar")
+            values.get("WEB_TO_OBSIDIAN_VAULT", "~/Obsidian")
         ).expanduser().resolve()
         if not vault.is_dir():
             raise ClipError("The configured Obsidian vault does not exist.")
 
         destination = _resolve_vault_path(
-            vault, values.get("WEB_TO_OBSIDIAN_DEST", "Inbox")
+            vault, values.get("WEB_TO_OBSIDIAN_DEST", "inbox")
         )
         images = _resolve_vault_path(
             vault, values.get("WEB_TO_OBSIDIAN_IMAGES", "images")
@@ -108,12 +108,19 @@ class ClipConfig:
             not isinstance(value, str) for value in section.values()
         ):
             raise ClipError("The plugin config.toml contains unsupported values.")
-        mapping = {
-            "WEB_TO_OBSIDIAN_VAULT": section.get("vault", "~/obsidian/shijistar"),
-            "WEB_TO_OBSIDIAN_DEST": section.get("destination", "Inbox"),
-            "WEB_TO_OBSIDIAN_IMAGES": section.get("images", "images"),
-            "WEB_TO_OBSIDIAN_SYNC_BRANCH": section.get("sync_branch", "master"),
-        }
+        # Only the keys the table actually carries reach `from_env`; anything
+        # omitted falls back to the defaults there. Writing them here too would
+        # keep two copies of every default in step by hand — the second copy
+        # would silently win for any key the table leaves out.
+        mapping = {}
+        for key, variable in (
+            ("vault", "WEB_TO_OBSIDIAN_VAULT"),
+            ("destination", "WEB_TO_OBSIDIAN_DEST"),
+            ("images", "WEB_TO_OBSIDIAN_IMAGES"),
+            ("sync_branch", "WEB_TO_OBSIDIAN_SYNC_BRANCH"),
+        ):
+            if key in section:
+                mapping[variable] = section[key]
         if "lock_file" in section:
             mapping["WEB_TO_OBSIDIAN_LOCK_FILE"] = section["lock_file"]
         if "pending_root" in section:

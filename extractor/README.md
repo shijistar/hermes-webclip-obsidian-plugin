@@ -44,23 +44,32 @@ For CI or locked installs use `npm ci --ignore-scripts` and then
 ## CLI
 
 ```bash
-node src/cli.mjs <url> [--no-browser]
+node src/cli.mjs <url> [--no-browser] [--with-videos]
 ```
 
 - `<url>` — exactly one `http://` or `https://` URL.
 - `--no-browser` — skip the Chromium fallback; fail with `QUALITY_GATE` if the
   static pass yields no substantial article.
+- `--with-videos` — accept a page whose only content is a video player, by
+  widening the quality gate. The `videos` array is collected either way.
 
 Output is a single JSON line on stdout. On success:
 
 ```json
-{ "ok": true, "title": "...", "author": "...", "published": "...",
-  "description": "...", "site": "...", "canonicalUrl": "...",
-  "keywords": [...], "markdown": "...", "wordCount": 123, "method": "static" }
+{ "ok": true, "url": "https://.../article", "title": "...", "author": "...",
+  "published": "...", "description": "...", "site": "...", "canonicalUrl": "...",
+  "keywords": [...], "markdown": "...", "wordCount": 123, "method": "static",
+  "videos": [ { "src": "https://.../clip.mp4", "type": "video/mp4",
+                "title": "...", "poster": "https://.../p.jpg",
+                "width": 1920, "height": 1080, "origin": "video-src" } ] }
 ```
 
 `method` is `static` (Defuddle over the pinned fetch) or `playwright`
-(Chromium fallback). On failure, exit code is `1` and stdout carries:
+(Chromium fallback). `videos` is always present and may be empty; every entry has
+`src`, and `type` / `title` / `poster` / `width` / `height` / `origin` are
+best-effort — an attribute the page omits arrives as an empty string or `0`, not
+as an error. Duplicate `src` values are dropped and the array is capped. On
+failure, exit code is `1` and stdout carries:
 
 ```json
 { "ok": false, "error": "<user-facing message>", "code": "<CODE>" }

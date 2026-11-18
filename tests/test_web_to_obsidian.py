@@ -153,7 +153,32 @@ class ConfigAndFilenameTests(unittest.TestCase):
             vault = Path(tmp).resolve() / "vault"
             vault.mkdir()
             config = clip.ClipConfig.from_env({"WEB_TO_OBSIDIAN_VAULT": str(vault)})
-            self.assertEqual(config.destination, vault / "Inbox")
+            self.assertEqual(config.destination, vault / "inbox")
+
+    def test_a_config_file_hides_the_environment_from_omitted_keys(self):
+        # Contract: when config.toml exists the environment takes no part at
+        # all, and an omitted key uses the built-in default. Mixing the two
+        # would let one deployment inherit another's environment.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            vault = root / "vault"
+            vault.mkdir()
+            config_path = root / "config.toml"
+            config_path.write_text(f'[clip]\nvault = "{vault}"\n', encoding="utf-8")
+
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "WEB_TO_OBSIDIAN_DEST": "elsewhere",
+                    "WEB_TO_OBSIDIAN_IMAGES": "env-images",
+                    "WEB_TO_OBSIDIAN_SYNC_BRANCH": "env-branch",
+                },
+            ):
+                config = clip.ClipConfig.from_file(config_path)
+
+            self.assertEqual(config.destination, vault / "inbox")
+            self.assertEqual(config.images, vault / "images")
+            self.assertEqual(config.sync_branch, "master")
 
     def test_pending_root_reads_from_env(self):
         with tempfile.TemporaryDirectory() as tmp:

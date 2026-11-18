@@ -1,9 +1,18 @@
 [clip]
-vault = "~/obsidian/shijistar"
-destination = "Inbox"
+# Absolute path to an existing Obsidian vault. With Git sync (the default) it
+# must also be a Git repository on `sync_branch`, otherwise every /webclip
+# needs --no-git. Match the case exactly as Obsidian opened it.
+vault = "~/Obsidian"
+# Folder for new notes, relative to `vault`. Created if missing.
+destination = "inbox"
+# Where localized images go, relative to `vault`.
 images = "images"
+# Git sync refuses to run unless the vault is on this branch.
 sync_branch = "master"
+# Cross-process lock. Must live outside the vault, or holding it dirties the
+# worktree and the next clip fails its clean-tree check.
 lock_file = "~/.hermes/workspace/cache/webclip-obsidian/vault.lock"
+# Pending yes/no image confirmation state; only one is active at a time.
 pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 # Query parameters appended to the article preview (GitHub blob) URL.
 # Leave empty to keep the URL unchanged. Feishu/Lark example:
@@ -11,8 +20,8 @@ pending_root = "~/.hermes/workspace/cache/webclip-obsidian/pending-state"
 preview_url_params = ""
 
 [video]
-# Absolute path (~ expanded) = outside the vault; a relative path = inside the
-# vault, resolved against [clip].vault. Default: outside the vault.
+# An absolute path may live anywhere; a relative path must stay inside the vault
+# (resolved against [clip].vault). Default: outside the vault.
 destination = "~/Movies/Videos/webclip"
 # When the destination is inside the vault, write and commit an ignore block so
 # the next /webclip still passes its clean-worktree preflight.
@@ -23,5 +32,3 @@ max_size_mb = 500
 max_per_run = 10
 # Per-request and per-segment timeout (seconds).
 download_timeout_s = 300
-# Optional path to yt-dlp; empty means auto-detect (not used yet).
-ytdlp = ""

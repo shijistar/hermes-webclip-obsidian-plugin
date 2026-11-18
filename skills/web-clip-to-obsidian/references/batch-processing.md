@@ -22,7 +22,7 @@ cat > /tmp/batch_clip.sh << 'SCRIPT'
 #!/bin/bash
 set -euo pipefail
 cd ~/.hermes/workspace/repository/hermes-webclip-obsidian-plugin
-VAULT=~/obsidian/shijistar
+VAULT=~/Obsidian
 
 clip_one() {
     local url="$1" imgs="$2" label="$3"
@@ -72,7 +72,7 @@ ClipError: Git protection requires an entirely clean worktree.
 **Fix**: Inspect the worktree **before** touching anything. Never run a blanket `git checkout -- .` — it would also discard any manual note edits you have not committed.
 
 ```bash
-cd ~/obsidian/shijistar && git status --short
+cd ~/Obsidian && git status --short
 ```
 
 - If the output only lists generated paths under `Inbox/` and `images/` (failed-clip residue), clean *only* those known generated paths, verifying each path before discarding:
@@ -253,7 +253,7 @@ If the user wants a different title than what was auto-extracted:
 > intended lines moved.
 
 ```bash
-cd ~/obsidian/shijistar
+cd ~/Obsidian
 git mv "Inbox/old-filename.md" "Inbox/new-filename.md"
 sed -i 's/^title: .*$/title: New Title/' "Inbox/new-filename.md"
 git add -A && git commit -m "clip: New Title" && git push

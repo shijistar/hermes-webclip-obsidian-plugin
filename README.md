@@ -2,65 +2,52 @@
 
 A **web clipping pipeline for Obsidian**: extract a public web article as clean
 Markdown, save it as a dated note in your vault, and — when the vault is a Git
-repository — commit and push it with guarded automatic synchronization. The
-repository is the Hermes plugin package, with a bundled Node.js extractor and an
-agent skill in the same tree.
+repository — commit and push it with guarded automatic synchronization. A second
+command, `/save-video`, downloads the videos on a page to local disk.
+
+The repository is the Hermes plugin package, with a bundled Node.js extractor
+and two agent skills in the same tree.
 
 ## Features
 
-- **Clean extraction** — Defuddle static parsing with an isolated Playwright
+- **Clean extraction** — Defuddle static parsing, with an isolated Playwright
   Chromium fallback for weak static pages.
-- **Image control** — keep remote image URLs, download them into the vault, or
-  decide per clip.
-- **Favorite marker** — mark a note with `favorite: true` while clipping or
-  later; refreshing keeps the stored marker.
-- **Guarded Git sync** — clean-worktree checks, path-scoped commits, normal
-  pushes, and a GitHub preview link when available.
-- **WeChat fallback** — curl-based extraction when the Node extractor is
-  blocked by the article page.
-- **Idempotent notes** — notes are matched by normalized source URL; unchanged
-  content is a no-op instead of a duplicate.
+- **Image control** — keep remote URLs, localize them, or decide per clip.
+- **Video download** — HLS playlists and direct media, fetched through the
+  plugin's own SSRF guard and remuxed locally.
+- **Favorite marker** — flag a note as a keeper while clipping or later.
+- **Guarded Git sync** — clean-worktree checks, path-scoped commits, and a
+  preview link when available.
+- **Idempotent notes** — matched by normalized source URL; unchanged content is
+  a no-op instead of a duplicate.
 
 ## Requirements
 
-- Linux, macOS, or WSL (the implementation uses `fcntl` locks and POSIX process groups;
-  Windows is not supported).
+- Linux, macOS, or WSL. The implementation uses `fcntl` locks and POSIX process
+  groups; Windows is not supported.
 - Hermes Agent with standalone plugin support.
-- Python 3.11+ and PyYAML (declared in `plugin.yaml`; `hermes plugins install` installs it
-  into the Hermes runtime environment).
-- Node.js 18+ with the bundled extractor; Playwright Chromium is installed by
-  its `prepare` hook.
-- Git for the default synchronization flow.
+- Python 3.11+ and PyYAML (declared in `plugin.yaml`).
+- Node.js 18+ and Git; Playwright Chromium is installed by the extractor's
+  `prepare` hook.
 
-Not supported: login-gated pages, cookies, credentials, and password-manager
-integration.
+**The vault must already be a Git repository on `sync_branch`** — otherwise every
+`/webclip` needs `--no-git`. Not supported: login-gated pages, cookies,
+credentials, password-manager integration.
 
 ## Quick start
 
 ### Install
 
-The bundled installer wires up the Node dependencies (Playwright Chromium) and
-`config.toml`:
-
 ```bash
-cd /path/to/hermes-webclip-obsidian-plugin
-./post-install.sh --install-plugin   # install, then wire up dependencies
-./post-install.sh                    # later refresh
+hermes plugins install <repo-url>
+cd "$HERMES_HOME/plugins/webclip-obsidian"
+./post-install.sh
 ```
 
-It detects `HERMES_HOME` and the active profile automatically
-(`--hermes-home DIR` overrides) and preserves an existing `config.toml`. Manual
-steps are in [`PLUGIN.md`](PLUGIN.md#install).
-
-### Configure
-
-Review `config.toml` in the plugin directory before the first clip. The
-installer generates it from `config.example.toml` (defaults target
-`~/obsidian/shijistar`, write to `Inbox`, and sync `master`); the
-[Configuration](#configuration) section lists every key. `config.toml` is
-gitignored, so this version and later ones do not publish a machine's local
-values (values committed before this change remain visible in git history).
-Restart your Hermes gateway after changing the configuration.
+`hermes plugins install` clones the package; `post-install.sh` installs the
+extractor's Node dependencies and Playwright Chromium, then writes `config.toml`
+from `config.example.toml` — preserving an existing one. Restart the gateway
+after changing the configuration.
 
 ### Clip your first article
 
@@ -70,11 +57,17 @@ Restart your Hermes gateway after changing the configuration.
 /webclip https://example.com/article --favorite
 ```
 
-The note is written with a dated filename (`YYYY-MM-DD-<title>.md`) in the
-destination. With Git enabled, the plugin commits it as `clip: <title>`, pushes,
-and reports a GitHub preview link. If remote Markdown images remain and
-`--save-images` is omitted, the plugin asks for a `yes`/`no` image decision
-before writing.
+The note is written as `YYYY-MM-DD-<title>.md` in the destination. With Git
+enabled, the plugin commits it as `clip: <title>`, pushes, and reports a preview
+link. If remote Markdown images remain and `--save-images` is omitted, the plugin
+asks for a `yes`/`no` decision before writing.
+
+### Download your first video
+
+```text
+/save-video https://example.com/post-with-video
+/save-video https://example.com/a https://example.com/b --to ~/Movies/clips
+```
 
 ## Usage
 
@@ -84,95 +77,85 @@ optional). A `webclip_id` target requires `--favorite` or `--unfavorite`.
 
 ### Command and flags
 
-| Flag | Effect |
-| --- | --- |
-| `--refresh` | Update changed managed content while preserving the manual section. |
-| `--no-browser` | Disable the Playwright fallback in the extractor. |
-| `--no-git` | Skip Git preflight, commit, and push for this invocation. |
-| `--save-images yes\|no\|ask` | Download images, keep remote URLs, or ask (default). Applies only when the page is clipped or refreshed. |
-| `--favorite` / `--unfavorite` | Ensure the note carries (or does not carry) the marker (see below). |
+| Command | Flag | Effect |
+| --- | --- | --- |
+| both | `--no-browser` | Disable the Playwright fallback in the extractor. |
+| `/webclip` | `--refresh` | Update changed managed content, preserving the manual section. |
+| `/webclip` | `--no-git` | Skip Git preflight, commit, and push for this run. |
+| `/webclip` | `--save-images yes\|no\|ask` | Download images, keep remote URLs, or ask (default). |
+| `/webclip` | `--favorite` / `--unfavorite` | Ensure the note carries (or does not carry) the marker. |
+| `/save-video` | `--name <name>` | Override the filename stem (page title by default). |
+| `/save-video` | `--to <dir>` | Override the destination; inside-vs-outside is decided by resolving it. |
+| `/save-video` | `--overwrite` | Replace an existing file instead of adding a `-1` suffix. |
 
 ### Favorite marker
 
-`favorite` is a plugin-managed boolean property. It is written only when true;
-an absent field means the note is not favorited.
+`favorite` is a plugin-managed boolean, written only when true. It is a
+property, not a tag, so `#favorite` will not match.
 
-`--favorite` is idempotent: it clips a URL that is not in the vault yet, marks
-an existing note without fetching it, and only re-fetches when you ask with
-`--refresh`. `--unfavorite` clears the marker and, without `--refresh`, never
-fetches.
-
-| Target | Command | Fetches page | Changes body | Result |
-| --- | --- | --- | --- | --- |
-| new URL | `--favorite` | Yes | Yes (first clip) | Clips and writes `favorite: true` |
-| clipped URL | `--favorite` | No | No | Writes `favorite: true` |
-| clipped URL | `--favorite --refresh` | Yes | Only if the page changed | Refreshes and keeps the marker |
-| clipped URL | `--unfavorite` | No | No | Removes the marker |
-| `webclip_id` | `--favorite` / `--unfavorite` | No | No | Marks the matching note(s) |
-
-- A target is either an `http(s)` URL or a `webclip_id`: the 64-hex digest from
-  the note frontmatter, with or without the `sha256:` prefix. A content hash
-  (`source_content_hash`) is accepted as a fallback when no `webclip_id`
-  matches.
-- Marker operations patch exactly one frontmatter line and leave the article
-  body and manual section byte-for-byte unchanged (a marker rewrite normalizes
-  line endings to LF). A `webclip_id` target
-  cannot be combined with `--refresh` or `--save-images`.
-- Every note matching the selector is marked; duplicate clips of the same
-  article are reported as "N notes" in the result.
-- Refreshing or re-clipping **without** a favorite flag keeps the existing
-  marker. Clear it explicitly with `--unfavorite`.
-- A change limited to `favorite` does not require `--refresh`; article-body
-  changes still do.
-- Only notes carrying a `webclip_id` and the managed/manual boundaries can be
-  marked. Unknown selectors fail closed.
-- Repeating the current state writes nothing and creates no Git commit.
-
-In Obsidian, query the boolean property directly. With the Dataview community
-plugin:
+`--favorite` clips a new URL, marks an existing note without fetching it, and
+re-fetches only with `--refresh`. `--unfavorite` clears the marker. Refreshing or
+re-clipping without a favorite flag keeps the existing marker.
 
 ```dataview
-LIST FROM "Inbox" WHERE favorite = true
+LIST FROM "inbox" WHERE favorite = true
 ```
 
-Without Dataview, search `favorite: true` or filter the Properties view. This is
-not a tag, so `#favorite` will not match. Full rules:
-[`PLUGIN.md`](PLUGIN.md#favorite-marker).
+Full rules, including `webclip_id` targeting: [`PLUGIN.md`](PLUGIN.md#favorite-marker).
 
 ### Images
 
 - `--save-images ask` (default) stores a pending yes/no confirmation when the
-  sanitized Markdown still has remote Markdown images.
+  sanitized Markdown still has remote images.
 - `--save-images yes` downloads them into `images/<article-slug>/`.
 - `--save-images no` keeps the remote URLs and saves immediately.
 
+### Save video
+
+`/save-video <url> [<url> ...] [flags]` downloads the video(s) on a page. It
+never writes a note — the two commands are independent.
+
+HLS playlists are pre-flighted: encrypted streams (including a master-level
+`EXT-X-SESSION-KEY`) and live streams are refused rather than half-downloaded.
+Segments are fetched by the plugin's own SSRF-guarded client, so ffmpeg only ever
+reads local files. Direct media is streamed with a byte ceiling enforced while
+writing.
+
+Every candidate is reported, and one failure never aborts the rest of the batch.
+Limits: 500 MB per file, 10 URLs per run, 20 candidates per page. The default
+destination is `[video].destination` (`~/Movies/Videos/webclip`); a destination
+inside the vault gets a managed `.gitignore` block that is written **and
+committed**, so the next `/webclip` still passes its clean-worktree preflight.
+
+Supported in this release: generic HTML5 pages and Netease. Bilibili and YouTube
+are planned. Platform matrix, HLS details and the storage policy:
+[`skills/web-save-video/SKILL.md`](skills/web-save-video/SKILL.md).
+
 ## Configuration
 
-`config.toml` lives in the plugin directory. It is gitignored and generated
-from `config.example.toml` on install:
+`config.toml` lives in the installed plugin directory, is gitignored, and is
+generated from `config.example.toml` on install. The keys worth changing first:
 
 | Key | Default | Purpose |
 | --- | --- | --- |
-| `vault` | `~/obsidian/shijistar` | Obsidian vault root. |
-| `destination` | `Inbox` | Note destination inside the vault. |
-| `images` | `images` | Directory for localized images. |
-| `sync_branch` | `master` | Branch the vault must be on for Git sync. |
-| `lock_file` | `~/.hermes/workspace/cache/webclip-obsidian/vault.lock` | Cross-process lock; must be outside the vault. |
-| `pending_root` | `~/.hermes/workspace/cache/webclip-obsidian/pending-state` | Pending image confirmations; one active at a time. |
-| `preview_url_params` | `""` (empty) | Query parameters appended to the article preview URL; see [Opening preview links in a browser](docs/preview-link-params.md). |
+| `[clip].vault` | `~/Obsidian` | Vault root. Must already exist. |
+| `[clip].destination` | `inbox` | Note folder inside the vault. |
+| `[video].destination` | `~/Movies/Videos/webclip` | Video output; an absolute path may live anywhere, a relative one must stay in the vault. |
+| `[video].max_size_mb` | `500` | Refuse a single larger file. |
+| `[clip].preview_url_params` | `""` | Query parameters for the preview link; see [Opening preview links in a browser](docs/preview-link-params.md). |
 
-The equivalent `WEB_TO_OBSIDIAN_VAULT`, `WEB_TO_OBSIDIAN_DEST`,
-`WEB_TO_OBSIDIAN_IMAGES`, `WEB_TO_OBSIDIAN_SYNC_BRANCH`,
-`WEB_TO_OBSIDIAN_LOCK_FILE`, `WEB_TO_OBSIDIAN_PENDING_ROOT`, and
-`WEB_TO_OBSIDIAN_PREVIEW_URL_PARAMS` environment variables are accepted when
-`config.toml` is absent. Values are never forwarded to the extractor process.
+Every key, with a comment on what changing it does, is in
+[`config.example.toml`](config.example.toml). `lock_file` **must stay outside the
+vault**, or holding it dirties the worktree. When `config.toml` is absent the
+`WEB_TO_OBSIDIAN_*` environment variables are read instead; when it exists, the
+environment takes no part. Values are never forwarded to the extractor process.
 
 ## Safety
 
 - URLs reject credentials, fragments, unsafe ports, malformed hosts, and
   non-HTTP schemes; redirects are revalidated.
-- Remote image downloads block reserved/private IP ranges, pin redirects,
-  reject non-default ports, and require `Content-Type: image/*`.
+- Image and video downloads block reserved and private IP ranges, pin the
+  connection to the approved address, and reject non-default ports.
 - Vault writes stay inside the configured vault, reject symlinks, and use
   same-directory temporary files with `fsync` and atomic replacement.
 - The extractor child receives only an allowlisted environment; credential-like
@@ -185,28 +168,20 @@ Details: [`PLUGIN.md`](PLUGIN.md#network-and-content-safety),
 [`PLUGIN.md`](PLUGIN.md#vault-and-idempotency-safety), and
 [`PLUGIN.md`](PLUGIN.md#git-safety).
 
-## Development
-
-```bash
-pip install -r requirements-dev.txt
-python3 -m pytest tests/ -v
-cd extractor && npm test && npm run check
-```
-
-Tests use fixtures, temporary directories, and temporary Git repositories; they
-never write the configured real vault. Contributor rules and the release
-workflow live in [`AGENTS.md`](AGENTS.md).
-
 ## Documentation map
 
 | Topic | Where |
 | --- | --- |
 | Install, configuration, usage | [`PLUGIN.md`](PLUGIN.md) |
+| Compatibility surface and known limitations | [`PLUGIN.md`](PLUGIN.md#compatibility) |
 | Favorite marker rules | [`PLUGIN.md`](PLUGIN.md#favorite-marker) |
-| Plugin network, vault, and Git safety | [`PLUGIN.md`](PLUGIN.md#network-and-content-safety) |
+| Video download rules | [`PLUGIN.md`](PLUGIN.md#save-video) |
+| Network, vault, and Git safety | [`PLUGIN.md`](PLUGIN.md#network-and-content-safety) |
+| Every configuration key | [`config.example.toml`](config.example.toml) |
 | Extractor CLI and error codes | [`extractor/README.md`](extractor/README.md) |
-| Agent skill deployment | [`skills/web-clip-to-obsidian/README.md`](skills/web-clip-to-obsidian/README.md) |
-| Contributor guide | [`AGENTS.md`](AGENTS.md) |
+| Article-clipping skill | [`skills/web-clip-to-obsidian/README.md`](skills/web-clip-to-obsidian/README.md) |
+| Video skill: platforms, HLS, storage | [`skills/web-save-video/SKILL.md`](skills/web-save-video/SKILL.md) |
+| Contributor guide and release workflow | [`AGENTS.md`](AGENTS.md) |
 | Version history | [`CHANGELOG.md`](CHANGELOG.md) |
 
 ## License
