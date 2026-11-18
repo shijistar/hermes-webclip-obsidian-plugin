@@ -59,10 +59,14 @@ def _host_of(url: str) -> str:
 
 
 def _id_params(video_id: str) -> dict[str, object]:
-    """``aid`` takes the bare number: ``aid=av80433022`` is rejected with -400."""
+    """``aid`` takes the bare number: ``aid=av80433022`` is rejected with -400.
+
+    ``bvid`` is case-sensitive on the wire, so a lowercase ``bv1…`` is upper-cased
+    to ``BV1…``; otherwise the API answers -400 for a URL the user copied verbatim.
+    """
     if video_id.lower().startswith("av"):
         return {"aid": video_id[2:]}
-    return {"bvid": video_id}
+    return {"bvid": "BV" + video_id[2:]}
 
 
 class BilibiliAdapter:
@@ -139,7 +143,10 @@ class BilibiliAdapter:
         """Resolve ``b23.tv`` to the page it redirects to.
 
         ``fetch_bytes`` follows redirects itself and returns the final URL, so
-        one small request is enough: the body is discarded.
+        one small request is enough: the body is discarded. The body cap is
+        200 KB because the resolver reads the redirect target, not the page —
+        but it is a page fetch nonetheless, so a site that starts inlining a
+        large state blob would break short links before it broke anything else.
         """
         if _host_of(url) != "b23.tv":
             return url
@@ -194,6 +201,13 @@ class BilibiliAdapter:
             raise ClipError(
                 "Bilibili returned no downloadable file for this video; "
                 "it may only offer DASH streams."
+            )
+        if len(entries) > 1:
+            # A multi-entry durl is one file split into segments. Saving
+            # entries[0] would look like success while delivering a fragment.
+            raise ClipError(
+                "Bilibili returned a segmented download; only single-file "
+                "responses are supported."
             )
         first = entries[0]
         src = first.get("url") if isinstance(first, dict) else None

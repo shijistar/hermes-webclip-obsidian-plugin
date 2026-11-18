@@ -43,6 +43,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - A batch of several URLs numbered its files per URL, so two links with the same
   title produced `-1` twice and then `-1-1`. Numbering now runs across the whole
   command, which is what makes a mixed Bilibili + YouTube batch readable.
+- **A list-shaped YouTube URL could bypass `max_per_run`.** `--no-playlist` only
+  constrains URLs that carry a video *and* a list; a bare `/playlist`,
+  `/@handle`, `/channel/…` or `/watch` without `v=` made yt-dlp walk the list
+  (measured: 249 entries for one channel) while holding the vault lock. The
+  adapter now accepts only single-video shapes, and `--playlist-items 1` sits
+  behind that check.
+- `_reason` treated any text containing "age" as a login wall, so
+  `unable to download webpage` and `storage failure` were both reported as
+  "requires a signed-in account".
+- A Bilibili `durl` with several entries was saved as its first segment under a
+  whole-video name; it is now refused with an explicit message.
+- A webm-only result was renamed to `.mp4`; the container is now checked and a
+  non-mp4 result is refused instead of mislabelled.
+- A download skipped by `--max-filesize` exits 0 with an empty directory, which
+  used to surface as "did not leave exactly one video file". It now names the
+  size limit.
+- A lowercase `bv…` prefix was sent verbatim and rejected with -400; the prefix
+  is normalized to `BV` while the id keeps its case.
 
 ### Notes
 

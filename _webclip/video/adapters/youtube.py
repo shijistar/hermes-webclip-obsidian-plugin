@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Mapping
 import json
-from urllib.parse import urlencode, urlsplit
+import re
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from ...core import ClipError
 from ...netguard import fetch_bytes
@@ -34,6 +35,45 @@ _HOSTS = frozenset(
 )
 _OEMBED = "https://www.youtube.com/oembed"
 _MAX_OEMBED_BYTES = 64_000
+#: A video id is 11 characters of base64url.
+_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_SHORT_PATH_PREFIXES = ("/shorts/", "/embed/")
+_NOT_A_VIDEO = (
+    "This YouTube URL is not a single video; playlists, channels and search "
+    "results are not supported."
+)
+
+
+def _video_id(url: str) -> str:
+    """The id of the single video behind *url*, or ``""``.
+
+    ``--no-playlist`` only constrains URLs that carry a video *and* a list. A
+    bare ``/playlist``, ``/@handle`` or ``/channel/`` URL is a pure list, so
+    yt-dlp would happily walk 249 entries (measured) — past ``max_per_run``,
+    onto disk one file at a time, holding the vault lock throughout. The shape
+    check below is what actually keeps a batch a batch.
+    """
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return ""
+    host = (parts.hostname or "").lower()
+    path = parts.path.rstrip("/") or "/"
+
+    if host == "youtu.be":
+        candidate = path.lstrip("/")
+        return candidate if _VIDEO_ID_RE.match(candidate) else ""
+
+    if path == "/watch":
+        values = parse_qs(parts.query).get("v") or []
+        candidate = values[0].strip() if values else ""
+        return candidate if _VIDEO_ID_RE.match(candidate) else ""
+
+    for prefix in _SHORT_PATH_PREFIXES:
+        if path.startswith(prefix):
+            candidate = path[len(prefix) :]
+            return candidate if _VIDEO_ID_RE.match(candidate) else ""
+    return ""
 
 
 class YoutubeAdapter:
@@ -51,6 +91,8 @@ class YoutubeAdapter:
     def discover(
         self, url: str, *, article: Mapping[str, object] | None = None
     ) -> list[VideoCandidate]:
+        if not _video_id(url):
+            raise ClipError(_NOT_A_VIDEO)
         return [
             VideoCandidate(
                 src=url,

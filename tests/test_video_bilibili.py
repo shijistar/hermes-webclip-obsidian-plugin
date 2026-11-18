@@ -127,6 +127,33 @@ class DiscoveryTests(unittest.TestCase):
             {"Referer": "https://www.bilibili.com/"},
         )
 
+    def test_a_segmented_durl_is_refused_instead_of_truncated(self):
+        payload = {
+            "code": 0,
+            "data": {
+                "durl": [
+                    {"url": "https://upos-sz-estgoss.bilivideo.com/a.mp4"},
+                    {"url": "https://upos-sz-estgoss.bilivideo.com/b.mp4"},
+                ]
+            },
+        }
+        with self.assertRaises(ClipError) as raised:
+            self._discover(
+                "https://www.bilibili.com/video/BV1GJ411x7h7",
+                _payload(VIEW_SINGLE),
+                _payload(payload),
+            )
+        self.assertIn("segmented", str(raised.exception))
+
+    def test_a_lowercase_bv_prefix_is_normalized(self):
+        # The id itself is case-sensitive; only the prefix is safe to normalize.
+        _found, fetched = self._discover(
+            "https://www.bilibili.com/video/bv1GJ411x7h7",
+            _payload(VIEW_SINGLE),
+            _payload(PLAYURL_SINGLE),
+        )
+        self.assertIn("bvid=BV1GJ411x7h7", fetched.call_args_list[0].args[0])
+
     def test_an_av_url_sends_the_bare_aid(self):
         # `aid=av80433022` is rejected with -400; the API wants the number alone.
         found, fetched = self._discover(

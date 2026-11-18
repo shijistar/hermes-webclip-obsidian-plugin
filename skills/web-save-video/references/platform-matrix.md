@@ -9,7 +9,7 @@ adapter last, because it matches every URL.
 | Generic HTML5 | shipped | any URL | extractor DOM scan (`<video>`, `<source>`, `og:video`, JSON-LD) | HLS via ffmpeg, or direct GET |
 | Netease (163.com) | shipped | hostname `163.com` / `*.163.com` | curl the page, read `data-m3u8` / `data-mp4` | HLS |
 | Bilibili | shipped | `*.bilibili.com`, `b23.tv` (live and bangumi refused by name) | `x/web-interface/view` → `x/player/playurl?platform=html5&high_quality=1` | direct GET of the single `durl` mp4 |
-| YouTube | shipped | `youtube.com`, `youtu.be`, `m.youtube.com`, `music.youtube.com` | yt-dlp (`kind="ytdlp"`) | yt-dlp, `protocol=https` adaptive streams only |
+| YouTube | shipped | `youtube.com`, `youtu.be`, `m.youtube.com`, `music.youtube.com`, `youtube-nocookie.com` — single-video shapes only (`/watch?v=`, `youtu.be/<id>`, `/shorts/`, `/embed/`) | yt-dlp (`kind="ytdlp"`) | yt-dlp, `protocol=https` adaptive streams only |
 | WeChat Channels | unsupported | — | — | no public stream URL exists |
 
 ## Measured facts (2026-11-18, this machine)
@@ -51,3 +51,14 @@ Re-measure before trusting any of these after a site change.
    Chromium — and therefore Obsidian — plays Opus inside mp4; QuickTime does not.
 7. yt-dlp subprocesses need `HTTPS_PROXY` / `ALL_PROXY` preserved; the extractor's
    environment allowlist drops them. See `ytdlp.md`.
+8. **`--no-playlist` is not enough for list-shaped URLs.** It only constrains a
+   URL that carries both a video and a list. A bare `/playlist`, `/@handle`,
+   `/channel/...` or `/watch` with no `v=` walks the whole list (measured: 249
+   entries for one channel), which would blow past `max_per_run` and hold the
+   vault lock. The adapter refuses those shapes before yt-dlp is started, and
+   `--playlist-items 1` sits behind it as a second line of defence.
+9. A `durl` with more than one entry is one file split into segments. Only
+   single-file responses are supported; anything else is refused rather than
+   saved as a fragment under a whole-video name. `backup_url` is likewise not
+   used yet — all seven samples carried a single entry and no backup list, so
+   there is nothing to fall back to in practice.

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import re
 import shutil
 import tempfile
 
@@ -30,10 +31,19 @@ from ...proc import _run_bounded
 from ..models import DownloadPlan, DownloadedFile
 from .ffmpeg import find_ffmpeg, probe_duration
 
+#: yt-dlp writes these two into stderr; both used to fall through to a generic
+#: message, and the size one also exits 0 with an empty directory.
+_SIZE_RE = re.compile(r"max[- ]filesize|larger than max", re.IGNORECASE)
+_SIGN_IN_RE = re.compile(r"\bsign in\b|\bconfirm your age\b|\bage[- ]restricted\b", re.IGNORECASE)
+
 #: Whole-run budget. A 10 minute clip needs far more than the 300 s default that
 #: applies to a single HTTP request elsewhere.
 YTDLP_TIMEOUT = 1800
-_FORMAT = "bv*[protocol=https]+ba[protocol=https]/b[protocol=https]/b"
+_FORMAT = (
+    "bv*[protocol=https][ext=mp4]+ba[protocol=https]"
+    "/bv*[protocol=https]+ba[protocol=https]"
+    "/b[protocol=https][ext=mp4]/b[protocol=https]"
+)
 #: Audio is whatever yt-dlp considers best (in practice Opus). Preferring
 #: `[ext=m4a]` was tried and abandoned: on this machine that variant stalled at
 #: 1.8 MB for ten minutes with no progress, while the default audio completed.
@@ -92,9 +102,13 @@ def _environment() -> dict[str, str]:
 def _reason(stderr: bytes) -> str:
     """Map the common upstream failures to something a user can act on."""
     text = stderr.decode("utf-8", errors="replace")
+    if _SIZE_RE.search(text):
+        return "The video is larger than the configured size limit."
     if "403" in text or "Forbidden" in text:
         return "YouTube refused the download (HTTP 403); retry later."
-    if "Sign in" in text or "age" in text.lower():
+    # A bare `"age" in text` matched "webpage", "message" and "storage" too, so
+    # an ordinary failure was reported as a login wall (measured).
+    if _SIGN_IN_RE.search(text):
         return "YouTube requires a signed-in account for this video."
     if "Requested format is not available" in text:
         return "YouTube offered no downloadable format for this video."
@@ -124,6 +138,11 @@ def download_ytdlp(
             executable,
             "--ignore-config",
             "--no-playlist",
+            # Defence in depth: the adapter already refuses list-shaped URLs,
+            # and `--no-playlist` does not constrain a bare /playlist or
+            # /@handle URL at all.
+            "--playlist-items",
+            "1",
             "--no-progress",
             "--no-warnings",
             # Without a socket timeout a throttled track hangs until the 1800 s
@@ -164,8 +183,20 @@ def download_ytdlp(
             if item.is_file() and item.suffix.lower() in _RENDERED_SUFFIXES
         ]
         if len(produced) != 1:
+            # `--max-filesize` skips the format and still exits 0, leaving an
+            # empty directory; without this the user only sees a puzzling
+            # "exactly one file" message.
+            if _SIZE_RE.search(result.stderr.decode("utf-8", errors="replace")):
+                raise ClipError("The video is larger than the configured size limit.")
             raise ClipError("yt-dlp did not leave exactly one video file behind.")
         output = produced[0]
+        if output.suffix.lower() != ".mp4":
+            # The name is built from `video/mp4`, so saving a webm under that
+            # name would mislabel the container.
+            raise ClipError(
+                f"YouTube returned a {output.suffix.lstrip('.').lower() or 'unknown'} "
+                "stream, which cannot be saved as mp4."
+            )
         size = output.stat().st_size
         if size == 0:
             raise ClipError("yt-dlp produced an empty file.")

@@ -229,7 +229,9 @@ output: it never writes a note.
   tops out at 720P; live streams and bangumi are refused by name instead of
   falling through to the generic collector. YouTube goes through `yt-dlp`
   (`[video].ytdlp`, auto-detected otherwise); without that binary the command
-  says so and saves nothing, rather than failing silently.
+  says so and saves nothing, rather than failing silently. Only single-video URLs
+  are accepted — a playlist, channel or handle URL is refused by shape, because
+  yt-dlp's `--no-playlist` does not constrain a bare list URL.
 
 ### Favorite marker
 

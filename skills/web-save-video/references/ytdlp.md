@@ -15,7 +15,8 @@ its own SSRF-guarded downloader for everything else and delegates only this site
 | Flag | What breaks without it |
 | --- | --- |
 | `--ignore-config` | yt-dlp reads `~/.config/yt-dlp/config`, which may contain `--exec` — a config file would be running commands inside the plugin |
-| `--no-playlist` | a `watch?v=…&list=…` URL downloads the whole playlist, past `max_per_run` |
+| `--no-playlist` | a `watch?v=…&list=…` URL would download the whole playlist. On its own it does **not** stop a bare `/playlist`, `/@handle` or `/channel/` URL (measured: 249 entries), which is why the adapter also rejects those shapes |
+| `--playlist-items 1` | second line of defence behind the adapter's URL-shape check |
 | `-f "…[protocol=https]…"` | default order selects `m3u8_native`, which answers `HTTP 403` here |
 | `ba[ext=m4a]` preference | **not used**: that variant stalled at 1.8 MB for ten minutes here, while the default audio completed. Opus inside mp4 plays in Chromium/Obsidian, not in QuickTime |
 | `--socket-timeout 20` + `--retries 2` | a throttled track would otherwise hang until the 1800 s budget expires |

@@ -147,6 +147,45 @@ class YoutubeDiscoveryTests(unittest.TestCase):
         self.assertEqual(found[0].title, "")
         self.assertEqual(found[0].kind, "ytdlp")
 
+    def test_every_single_video_url_shape_is_accepted(self):
+        adapter = discover_module.YoutubeAdapter()
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes",
+            return_value=("u", json.dumps({"title": "T"}).encode("utf-8")),
+        ):
+            for url in (
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "https://youtu.be/dQw4w9WgXcQ",
+                "https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=10s",
+                "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+                "https://www.youtube.com/embed/dQw4w9WgXcQ",
+                "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+            ):
+                with self.subTest(url=url):
+                    self.assertEqual(len(adapter.discover(url)), 1)
+
+    def test_list_shaped_urls_are_refused_before_yt_dlp_sees_them(self):
+        # `--no-playlist` does not constrain these: a channel URL enumerates 249
+        # entries (measured), which would bypass max_per_run and hold the vault
+        # lock for the whole walk.
+        adapter = discover_module.YoutubeAdapter()
+        for url in (
+            "https://www.youtube.com/playlist?list=PL123",
+            "https://www.youtube.com/@3blue1brown",
+            "https://www.youtube.com/channel/UC123",
+            "https://www.youtube.com/watch",
+            "https://www.youtube.com/results?search_query=x",
+            "https://youtu.be/",
+        ):
+            with self.subTest(url=url):
+                with mock.patch(
+                    "_webclip.video.adapters.youtube.fetch_bytes"
+                ) as fetched:
+                    with self.assertRaises(ClipError) as raised:
+                        adapter.discover(url)
+                self.assertIn("not a single video", str(raised.exception))
+                fetched.assert_not_called()
+
 
 class DedupeTests(unittest.TestCase):
     def test_duplicate_sources_collapse(self):

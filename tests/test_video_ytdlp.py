@@ -101,6 +101,63 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(command[command.index("--") + 1], PLAN.urls[0])
         self.assertEqual(command[-1], PLAN.urls[0])
 
+    def test_the_guard_flags_carry_the_values_they_are_supposed_to(self):
+        _result, captured = self._run()
+        command = captured["command"]
+
+        def value_of(flag: str) -> str:
+            return command[command.index(flag) + 1]
+
+        self.assertEqual(value_of("--max-filesize"), str(500 * 1024 * 1024))
+        self.assertEqual(value_of("--socket-timeout"), "20")
+        self.assertEqual(value_of("--retries"), "2")
+        self.assertEqual(value_of("--playlist-items"), "1")
+        self.assertEqual(value_of("-S"), "res:1080,codec:avc1")
+        self.assertEqual(value_of("--merge-output-format"), "mp4")
+        self.assertEqual(value_of("--ffmpeg-location"), "/usr/bin/ffmpeg")
+
+    def test_the_proxy_variables_are_forwarded(self):
+        # Dropping them makes YouTube unreachable from this machine, so the docs
+        # promise this behaviour; it is not an implementation detail.
+        with mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://127.0.0.1:7890"}):
+            _result, captured = self._run()
+        self.assertEqual(
+            captured["kwargs"]["env"].get("HTTPS_PROXY"), "http://127.0.0.1:7890"
+        )
+
+    def test_a_non_mp4_result_is_refused_instead_of_mislabelled(self):
+        def fake_run(command, **kwargs):
+            template = Path(command[command.index("-o") + 1])
+            (template.parent / "video.webm").write_bytes(b"x" * 64)
+            return ProcessResult(returncode=0, stdout=b"", stderr=b"")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "out.mp4"
+            with mock.patch.object(ytdlp_module, "_run_bounded", side_effect=fake_run), \
+                 mock.patch.object(ytdlp_module, "find_ffmpeg", return_value="/usr/bin/ffmpeg"):
+                with self.assertRaises(ClipError) as raised:
+                    download_ytdlp(PLAN, destination, executable="/opt/bin/yt-dlp")
+        self.assertIn("webm", str(raised.exception))
+
+    def test_a_size_skipped_download_names_the_size_limit(self):
+        with self.assertRaises(ClipError) as raised:
+            self._run(
+                produced=False,
+                stderr=b"ERROR: File is larger than max-filesize (600MB > 500MB)",
+            )
+        self.assertIn("size limit", str(raised.exception))
+
+    def test_a_generic_failure_is_not_reported_as_a_login_wall(self):
+        # `"age" in text` used to match "webpage" and "storage".
+        for stderr in (
+            b"ERROR: unable to download webpage: HTTP Error 500",
+            b"ERROR: storage failure",
+        ):
+            with self.subTest(stderr=stderr):
+                with self.assertRaises(ClipError) as raised:
+                    self._run(returncode=1, stderr=stderr)
+                self.assertNotIn("signed-in", str(raised.exception))
+
     def test_the_subprocess_gets_a_wall_clock_budget_of_its_own(self):
         _result, captured = self._run()
         self.assertGreaterEqual(captured["kwargs"]["timeout"], ytdlp_module.YTDLP_TIMEOUT)
