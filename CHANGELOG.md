@@ -104,6 +104,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   end-to-end samples spanning 16:9, 4:3 and 9:16 from 720×1280 to 1920×1080, and the measured
   behaviour of `data-mp4`: it held the same `.m3u8` address as `data-m3u8` in 3/3 pages, so the
   container must be derived from the URL rather than the attribute name.
+- `skills/web-save-video/references/download-hls.md` now documents how to verify a merged file:
+  the residue against the `EXTINF` sum scales with segment count (48–68 ms per segment across
+  five measured pages), so an absolute "under 3 seconds" rule fails a long but intact download.
+  Includes the packet-timeline check that separates boundary padding from a dropped segment.
 
 ## 2026-11-16
 
