@@ -21,7 +21,7 @@ const PUBLIC_ERRORS = {
   EXTRACTION_FAILED: 'Article extraction failed.',
   QUALITY_GATE: 'The page did not contain a substantial article.',
   BROWSER_FAILED: 'Browser extraction failed.',
-  USAGE: 'Usage: node src/cli.mjs <url> [--no-browser]',
+  USAGE: 'Usage: node src/cli.mjs <url> [--no-browser] [--with-videos]',
 };
 
 function output(value) {
@@ -33,6 +33,9 @@ async function main(argv) {
   const noBrowserIndex = args.indexOf('--no-browser');
   const noBrowser = noBrowserIndex !== -1;
   if (noBrowser) args.splice(noBrowserIndex, 1);
+  const withVideosIndex = args.indexOf('--with-videos');
+  const withVideos = withVideosIndex !== -1;
+  if (withVideos) args.splice(withVideosIndex, 1);
   if (args.length !== 1 || args[0].startsWith('--')) {
     output({ ok: false, error: PUBLIC_ERRORS.USAGE, code: 'USAGE' });
     process.exitCode = 1;
@@ -40,7 +43,7 @@ async function main(argv) {
   }
 
   try {
-    const result = await extractUrl(args[0], { allowBrowser: !noBrowser });
+    const result = await extractUrl(args[0], { allowBrowser: !noBrowser, withVideos });
     output({ ok: true, ...result });
   } catch (cause) {
     const code = typeof cause?.code === 'string' && Object.hasOwn(PUBLIC_ERRORS, cause.code)

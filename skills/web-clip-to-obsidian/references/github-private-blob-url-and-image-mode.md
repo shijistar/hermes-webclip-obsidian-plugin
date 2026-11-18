@@ -32,7 +32,7 @@ produced by the caller, not by the plugin.
 
 ## 2) Skill file location
 
-- Skill source (single copy): `<plugin_root>/skill/SKILL.md`, resolved as
+- Skill source (single copy): `<plugin_root>/skills/web-clip-to-obsidian/SKILL.md`, resolved as
   `webclip-obsidian:web-clip-to-obsidian`.
 
 There is no separate profile copy to keep in sync: the plugin package holds the only

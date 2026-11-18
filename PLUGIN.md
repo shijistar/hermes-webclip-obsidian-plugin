@@ -64,7 +64,7 @@ follow-up steps.
 
 > The installed plugin is a clone of the repository. `hermes plugins install`
 > clones the repo root (the plugin package), so the bundled `extractor/`
-> directory and `skill/` are preserved in the installed copy. At runtime the
+> directory and `skills/` are preserved in the installed copy. At runtime the
 > plugin uses the bundled `<plugin_root>/extractor` (dependencies installed by
 > `npm install` inside it, which also pulls Playwright Chromium via the
 > `prepare` hook); if a published `@tiny-codes/web-clip-extractor` npm package
@@ -135,6 +135,32 @@ fallback. These values are never forwarded to the untrusted extractor process.
   confirmation and waits for a plain `yes` or `no` reply via the registered
   `web_to_obsidian_resume_pending` tool. If no remote images remain, the note
   is saved immediately.
+
+### Save video
+
+```text
+/save-video <url> [<url> ...] [--name <name>] [--to <dir>]
+            [--overwrite] [--no-browser]
+```
+
+Downloads the video(s) on a page to local disk. Separate command, separate
+output: it never writes a note.
+
+- Up to 10 URLs per command; each page may contribute several videos, which get
+  `-1`/`-2` suffixes on a shared base name.
+- Default `[video].destination` is `~/Movies/Videos/webclip`, outside the
+  vault. A destination inside the vault gets a managed `.gitignore` block that is
+  written **and committed**, so the next `/webclip` still passes its
+  clean-worktree preflight.
+- HLS playlists are pre-flighted: encrypted (including a master-level
+  `EXT-X-SESSION-KEY`) and live streams are refused rather than half-downloaded.
+  Segments are fetched by the plugin's own SSRF-guarded client, so ffmpeg only
+  ever reads local files.
+- `--overwrite` replaces an existing file; without it a free `-1` name is used.
+  A failed download never damages the file it was about to replace.
+- Every candidate is reported; one failure does not abort the rest of the batch.
+- Supported in this release: generic HTML5 pages and Netease. Bilibili and
+  YouTube are planned.
 
 ### Favorite marker
 

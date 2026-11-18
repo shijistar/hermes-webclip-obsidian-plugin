@@ -23,6 +23,14 @@ _RESUME_PENDING_SCHEMA = {
     "additionalProperties": False,
 }
 
+# Both skills ship inside the plugin package and are registered here, so the
+# package holds the only copy. The name is the registration name; the path is
+# where the file lives.
+_SKILLS = (
+    ("web-clip-to-obsidian", "skills/web-clip-to-obsidian/SKILL.md"),
+    ("web-save-video", "skills/web-save-video/SKILL.md"),
+)
+
 
 def register(ctx) -> None:
     from .web_to_obsidian import (
@@ -30,7 +38,6 @@ def register(ctx) -> None:
         build_resume_tool,
         read_skill_frontmatter,
     )
-
     plugin_root = Path(__file__).resolve().parent
     handler = build_handler(plugin_root)
     ctx.register_command(
@@ -39,25 +46,41 @@ def register(ctx) -> None:
         description="Clip a public web article into an Obsidian vault with guarded Git sync.",
         args_hint="<url|webclip_id> [--refresh] [--no-browser] [--no-git] [--save-images yes|no|ask] [--favorite|--unfavorite]",
     )
-    # The skill ships inside the plugin package and is registered here, so the package
-    # holds the only copy. Anything that goes wrong with it (missing file, damaged
-    # encoding, an older ctx without register_skill) must not take the /webclip command
-    # down with it, so this degrades to "no skill" instead of raising.
-    skill_md = plugin_root / "skill" / "SKILL.md"
+    # The video subsystem is imported here, inside its own guard: a broken or
+    # partially installed `_webclip/video` package must cost the /save-video
+    # command only, exactly like a broken skill costs its own registration.
     try:
-        frontmatter = read_skill_frontmatter(skill_md)
-        ctx.register_skill(
-            "web-clip-to-obsidian",
-            skill_md,
-            description=str(frontmatter.get("description") or "").strip(),
-            frontmatter=frontmatter,
+        # Absolute import on purpose: web_to_obsidian has just registered
+        # `_webclip` in sys.modules, and importing through that same entry keeps
+        # one ClipError class for the whole plugin.
+        from _webclip.video.service import build_handler as build_video_handler
+
+        ctx.register_command(
+            "save-video",
+            handler=build_video_handler(plugin_root),
+            description="Download the video(s) on a page to local disk, outside the vault by default.",
+            args_hint="<url> [<url> ...] [--name <name>] [--to <dir>] [--overwrite] [--no-browser]",
         )
-    except Exception as exc:  # FileNotFoundError, or an older ctx without register_skill
-        # Keep the traceback: a bare message cannot distinguish "skill/ is missing"
-        # from a real API mismatch (TypeError) that needs fixing.
+    except Exception as exc:
         logger.warning(
-            "web-clip-to-obsidian skill registration skipped: %s", exc, exc_info=True
+            "save-video command registration skipped: %s", exc, exc_info=True
         )
+    # A broken skill must not take the commands down with it: each registration
+    # degrades to "no skill" on its own.
+    for skill_name, relative_path in _SKILLS:
+        skill_md = plugin_root / relative_path
+        try:
+            frontmatter = read_skill_frontmatter(skill_md)
+            ctx.register_skill(
+                skill_name,
+                skill_md,
+                description=str(frontmatter.get("description") or "").strip(),
+                frontmatter=frontmatter,
+            )
+        except Exception as exc:  # FileNotFoundError, or an older ctx without register_skill
+            # Keep the traceback: a bare message cannot distinguish "the file is
+            # missing" from a real API mismatch (TypeError) that needs fixing.
+            logger.warning("%s skill registration skipped: %s", skill_name, exc, exc_info=True)
 
     ctx.register_tool(
         name="web_to_obsidian_resume_pending",

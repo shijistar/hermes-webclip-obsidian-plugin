@@ -11,7 +11,7 @@ import tomllib
 
 from .core import ClipError, _SAFE_BRANCH_NAME
 from .paths import _resolve_vault_path
-from .urls import _normalize_preview_url_params, _parse_target_selector
+from .urls import _normalize_preview_url_params, _parse_target_selector, _validate_http_url
 
 @dataclass(frozen=True)
 class ClipOptions:
@@ -191,3 +191,163 @@ def parse_clip_args(raw_args: str) -> ClipOptions:
         target_kind=target_kind,
         target_hash=target_hash,
     )
+
+
+# --------------------------------------------------------------------------- video
+
+
+@dataclass(frozen=True)
+class VideoOptions:
+    urls: tuple[str, ...]
+    name: str | None = None
+    destination: str | None = None
+    overwrite: bool = False
+    no_browser: bool = False
+
+
+MAX_SAVE_VIDEO_URLS = 10
+
+
+def parse_save_video_args(raw_args: str) -> VideoOptions:
+    """Parse ``/save-video`` arguments without invoking a shell."""
+    try:
+        tokens = shlex.split(raw_args, posix=True)
+    except ValueError as exc:
+        raise ClipError("Invalid quoting in /save-video arguments.") from exc
+
+    urls: list[str] = []
+    name: str | None = None
+    destination: str | None = None
+    overwrite = False
+    no_browser = False
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "--overwrite":
+            overwrite = True
+        elif token == "--no-browser":
+            no_browser = True
+        elif token in {"--name", "--to"}:
+            index += 1
+            if index >= len(tokens):
+                raise ClipError(f"The {token} option requires a value.")
+            value = tokens[index].strip()
+            if not value:
+                raise ClipError(f"The {token} option requires a value.")
+            if token == "--name":
+                if name is not None:
+                    raise ClipError("The --name option can only be given once.")
+                name = value
+            else:
+                if destination is not None:
+                    raise ClipError("The --to option can only be given once.")
+                destination = value
+        elif token.startswith("-"):
+            raise ClipError("Unknown /save-video option.")
+        else:
+            _validate_http_url(token)
+            urls.append(token)
+        index += 1
+
+    if not urls:
+        raise ClipError(
+            "Usage: /save-video <url> [<url> ...] [--name <name>] [--to <dir>] "
+            "[--overwrite] [--no-browser]"
+        )
+    if len(urls) > MAX_SAVE_VIDEO_URLS:
+        raise ClipError(
+            f"/save-video accepts at most {MAX_SAVE_VIDEO_URLS} URLs per command."
+        )
+    return VideoOptions(
+        urls=tuple(urls),
+        name=name,
+        destination=destination,
+        overwrite=overwrite,
+        no_browser=no_browser,
+    )
+
+
+@dataclass(frozen=True)
+class VideoConfig:
+    """``[video]`` settings.
+
+    Parsed separately from :class:`ClipConfig` on purpose: a typo in this table
+    must degrade to defaults with a warning, never take ``/webclip`` down with
+    it.
+    """
+
+    destination: str = "~/Movies/Videos/webclip"
+    gitignore: bool = True
+    max_size_mb: int = 500
+    max_per_run: int = 10
+    download_timeout_s: int = 300
+    ytdlp: str = ""
+    warnings: tuple[str, ...] = ()
+
+    @classmethod
+    def from_file(cls, path: Path) -> "VideoConfig":
+        if not path.is_file():
+            return cls()
+        try:
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, tomllib.TOMLDecodeError):
+            return cls(warnings=("[video] could not be read; using defaults.",))
+        section = data.get("video")
+        if section is None:
+            return cls()
+        if not isinstance(section, dict):
+            return cls(warnings=("The [video] table is invalid; using defaults.",))
+
+        warnings: list[str] = []
+        supported = {
+            "destination",
+            "gitignore",
+            "max_size_mb",
+            "max_per_run",
+            "download_timeout_s",
+            "ytdlp",
+        }
+        unknown = sorted(set(section) - supported)
+        if unknown:
+            warnings.append(
+                "Unsupported [video] keys ignored: " + ", ".join(unknown) + "."
+            )
+
+        destination = section.get("destination", cls.destination)
+        if not isinstance(destination, str) or not destination.strip():
+            warnings.append("[video].destination must be a non-empty string; using the default.")
+            destination = cls.destination
+
+        gitignore = section.get("gitignore", cls.gitignore)
+        if not isinstance(gitignore, bool):
+            warnings.append("[video].gitignore must be true or false; using true.")
+            gitignore = cls.gitignore
+
+        def _bounded_int(key: str, default: int, minimum: int, maximum: int) -> int:
+            raw = section.get(key, default)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                warnings.append(f"[video].{key} must be an integer; using {default}.")
+                return default
+            if not minimum <= raw <= maximum:
+                warnings.append(
+                    f"[video].{key} must be between {minimum} and {maximum}; using {default}."
+                )
+                return default
+            return raw
+
+        ytdlp = section.get("ytdlp", "")
+        if not isinstance(ytdlp, str):
+            warnings.append("[video].ytdlp must be a path string; using auto-detection.")
+            ytdlp = ""
+
+        return cls(
+            destination=destination.strip(),
+            gitignore=gitignore,
+            max_size_mb=_bounded_int("max_size_mb", cls.max_size_mb, 1, 20_000),
+            max_per_run=_bounded_int("max_per_run", cls.max_per_run, 1, 50),
+            download_timeout_s=_bounded_int(
+                "download_timeout_s", cls.download_timeout_s, 10, 7200
+            ),
+            ytdlp=ytdlp.strip(),
+            warnings=tuple(warnings),
+        )

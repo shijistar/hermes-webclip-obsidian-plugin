@@ -4,10 +4,56 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-18
+
+### Fixed
+
+- `netguard`: a chunked response that stops mid-body raises `http.client.IncompleteRead`,
+  which is neither an `OSError` nor a `ClipError`. It escaped the per-candidate handler and
+  aborted the whole `/save-video` batch instead of failing one candidate; both readers now
+  convert it, and a truncated download removes its partial file.
+- `probe`: the HLS encryption check searched the raw attribute list for `METHOD=`, so
+  `#EXT-X-KEY:KEYFORMAT="METHOD=NONE",METHOD=AES-128,…` reported an AES-128 stream as plain
+  and downloaded it into an unplayable file. The attribute list is parsed now, so quoted
+  values cannot impersonate a key.
+- `service`: `/save-video` read `[clip]` leniently while `/webclip` used
+  `ClipConfig.from_file`, so a table without `lock_file` (or `vault`) sent the two commands
+  to different locks and vaults. Both resolve through the same entry point.
+- `report`: the `MEDIA:` neutraliser required a word boundary, so a page-supplied
+  `https://…/xMEDIA:/tmp/report.pdf` survived as a live directive. It is neutralised at any
+  offset now, which also lets the path-separator rewrite cover it.
+- `download/hls`: ffmpeg opens its output with `fopen()` and `-y`, which follows a symlink
+  and truncates its target. The merge output is claimed with `O_EXCL` first, so a pre-placed
+  symlink fails the candidate instead of redirecting the write.
+
+### Docs
+
+- `skills/web-save-video/references/storage-policy.md`: a relative destination that escapes
+  the vault through a symlink is rejected, not treated as "outside".
+- `/save-video` security regressions moved into `tests/test_security_regressions.py`, where
+  `AGENTS.md` requires them.
+
 ## 2026-11-17
 
 ### Added
 
+- `/save-video <url> [<url> ...] [--name <name>] [--to <dir>] [--overwrite] [--no-browser]`:
+  downloads the video(s) on a page to local disk. Generic HTML5 pages use the extractor's new
+  `videos` field; Netease pages are fetched by a site adapter because a `/news/v/` stub has no
+  article body. HLS playlists are pre-flighted (encryption, liveness, segment count) and their
+  segments are downloaded by the plugin's own SSRF-guarded client before ffmpeg remuxes **local**
+  files; direct media is streamed with a byte ceiling enforced while writing. Every candidate is
+  reported, and a failure never aborts the rest of the batch.
+- `[video]` table in `config.toml`: `destination` (absolute = outside the vault, relative =
+  inside), `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`, `ytdlp`. Parsed
+  independently of `[clip]`, so a typo here degrades to defaults with a warning instead of
+  breaking `/webclip`.
+- `skills/web-save-video/`: new skill (main file under 80 lines) with seven references —
+  platform matrix, DOM discovery, HLS, direct download, naming, storage policy, Netease.
+- `_webclip/netguard.py`: resolves a page-supplied URL once, rejects private / link-local /
+  non-default-port answers, pins the connection to the approved address and revalidates every
+  redirect. This is what stops a playlist from pointing the downloader at `127.0.0.1` or a cloud
+  metadata endpoint.
 - `skill/references/zhihu-article-extraction.md`: the Zhihu per-article procedure that until now
   lived only in a local profile skill — the four-layer ladder, how to read a `40362` refusal
   (request-layer throttling, not a cookie problem, plus the three-probe check that proves it),
@@ -18,6 +64,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- Repository layout: `skill/` became `skills/<name>/`, so a second skill can ship from the same
+  package. Registration paths in `__init__.py`, `post-install.sh`, `AGENTS.md`, `PLUGIN.md`,
+  `README.md` and the skill's own references were updated; the registered names are unchanged.
+  Skill version 1.12.0 → 1.13.0.
+- Extractor 0.4.1 → 0.5.0. `extractHtml()` now returns a `videos` array (collected from the DOM
+  before Defuddle runs), `--with-videos` lets a video-stub page clear the quality gate, and asking
+  an older extractor for videos is a loud error instead of an empty list. `/webclip` never asks
+  for `videos`, so its behaviour is unchanged.
+- `_webclip/article.py` validates the new `videos` field (http(s) sources only, at most 20
+  entries) and distinguishes "the extractor cannot report videos" from "this page has none".
 - The fallback contract now puts the fetched page text in `article["markdown"]`, with the trimmed
   or re-rendered body only in `content_markdown`. `render_note()` refuses a payload that supplies
   a rendered body with an empty `markdown`, because that combination made `source_content_hash`
@@ -39,6 +95,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   live in `plugin.yaml`, `extractor/package.json` and the `version` frontmatter of
   `skill/SKILL.md`, and copying them into a document that must be edited by hand only added a
   second place to forget. The table now records where each version lives.
+
+### Fixed
+
+- A vault destination's `.gitignore` commit reported only "A Git command failed while tidying the
+  vault" when the repository had no author identity. Git 2.56 no longer invents `user@hostname`,
+  so this surfaced as an unexplained failure on CI and on fresh vaults. The plugin now says
+  "Git has no author identity in this vault. Set user.name and user.email", and other Git
+  failures carry the stderr detail instead of being discarded. The video test fixtures pin a
+  local identity for the same reason: the plugin commits without `-c`.
+- The `/save-video` receipt no longer renders page-controlled text. A title could carry a newline
+  and forge a `MEDIA:` line (or a bare existing path), which the gateway turns into an uploaded
+  attachment; the success line now shows the saved filename and every page-supplied field is
+  flattened and de-fanged.
+- A response shorter than its declared `Content-Length` was accepted as complete — `read(amt)`
+  returns `b""` instead of raising `IncompleteRead` when the peer closes early — so a truncated
+  video could be published, and could replace a good file under `--overwrite`. Both readers now
+  verify the received count, and the temporary file is created with `O_EXCL` under a randomised
+  name so a pre-placed symlink fails the write instead of redirecting it.
+- One bad candidate can no longer abort the batch: a malformed `#EXTINF` duration, a page-declared
+  `width="100001"` that made the payload validator raise (which also broke `/webclip`), and an
+  `http.client.HTTPException` from a broken status line are all reported per candidate.
+- Playlists this downloader cannot honour are refused at pre-flight instead of being downloaded
+  incorrectly: `EXT-X-BYTERANGE` (the whole resource once per range) and `EXT-X-MAP` (the fMP4
+  initialisation section would be dropped).
+- Smaller fixes: the declared MIME subtype is mapped through a fixed set (`video/md` no longer
+  saves a `.md` file inside the vault), gitignore entries escape glob characters, the managed
+  block is built with a literal replacement, a relative destination that escapes the vault
+  through a symlink is refused, variant parsing is a single pass, `METHOD` is read as an
+  attribute, the vault and lock fall back to `WEB_TO_OBSIDIAN_*` like `/webclip`, and
+  `<picture>`/`<audio>` sources no longer consume the video candidate limit.
+
+### Docs
+
+- `skills/web-save-video/references/netease.md` records the `/news/sv/` URL prefix (same player
+  markup, same adapter — `matches()` only checks the hostname, so no path check was added), four
+  end-to-end samples spanning 16:9, 4:3 and 9:16 from 720×1280 to 1920×1080, and the measured
+  behaviour of `data-mp4`: it held the same `.m3u8` address as `data-m3u8` in 3/3 pages, so the
+  container must be derived from the URL rather than the attribute name.
+- `skills/web-save-video/references/download-hls.md` now documents how to verify a merged file:
+  the residue against the `EXTINF` sum scales with segment count (48–68 ms per segment across
+  five measured pages), so an absolute "under 3 seconds" rule fails a long but intact download.
+  Includes the packet-timeline check that separates boundary padding from a dropped segment.
 
 ## 2026-11-16
 
