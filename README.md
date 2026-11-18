@@ -129,8 +129,10 @@ destination is `[video].destination` (`~/Movies/Videos/webclip`); a destination
 inside the vault gets a managed `.gitignore` block that is written **and
 committed**, so the next `/webclip` still passes its clean-worktree preflight.
 
-Supported in this release: generic HTML5 pages and Netease. Bilibili and YouTube
-are planned. Platform matrix, HLS details and the storage policy:
+Supported in this release: generic HTML5 pages, Netease, Bilibili and YouTube.
+Bilibili is capped at 720P anonymously; YouTube needs `yt-dlp` on the machine
+(`brew install yt-dlp`), and says so when it is missing. Platform matrix, HLS
+details and the storage policy:
 [`skills/web-save-video/SKILL.md`](skills/web-save-video/SKILL.md).
 
 ## Configuration

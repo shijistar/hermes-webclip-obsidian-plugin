@@ -80,6 +80,22 @@ class ServiceTests(unittest.TestCase):
         )
         self.assertEqual(names, ["Clip-1.mp4", "Clip-2.mp4"])
 
+    def test_two_urls_number_their_files_across_the_batch(self):
+        # A mixed-platform batch is the reason this exists: both links used to
+        # start at `-1`, so a shared title produced `-1-1` instead of `-1`/`-2`.
+        service = VideoService(self.plugin)
+        article = self._article({"src": "https://cdn.example.com/a.mp4", "title": "Clip"})
+        with mock.patch.object(service_module, "run_extractor", return_value=article), mock.patch.object(
+            service_module, "download_direct", side_effect=self._download_ok()
+        ):
+            report = service.run(
+                f"https://example.com/one https://example.com/two --to {self.outside}"
+            )
+        names = sorted(
+            outcome.path.name for outcome in report.succeeded if outcome.path is not None
+        )
+        self.assertEqual(names, ["Clip-1.mp4", "Clip-2.mp4"])
+
     def test_a_failure_does_not_stop_the_rest_of_the_batch(self):
         service = VideoService(self.plugin)
         article = self._article(

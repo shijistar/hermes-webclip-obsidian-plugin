@@ -41,7 +41,7 @@ deliberately narrow: anything not named here may change in a minor release.
 | `/webclip` flags | L1 | `--refresh`, `--no-browser`, `--no-git`, `--save-images yes\|no\|ask`, `--favorite`, `--unfavorite` keep their names and meanings. |
 | `/save-video` flags | L1 | `--overwrite`, `--no-browser`, `--name`, `--to` keep their names and meanings. |
 | `[clip]` keys | L1 | The seven keys keep their names, types and default meanings; an unknown key is rejected. |
-| `[video]` keys | L1 | `destination`, `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`. `ytdlp` is still accepted but is not part of the documented surface. |
+| `[video]` keys | L1 | `destination`, `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`, `ytdlp`. `ytdlp` is optional: an empty value means auto-detection. |
 | Environment variables | L1 | The `WEB_TO_OBSIDIAN_*` names. Precedence is all-or-nothing: when `config.toml` exists the environment takes no part, for any key; when it is absent the environment is read and the built-in defaults fill the gaps. |
 | Note filename | L2 | `YYYY-MM-DD-<title-derived>.md`. The cleaned characters are not promised, because sanitising rules may change. |
 | Note frontmatter | L1 | `title`, `url`, `original_url`, `original_host`, `author`, `site`, `description`, `keywords`, `tags`, `published`, `created`, `status`, `category`, `favorite` keep their names and meanings. |
@@ -219,8 +219,12 @@ output: it never writes a note.
 - `--overwrite` replaces an existing file; without it a free `-1` name is used.
   A failed download never damages the file it was about to replace.
 - Every candidate is reported; one failure does not abort the rest of the batch.
-- Supported in this release: generic HTML5 pages and Netease. Bilibili and
-  YouTube are planned.
+- Supported in this release: generic HTML5 pages, Netease, Bilibili and YouTube.
+  Bilibili is fetched as the html5 player's single muxed mp4, so anonymously it
+  tops out at 720P; live streams and bangumi are refused by name instead of
+  falling through to the generic collector. YouTube goes through `yt-dlp`
+  (`[video].ytdlp`, auto-detected otherwise); without that binary the command
+  says so and saves nothing, rather than failing silently.
 
 ### Favorite marker
 

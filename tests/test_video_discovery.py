@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from unittest import mock
 
@@ -99,6 +100,52 @@ class NeteaseDiscoveryTests(unittest.TestCase):
             adapter = discover_module.NeteaseAdapter()
             with self.assertRaises(ClipError):
                 adapter.discover("https://www.163.com/news/a/ABC.html")
+
+
+class PlatformRegistrationTests(unittest.TestCase):
+    def test_site_adapters_run_before_the_generic_one(self):
+        self.assertEqual(
+            [adapter.name for adapter in discover_module._ADAPTERS],
+            ["bilibili", "youtube", "netease", "generic"],
+        )
+
+    def test_each_platform_maps_to_its_own_adapter(self):
+        for url, name in (
+            ("https://www.bilibili.com/video/BV1GJ411x7h7", "bilibili"),
+            ("https://youtu.be/dQw4w9WgXcQ", "youtube"),
+            ("https://www.163.com/news/a/ABC.html", "netease"),
+            ("https://example.com/a", "generic"),
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(adapter_for(url).name, name)
+
+
+class YoutubeDiscoveryTests(unittest.TestCase):
+    def _discover(self, *, title="Rick Astley - Never Gonna Give You Up"):
+        body = json.dumps({"title": title}).encode("utf-8")
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes", return_value=("u", body)
+        ):
+            return discover_module.YoutubeAdapter().discover(
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            )
+
+    def test_a_watch_url_yields_one_ytdlp_candidate(self):
+        found = self._discover()
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].kind, "ytdlp")
+        self.assertEqual(found[0].src, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        self.assertEqual(found[0].title, "Rick Astley - Never Gonna Give You Up")
+
+    def test_a_missing_title_degrades_to_an_empty_one(self):
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes", side_effect=ClipError("boom")
+        ):
+            found = discover_module.YoutubeAdapter().discover(
+                "https://youtu.be/dQw4w9WgXcQ"
+            )
+        self.assertEqual(found[0].title, "")
+        self.assertEqual(found[0].kind, "ytdlp")
 
 
 class DedupeTests(unittest.TestCase):

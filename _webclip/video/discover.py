@@ -9,11 +9,18 @@ from __future__ import annotations
 from typing import Mapping, Sequence
 
 from .adapters.base import SiteAdapter
+from .adapters.bilibili import BilibiliAdapter
 from .adapters.generic_html5 import GenericHtml5Adapter
 from .adapters.netease import NeteaseAdapter
+from .adapters.youtube import YoutubeAdapter
 from .models import VideoCandidate
 
-_ADAPTERS: tuple[SiteAdapter, ...] = (NeteaseAdapter(), GenericHtml5Adapter())
+_ADAPTERS: tuple[SiteAdapter, ...] = (
+    BilibiliAdapter(),
+    YoutubeAdapter(),
+    NeteaseAdapter(),
+    GenericHtml5Adapter(),
+)
 
 
 def adapter_for(url: str) -> SiteAdapter:

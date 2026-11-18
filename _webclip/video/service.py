@@ -27,6 +27,7 @@ from ..git_sync import VaultLock
 from .discover import adapter_for, discover
 from .download.direct import download_direct
 from .download.hls import download_hls
+from .download.ytdlp import YTDLP_TIMEOUT, download_ytdlp, find_ytdlp
 from .models import DownloadPlan, VideoCandidate, VideoOutcome, VideoReport
 from .naming import build_filename, unique_path
 from .report import render_report
@@ -168,7 +169,7 @@ class VideoService:
             return
 
         use_index = len(candidates) >= 2 or multi_page
-        for position, candidate in enumerate(candidates, start=1):
+        for candidate in candidates:
             if attempted >= settings.max_per_run:
                 yield (
                     VideoOutcome(
@@ -192,7 +193,10 @@ class VideoService:
                     options=options,
                     settings=settings,
                     directory=directory,
-                    index=position if use_index else None,
+                    # Number across the whole command, not per URL: a batch of two
+                    # links must produce `-1` and `-2`, not `-1` twice. Two videos
+                    # with the same title would otherwise fall back to `-1-1`.
+                    index=attempted if use_index else None,
                 ),
                 attempted,
             )
@@ -209,7 +213,9 @@ class VideoService:
         index: int | None,
     ) -> VideoOutcome:
         max_bytes = settings.max_size_mb * 1024 * 1024
-        kind = "hls" if _is_hls(candidate) else "direct"
+        # An adapter that knows the media cannot be fetched by us says so
+        # explicitly; everything else is still inferred from the type.
+        kind = candidate.kind or ("hls" if _is_hls(candidate) else "direct")
         plan = DownloadPlan(
             urls=(candidate.src,),
             kind=kind,
@@ -254,6 +260,14 @@ class VideoService:
                     plan,
                     working,
                     timeout=settings.download_timeout_s,
+                    max_bytes=max_bytes,
+                )
+            elif kind == "ytdlp":
+                downloaded = download_ytdlp(
+                    plan,
+                    working,
+                    executable=find_ytdlp(settings.ytdlp),
+                    timeout=YTDLP_TIMEOUT,
                     max_bytes=max_bytes,
                 )
             else:

@@ -4,6 +4,53 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-18 (1.1.0)
+
+### Added
+
+- `/save-video`: **Bilibili**. Video pages, `b23.tv` short links and `?p=N`
+  multi-part URLs are resolved through `x/web-interface/view`, then the html5
+  player's `playurl` (`platform=html5&high_quality=1`). That shape returns one
+  muxed mp4 (`durl`) instead of DASH, so there is no merge step, the file is
+  served from a plain `upos-sz-*` host, and an anonymous caller gets 720P.
+  Live streams and bangumi/pgc are refused by name — they are DRM territory and
+  must not fall through to the generic collector.
+- `/save-video`: **YouTube** through `yt-dlp`. This is the only backend that
+  fetches the media itself, so `VideoCandidate.kind = "ytdlp"` is the only switch
+  that enables it, and the subprocess always runs with `--ignore-config`,
+  `--no-playlist`, `--max-filesize`, `--no-progress`, `--ffmpeg-location` and a
+  1800 s budget of its own.
+- `[video].ytdlp` is documented and wired: an explicit path, `PATH`, then
+  `/opt/homebrew/bin` and `/usr/local/bin`. A missing binary reports "not enabled"
+  with the install command instead of a traceback.
+- `skills/web-save-video/references/ytdlp.md`: the flag contract, the 403
+  behaviour of `m3u8_native`, and the measured throughput.
+
+### Changed
+
+- `download/ytdlp.py` pins `[protocol=https]` and sets `--socket-timeout 20`
+  with `--retries 2`. The default format order selects HLS variants that answer
+  `HTTP 403` here, and without a socket timeout a throttled audio track hangs
+  until the wall clock expires (measured: an `m4a` track stalled at 1.8 MB for
+  ten minutes). Audio stays at yt-dlp's default (Opus), which Chromium — and
+  therefore Obsidian — plays from mp4.
+- `skills/web-save-video`: 1.0.4 → 1.1.0; `platform-matrix.md` rewritten around
+  the 2026-11-18 measurements (Bilibili 7/7 durl, YouTube 403 on `m3u8_native`,
+  netguard refusing the `:8082` PCDN nodes).
+
+### Fixed
+
+- A batch of several URLs numbered its files per URL, so two links with the same
+  title produced `-1` twice and then `-1-1`. Numbering now runs across the whole
+  command, which is what makes a mixed Bilibili + YouTube batch readable.
+
+### Notes
+
+- Bilibili's anonymous ceiling is 720P; HD needs cookies, which this plugin does
+  not inject on purpose.
+- YouTube throughput from this machine is roughly 200 KB/s, so a 10 minute clip
+  takes minutes. The 1800 s budget is sized for that, not for a fast link.
+
 ## 2026-11-18
 
 ### Added
