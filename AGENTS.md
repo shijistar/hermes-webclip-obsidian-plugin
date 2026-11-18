@@ -292,6 +292,16 @@ as-is; reference them from an English comment when the meaning is not obvious.
   `refactor:`, `chore:`, optionally scoped like `fix(plugin):`.
 - Push the feature branch and let the maintainer review before opening a PR.
   PR descriptions are written in English.
+- **Delete the remote branch only after the release lands.** The branch stays
+  until the PR is merged and every tag the merge requires — plus the date
+  release, when the change adds a `## YYYY-MM-DD` entry — exists on `origin`.
+  Removing it earlier leaves the release half-published if the merge has to be
+  redone, and while the work is still tag-less the branch is the only pointer
+  to it.
+
+  ```bash
+  git push origin --delete "<branch>"     # confirm with: git ls-remote --heads origin "<branch>"
+  ```
 - Never force-push, never rewrite public history. Prefer `revert` over
   `reset --hard`.
 
