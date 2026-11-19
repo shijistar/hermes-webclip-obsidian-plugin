@@ -24,6 +24,10 @@ class VideoCandidate:
     width: int = 0
     height: int = 0
     origin: str = ""
+    #: Backend hint from the adapter. ``""`` means "infer from the type and the
+    #: extension"; ``"ytdlp"`` is the only value the service dispatches on, and it
+    #: is reserved for sites where the media cannot be fetched by us at all.
+    kind: str = ""
 
     @staticmethod
     def _as_dimension(value: object) -> int:
@@ -62,7 +66,7 @@ class DownloadPlan:
     def __post_init__(self) -> None:
         if not self.urls:
             raise ValueError("A download plan needs at least one URL.")
-        if self.kind not in {"hls", "dash", "direct"}:
+        if self.kind not in {"hls", "dash", "direct", "ytdlp"}:
             raise ValueError(f"Unsupported download kind: {self.kind}")
 
 

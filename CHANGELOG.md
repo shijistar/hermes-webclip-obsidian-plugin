@@ -4,6 +4,101 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-19
+
+### Fixed
+
+- `https://www.youtube.com/embed/videoseries?list=…` was accepted as a single
+  video: `videoseries` is 11 characters from `[A-Za-z0-9_-]`, so it satisfied the
+  id regex, reached yt-dlp as a playlist embed, and `--playlist-items 1` saved
+  the playlist's first entry under the requested URL instead of refusing it. The
+  literal is refused by name now (`/embed/videoseries`, `youtu.be/videoseries`),
+  and the list-shape refusal test covers those forms.
+
+### Docs
+
+- README and `skills/web-save-video` now scope the SSRF guarantee to the direct
+  and HLS backends. YouTube downloads are fetched by `yt-dlp`, which does its own
+  networking, so reserved-address filtering and connection pinning do not apply
+  to them — the plugin's own checks there are URL shape, size and timeout.
+
+## 2026-11-18 (1.1.0)
+
+### Added
+
+- `/save-video`: **Bilibili**. Video pages, `b23.tv` short links and `?p=N`
+  multi-part URLs are resolved through `x/web-interface/view`, then the html5
+  player's `playurl` (`platform=html5&high_quality=1`). That shape returns one
+  muxed mp4 (`durl`) instead of DASH, so there is no merge step, the file is
+  served from a plain `upos-sz-*` host, and an anonymous caller gets 720P.
+  Live streams and bangumi/pgc are refused by name — they are DRM territory and
+  must not fall through to the generic collector.
+- `/save-video`: **YouTube** through `yt-dlp`. This is the only backend that
+  fetches the media itself, so `VideoCandidate.kind = "ytdlp"` is the only switch
+  that enables it, and the subprocess always runs with `--ignore-config`,
+  `--no-playlist`, `--max-filesize`, `--no-progress`, `--ffmpeg-location` and a
+  1800 s budget of its own.
+- `[video].ytdlp` is documented and wired: an explicit path, `PATH`, then the
+  managed copy from `post-install.sh`, then `/opt/homebrew/bin` and
+  `/usr/local/bin`. A missing binary reports how to install it instead of a
+  traceback.
+- `post-install.sh` now fetches yt-dlp itself: the official standalone binary
+  (~36 MB macOS / 39 MB Linux), verified against the release's `SHA2-256SUMS`,
+  into `<HERMES_HOME>/tools/yt-dlp/`. `--no-youtube` skips it, `--force-ytdlp`
+  re-fetches, and a failed download or checksum only warns — Bilibili, Netease
+  and the generic path never depended on it. No Homebrew, no Python coupling and
+  no deno: the plugin points yt-dlp at the machine's existing `node` via
+  `--js-runtimes` (measured: `[jsc:node]` solves YouTube's challenges with deno
+  absent from `PATH`). The path is deliberately not versioned so
+  `yt-dlp -U` can update it in place.
+- `skills/web-save-video/references/ytdlp.md`: the flag contract, the 403
+  behaviour of `m3u8_native`, and the measured throughput.
+
+### Changed
+
+- `download/ytdlp.py` pins `[protocol=https]` and sets `--socket-timeout 20`
+  with `--retries 2`. The default format order selects HLS variants that answer
+  `HTTP 403` here, and without a socket timeout a throttled audio track hangs
+  until the wall clock expires (measured: an `m4a` track stalled at 1.8 MB for
+  ten minutes). Audio stays at yt-dlp's default (Opus), which Chromium — and
+  therefore Obsidian — plays from mp4.
+- `skills/web-save-video`: 1.0.4 → 1.1.0; `platform-matrix.md` rewritten around
+  the 2026-11-18 measurements (Bilibili 7/7 durl, YouTube 403 on `m3u8_native`,
+  netguard refusing the `:8082` PCDN nodes).
+
+### Fixed
+
+- A batch of several URLs numbered its files per URL, so two links with the same
+  title produced `-1` twice and then `-1-1`. Numbering now runs across the whole
+  command, which is what makes a mixed Bilibili + YouTube batch readable.
+- **A list-shaped YouTube URL could bypass `max_per_run`.** `--no-playlist` only
+  constrains URLs that carry a video *and* a list; a bare `/playlist`,
+  `/@handle`, `/channel/…` or `/watch` without `v=` made yt-dlp walk the list
+  (measured: 249 entries for one channel) while holding the vault lock. The
+  adapter now accepts only single-video shapes, and `--playlist-items 1` sits
+  behind that check.
+- `_reason` treated any text containing "age" as a login wall, so
+  `unable to download webpage` and `storage failure` were both reported as
+  "requires a signed-in account".
+- A Bilibili `durl` with several entries was saved as its first segment under a
+  whole-video name; it is now refused with an explicit message.
+- A webm-only result was renamed to `.mp4`; the container is now checked and a
+  non-mp4 result is refused instead of mislabelled.
+- A download skipped by `--max-filesize` exits 0 with an empty directory, which
+  used to surface as "did not leave exactly one video file". It now names the
+  size limit.
+- A lowercase `bv…` prefix was sent verbatim and rejected with -400; the prefix
+  is normalized to `BV` while the id keeps its case.
+
+### Notes
+
+- Bilibili's anonymous ceiling is 720P; HD needs cookies, which this plugin does
+  not inject on purpose.
+- YouTube throughput from this machine swings between roughly 0.2 and 1.2 MB/s
+  for the same video (69 s to 386 s for one 84 MB clip), so budget minutes
+  rather than seconds. The 1800 s cap is sized for the slow end, not for a fast
+  link.
+
 ## 2026-11-18
 
 ### Added

@@ -41,7 +41,7 @@ deliberately narrow: anything not named here may change in a minor release.
 | `/webclip` flags | L1 | `--refresh`, `--no-browser`, `--no-git`, `--save-images yes\|no\|ask`, `--favorite`, `--unfavorite` keep their names and meanings. |
 | `/save-video` flags | L1 | `--overwrite`, `--no-browser`, `--name`, `--to` keep their names and meanings. |
 | `[clip]` keys | L1 | The seven keys keep their names, types and default meanings; an unknown key is rejected. |
-| `[video]` keys | L1 | `destination`, `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`. `ytdlp` is still accepted but is not part of the documented surface. |
+| `[video]` keys | L1 | `destination`, `gitignore`, `max_size_mb`, `max_per_run`, `download_timeout_s`, `ytdlp`. `ytdlp` is optional: an empty value means auto-detection. |
 | Environment variables | L1 | The `WEB_TO_OBSIDIAN_*` names. Precedence is all-or-nothing: when `config.toml` exists the environment takes no part, for any key; when it is absent the environment is read and the built-in defaults fill the gaps. |
 | Note filename | L2 | `YYYY-MM-DD-<title-derived>.md`. The cleaned characters are not promised, because sanitising rules may change. |
 | Note frontmatter | L1 | `title`, `url`, `original_url`, `original_host`, `author`, `site`, `description`, `keywords`, `tags`, `published`, `created`, `status`, `category`, `favorite` keep their names and meanings. |
@@ -87,7 +87,14 @@ walking up from its own location to the nearest `.hermes` directory:
 cd /path/to/hermes-webclip-obsidian-plugin
 ./post-install.sh                     # auto-detects HERMES_HOME / profile
 ./post-install.sh --hermes-home /path/to/custom-hermes   # custom Hermes home
+./post-install.sh --no-youtube        # skip the yt-dlp download (Bilibili etc. still work)
+./post-install.sh --force-ytdlp       # re-fetch yt-dlp even if present
 ```
+
+The script also fetches yt-dlp for YouTube: the official standalone binary
+(~36 MB, checksum-verified against the release's `SHA2-256SUMS`) goes to
+`<HERMES_HOME>/tools/yt-dlp/yt-dlp`. No Homebrew and no deno are required —
+yt-dlp is pointed at the machine's existing `node` for YouTube's JS challenges.
 
 Manual steps (what `./post-install.sh` automates), for a git checkout using Hermes'
 plugin manager:
@@ -219,8 +226,19 @@ output: it never writes a note.
 - `--overwrite` replaces an existing file; without it a free `-1` name is used.
   A failed download never damages the file it was about to replace.
 - Every candidate is reported; one failure does not abort the rest of the batch.
-- Supported in this release: generic HTML5 pages and Netease. Bilibili and
-  YouTube are planned.
+- **The vault lock is held for the whole command**, including a slow download.
+  While a `/save-video` run is in progress — a YouTube download can take minutes
+  at upstream speeds — a concurrent `/webclip` refuses to start with "vault busy".
+  That is deliberate: the lock covers filename uniqueness and the `.gitignore`
+  commit, not just the write. Long downloads are the cost.
+- Supported in this release: generic HTML5 pages, Netease, Bilibili and YouTube.
+  Bilibili is fetched as the html5 player's single muxed mp4, so anonymously it
+  tops out at 720P; live streams and bangumi are refused by name instead of
+  falling through to the generic collector. YouTube goes through `yt-dlp`
+  (`[video].ytdlp`, auto-detected otherwise); without that binary the command
+  says so and saves nothing, rather than failing silently. Only single-video URLs
+  are accepted — a playlist, channel or handle URL is refused by shape, because
+  yt-dlp's `--no-playlist` does not constrain a bare list URL.
 
 ### Favorite marker
 

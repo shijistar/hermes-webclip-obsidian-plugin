@@ -15,6 +15,7 @@
 #
 # Usage:
 #   ./post-install.sh [--hermes-home DIR] [--install-plugin]
+#                     [--no-youtube] [--force-ytdlp]
 #
 # Defaults:
 #   HERMES_HOME  = nearest `.hermes` directory above this script, or the
@@ -35,6 +36,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HERMES_HOME_ARG=""
 INSTALL_PLUGIN=0
+INSTALL_YTDLP=1
+FORCE_YTDLP=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,8 +45,12 @@ while [[ $# -gt 0 ]]; do
       HERMES_HOME_ARG="$2"; shift 2 ;;
     --install-plugin)
       INSTALL_PLUGIN=1; shift ;;
+    --no-youtube)
+      INSTALL_YTDLP=0; shift ;;
+    --force-ytdlp)
+      FORCE_YTDLP=1; shift ;;
     -h|--help)
-      sed -n '2,18p' "$0"; exit 0 ;;
+      sed -n '2,19p' "$0"; exit 0 ;;
     *)
       echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -194,6 +201,99 @@ else
   warn "No package.json in $EXTRACTOR_DIR — extractor npm install skipped"
 fi
 
+# ------------------------------------------ 2b. yt-dlp (YouTube support)
+# The standalone release binary, not brew and not pip: brew is macOS-only and
+# drags in deno (131 MB), and the pip package ships without the EJS challenge
+# solver unless yt-dlp-ejs is added separately (`Signature solving failed`).
+# The binary is ~36 MB, carries EJS, and can self-update with `-U` — which is
+# why it lives at a stable path instead of a versioned directory.
+YTDLP_VERSION="${YTDLP_VERSION:-2026.10.26}"
+YTDLP_RELEASE_BASE="${YTDLP_RELEASE_BASE:-https://github.com/yt-dlp/yt-dlp/releases/download}"
+YTDLP_DIR="$HERMES_HOME/tools/yt-dlp"
+YTDLP_BIN="$YTDLP_DIR/yt-dlp"
+
+_ytdlp_asset() {
+  case "$(uname -s)" in
+    Darwin) printf 'yt-dlp_macos\n' ;;
+    Linux)
+      case "$(uname -m)" in
+        x86_64|amd64) printf 'yt-dlp_linux\n' ;;
+        aarch64|arm64) printf 'yt-dlp_linux_aarch64\n' ;;
+        *) return 1 ;;
+      esac ;;
+    *) return 1 ;;
+  esac
+}
+
+_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    return 1
+  fi
+}
+
+_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+  local candidate
+  for candidate in "$HERMES_HOME"/tools/node-*/bin/node; do
+    [[ -x "$candidate" ]] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+if [[ "$INSTALL_YTDLP" -eq 1 ]]; then
+  if [[ -x "$YTDLP_BIN" && "$FORCE_YTDLP" -eq 0 ]]; then
+    ok "yt-dlp already installed at $YTDLP_BIN ($(cat "$YTDLP_DIR/VERSION" 2>/dev/null || echo 'version unknown'))"
+  elif ! YTDLP_ASSET="$(_ytdlp_asset)"; then
+    warn "No yt-dlp release for $(uname -s)/$(uname -m); YouTube downloads stay unavailable on this platform"
+  else
+    info "Installing yt-dlp $YTDLP_VERSION ($YTDLP_ASSET) from $YTDLP_RELEASE_BASE ..."
+    YTDLP_TMP=""
+    if ! YTDLP_TMP="$(mktemp -d "${TMPDIR:-/tmp}/webclip-ytdlp.XXXXXX")"; then
+      warn "Could not create a temporary directory for yt-dlp; YouTube downloads stay unavailable"
+      YTDLP_TMP=""
+    fi
+    if [[ -n "$YTDLP_TMP" ]]; then
+      YTDLP_BASE="${YTDLP_RELEASE_BASE%/}/$YTDLP_VERSION"
+      if curl -fsSL --retry 2 --connect-timeout 20 \
+          -o "$YTDLP_TMP/$YTDLP_ASSET" "$YTDLP_BASE/$YTDLP_ASSET" \
+        && curl -fsSL --retry 2 --connect-timeout 20 \
+          -o "$YTDLP_TMP/SHA2-256SUMS" "$YTDLP_BASE/SHA2-256SUMS"; then
+        YTDLP_EXPECTED="$(awk -v a="$YTDLP_ASSET" '$2 == a { print $1; exit }' "$YTDLP_TMP/SHA2-256SUMS")"
+        YTDLP_ACTUAL="$(_sha256 "$YTDLP_TMP/$YTDLP_ASSET" || true)"
+        if [[ -n "$YTDLP_EXPECTED" && "$YTDLP_EXPECTED" == "$YTDLP_ACTUAL" ]]; then
+          if mkdir -p "$YTDLP_DIR" \
+            && install -m 0755 "$YTDLP_TMP/$YTDLP_ASSET" "$YTDLP_BIN" \
+            && printf '%s\n' "$YTDLP_VERSION" > "$YTDLP_DIR/VERSION"; then
+            ok "yt-dlp $YTDLP_VERSION installed at $YTDLP_BIN"
+          else
+            warn "Verified yt-dlp but could not write $YTDLP_BIN; YouTube downloads stay unavailable"
+          fi
+        else
+          warn "yt-dlp checksum mismatch (expected ${YTDLP_EXPECTED:-<missing>}, got ${YTDLP_ACTUAL:-<unavailable>}); YouTube downloads stay unavailable"
+          warn "Retry with: ./post-install.sh --force-ytdlp"
+        fi
+      else
+        warn "Could not download yt-dlp; YouTube downloads stay unavailable (retry later with --force-ytdlp)"
+      fi
+      rm -rf "$YTDLP_TMP"
+    fi
+  fi
+  if NODE_BIN="$(_find_node)"; then
+    ok "JavaScript runtime for yt-dlp: $NODE_BIN (deno not required)"
+  else
+    warn "No node found; yt-dlp will need deno for YouTube's JS challenges, and some formats may be missing"
+  fi
+else
+  info "Skipping yt-dlp (--no-youtube): YouTube downloads will be unavailable"
+fi
+
 # ------------------------------------------------ 3. config.toml bootstrap
 if [[ ! -f "$INSTALLED_PLUGIN_DIR/config.toml" ]]; then
   if [[ -f "$SCRIPT_DIR/config.example.toml" ]]; then
@@ -211,6 +311,7 @@ fi
 printf '\033[1;32m\nInstall summary\033[0m\n'
 printf '  Plugin:     %s\n' "$INSTALLED_PLUGIN_DIR"
 printf '  Extractor:  %s\n' "$INSTALLED_PLUGIN_DIR/extractor"
+printf '  yt-dlp:     %s\n' "$([[ -x "$YTDLP_BIN" ]] && printf '%s' "$YTDLP_BIN" || printf 'not installed (YouTube unavailable)')"
 printf '  Skill:      %s\n' "$INSTALLED_PLUGIN_DIR/skills (registered by the plugin)"
 printf '  Config:     %s\n' "$INSTALLED_PLUGIN_DIR/config.toml"
 printf '\033[1;32m\nNext steps:\033[0m\n'

@@ -129,8 +129,13 @@ destination is `[video].destination` (`~/Movies/Videos/webclip`); a destination
 inside the vault gets a managed `.gitignore` block that is written **and
 committed**, so the next `/webclip` still passes its clean-worktree preflight.
 
-Supported in this release: generic HTML5 pages and Netease. Bilibili and YouTube
-are planned. Platform matrix, HLS details and the storage policy:
+Supported in this release: generic HTML5 pages, Netease, Bilibili and YouTube.
+Bilibili is capped at 720P anonymously. YouTube needs `yt-dlp`, which
+`./post-install.sh` fetches for you (the official standalone binary, ~36 MB,
+checksum-verified, into `~/.hermes/tools/yt-dlp/`); no Homebrew or deno needed.
+It updates in place with `~/.hermes/tools/yt-dlp/yt-dlp -U`, and the command
+says what to do when the binary is missing. Platform matrix, HLS
+details and the storage policy:
 [`skills/web-save-video/SKILL.md`](skills/web-save-video/SKILL.md).
 
 ## Configuration
@@ -156,8 +161,12 @@ environment takes no part. Values are never forwarded to the extractor process.
 
 - URLs reject credentials, fragments, unsafe ports, malformed hosts, and
   non-HTTP schemes; redirects are revalidated.
-- Image and video downloads block reserved and private IP ranges, pin the
-  connection to the approved address, and reject non-default ports.
+- Image downloads, and direct or HLS video downloads, block reserved and private
+  IP ranges, pin the connection to the approved address, and reject non-default
+  ports. YouTube is the exception: `yt-dlp` does its own networking, so the URL
+  shape is checked before it runs and `--ignore-config`, `--no-playlist`,
+  `--playlist-items 1`, `--max-filesize` plus the plugin's size and timeout
+  limits apply — but address filtering and connection pinning do not.
 - Vault writes stay inside the configured vault, reject symlinks, and use
   same-directory temporary files with `fsync` and atomic replacement.
 - The extractor child receives only an allowlisted environment; credential-like

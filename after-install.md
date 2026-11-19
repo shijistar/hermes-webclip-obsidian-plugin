@@ -13,7 +13,10 @@ cd "$HERMES_HOME/plugins/webclip-obsidian"
 What it does:
 
 1. `npm install` in the bundled `extractor/` directory — installs the Node dependencies
-2. Bootstraps `config.toml` from `config.example.toml` if absent.
+2. Downloads yt-dlp (official standalone binary, checksum-verified) into
+   `<HERMES_HOME>/tools/yt-dlp/` so YouTube works without Homebrew or deno.
+   Pass `--no-youtube` to skip it, or `--force-ytdlp` to re-fetch.
+3. Bootstraps `config.toml` from `config.example.toml` if absent.
 
 <!-- If the plugin is _not_ installed yet (or you want to refresh an existing
 install), pass `--install-plugin`. On an existing install this performs a

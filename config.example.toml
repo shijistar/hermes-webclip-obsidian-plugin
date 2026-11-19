@@ -32,3 +32,7 @@ max_size_mb = 500
 max_per_run = 10
 # Per-request and per-segment timeout (seconds).
 download_timeout_s = 300
+# Optional path to yt-dlp. Empty means auto-detect: PATH, then
+# /opt/homebrew/bin, then /usr/local/bin. Only YouTube uses it.
+# yt-dlp is not installed by pip; on macOS: brew install yt-dlp
+ytdlp = ""

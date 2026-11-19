@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from unittest import mock
 
@@ -99,6 +100,97 @@ class NeteaseDiscoveryTests(unittest.TestCase):
             adapter = discover_module.NeteaseAdapter()
             with self.assertRaises(ClipError):
                 adapter.discover("https://www.163.com/news/a/ABC.html")
+
+
+class PlatformRegistrationTests(unittest.TestCase):
+    def test_site_adapters_run_before_the_generic_one(self):
+        self.assertEqual(
+            [adapter.name for adapter in discover_module._ADAPTERS],
+            ["bilibili", "youtube", "netease", "generic"],
+        )
+
+    def test_each_platform_maps_to_its_own_adapter(self):
+        for url, name in (
+            ("https://www.bilibili.com/video/BV1GJ411x7h7", "bilibili"),
+            ("https://youtu.be/dQw4w9WgXcQ", "youtube"),
+            ("https://www.163.com/news/a/ABC.html", "netease"),
+            ("https://example.com/a", "generic"),
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(adapter_for(url).name, name)
+
+
+class YoutubeDiscoveryTests(unittest.TestCase):
+    def _discover(self, *, title="Rick Astley - Never Gonna Give You Up"):
+        body = json.dumps({"title": title}).encode("utf-8")
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes", return_value=("u", body)
+        ):
+            return discover_module.YoutubeAdapter().discover(
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+            )
+
+    def test_a_watch_url_yields_one_ytdlp_candidate(self):
+        found = self._discover()
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].kind, "ytdlp")
+        self.assertEqual(found[0].src, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        self.assertEqual(found[0].title, "Rick Astley - Never Gonna Give You Up")
+
+    def test_a_missing_title_degrades_to_an_empty_one(self):
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes", side_effect=ClipError("boom")
+        ):
+            found = discover_module.YoutubeAdapter().discover(
+                "https://youtu.be/dQw4w9WgXcQ"
+            )
+        self.assertEqual(found[0].title, "")
+        self.assertEqual(found[0].kind, "ytdlp")
+
+    def test_every_single_video_url_shape_is_accepted(self):
+        adapter = discover_module.YoutubeAdapter()
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes",
+            return_value=("u", json.dumps({"title": "T"}).encode("utf-8")),
+        ):
+            for url in (
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "https://youtu.be/dQw4w9WgXcQ",
+                "https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=10s",
+                "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+                "https://www.youtube.com/embed/dQw4w9WgXcQ",
+                "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+            ):
+                with self.subTest(url=url):
+                    self.assertEqual(len(adapter.discover(url)), 1)
+
+    def test_list_shaped_urls_are_refused_before_yt_dlp_sees_them(self):
+        # `--no-playlist` does not constrain these: a channel URL enumerates 249
+        # entries (measured), which would bypass max_per_run and hold the vault
+        # lock for the whole walk.
+        adapter = discover_module.YoutubeAdapter()
+        for url in (
+            "https://www.youtube.com/playlist?list=PL123",
+            "https://www.youtube.com/@3blue1brown",
+            "https://www.youtube.com/channel/UC123",
+            "https://www.youtube.com/watch",
+            "https://www.youtube.com/results?search_query=x",
+            "https://youtu.be/",
+            # `videoseries` is 11 characters, so it satisfied the id regex; a
+            # playlist embed then reached yt-dlp and its first entry was saved
+            # silently. The literal is refused by name now.
+            "https://www.youtube.com/embed/videoseries?list=PL123",
+            "https://www.youtube.com/embed/videoseries",
+            "https://youtu.be/videoseries",
+        ):
+            with self.subTest(url=url):
+                with mock.patch(
+                    "_webclip.video.adapters.youtube.fetch_bytes"
+                ) as fetched:
+                    with self.assertRaises(ClipError) as raised:
+                        adapter.discover(url)
+                self.assertIn("not a single video", str(raised.exception))
+                fetched.assert_not_called()
 
 
 class DedupeTests(unittest.TestCase):

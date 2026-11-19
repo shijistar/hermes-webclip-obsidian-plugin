@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import subprocess
 import tempfile
 import unittest
@@ -75,6 +76,44 @@ class ServiceTests(unittest.TestCase):
             service_module, "download_direct", side_effect=self._download_ok()
         ):
             report = service.run(f"https://example.com/page --to {self.outside}")
+        names = sorted(
+            outcome.path.name for outcome in report.succeeded if outcome.path is not None
+        )
+        self.assertEqual(names, ["Clip-1.mp4", "Clip-2.mp4"])
+
+    def test_a_youtube_candidate_goes_through_ytdlp_with_its_own_budget(self):
+        # The dispatch used to be untested: a wrong branch would send a YouTube
+        # page URL into the direct downloader, which fetches HTML.
+        service = VideoService(self.plugin)
+        body = json.dumps({"title": "Clip"}).encode("utf-8")
+        with mock.patch(
+            "_webclip.video.adapters.youtube.fetch_bytes", return_value=("u", body)
+        ), mock.patch.object(
+            service_module, "find_ytdlp", return_value="/opt/bin/yt-dlp"
+        ), mock.patch.object(
+            service_module, "download_ytdlp", side_effect=self._download_ok()
+        ) as backend:
+            report = service.run(
+                f"https://www.youtube.com/watch?v=dQw4w9WgXcQ --to {self.outside}"
+            )
+        self.assertEqual(len(report.succeeded), 1)
+        plan = backend.call_args.args[0]
+        self.assertEqual(plan.kind, "ytdlp")
+        self.assertEqual(backend.call_args.kwargs["executable"], "/opt/bin/yt-dlp")
+        # Not the per-request `download_timeout_s`, which would kill long videos.
+        self.assertEqual(backend.call_args.kwargs["timeout"], service_module.YTDLP_TIMEOUT)
+
+    def test_two_urls_number_their_files_across_the_batch(self):
+        # A mixed-platform batch is the reason this exists: both links used to
+        # start at `-1`, so a shared title produced `-1-1` instead of `-1`/`-2`.
+        service = VideoService(self.plugin)
+        article = self._article({"src": "https://cdn.example.com/a.mp4", "title": "Clip"})
+        with mock.patch.object(service_module, "run_extractor", return_value=article), mock.patch.object(
+            service_module, "download_direct", side_effect=self._download_ok()
+        ):
+            report = service.run(
+                f"https://example.com/one https://example.com/two --to {self.outside}"
+            )
         names = sorted(
             outcome.path.name for outcome in report.succeeded if outcome.path is not None
         )

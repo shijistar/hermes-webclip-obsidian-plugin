@@ -1,11 +1,11 @@
 ---
 name: web-save-video
 description: Download web videos to local disk; HLS/mp4 via ffmpeg; 下载视频 保存视频 视频下载
-version: 1.0.4
+version: 1.1.0
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
-    tags: [video, download, hls, m3u8, ffmpeg, media, netease]
+    tags: [video, download, hls, m3u8, ffmpeg, media, netease, bilibili, youtube]
     related_skills: [web-clip-to-obsidian]
 ---
 
@@ -46,7 +46,9 @@ Reported as a failure, never as a silent zero:
 - **Live streams** (no `EXT-X-ENDLIST`) — only what elapsed would be captured
 - **Private / link-local / non-default-port addresses** — the page chose the URL,
   so it is resolved once, every answer must be public, and the connection is
-  pinned to that address
+  pinned to that address. Direct and HLS downloads only: YouTube is fetched by
+  `yt-dlp`, which does its own networking, so there only the URL-shape check and
+  the size/timeout limits apply
 - **Files over `[video].max_size_mb`** (default 500 MB), checked while writing
 - **Pages with no discoverable player** — says so instead of returning nothing
 
@@ -63,6 +65,8 @@ destination inside the vault gets a managed `.gitignore` block that is written
 | --- | --- |
 | No video found on a page that clearly has one | `references/discovery-dom.md` |
 | Netease page returns nothing | `references/netease.md` |
+| Bilibili returns "no downloadable file" or a 403 | `references/platform-matrix.md` |
+| YouTube 403 / "not enabled" / slow | `references/ytdlp.md` |
 | "encrypted", "live stream", "no segments" | `references/download-hls.md` |
 | "blocked by network policy", 403/404 while downloading | `references/download-direct.md` |
 | Wrong or surprising filename | `references/naming-and-batch.md` |
@@ -71,10 +75,11 @@ destination inside the vault gets a managed `.gitignore` block that is written
 
 ## Support Files
 
-`platform-matrix` (sites, detection, planned work), `discovery-dom` (how players
-are found), `download-hls` (pre-flight and local remux), `download-direct`
-(plain files, limits, redirects), `naming-and-batch`, `storage-policy`, and
-`netease` (page shapes and measured quirks) — all under `references/`.
+`platform-matrix` (sites, detection, measured quirks), `discovery-dom` (how
+players are found), `download-hls` (pre-flight and local remux), `download-direct`
+(plain files, limits, redirects), `ytdlp` (the YouTube backend and its flag
+contract), `naming-and-batch`, `storage-policy`, and `netease` (page shapes) — all
+under `references/`.
 
 Before reporting success, confirm the path exists, its size matches the report,
 and a vault destination left `git status` clean.
