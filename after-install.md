@@ -3,7 +3,7 @@
 The plugin is installed. Finish setup with the bundled one-shot installer:
 
 ```bash
-cd "$HERMES_HOME/plugins/webclip-obsidian"
+cd "${HERMES_HOME:-$HOME/.hermes}/plugins/webclip-obsidian"
 ./post-install.sh
 ```
 

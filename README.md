@@ -41,7 +41,7 @@ credentials, password-manager integration.
 ### Install
 
 ```bash
-hermes plugins install <repo-url>
+hermes plugins install https://github.com/shijistar/hermes-webclip-obsidian-plugin
 cd "${HERMES_HOME:-$HOME/.hermes}/plugins/webclip-obsidian"
 ./post-install.sh
 ```
