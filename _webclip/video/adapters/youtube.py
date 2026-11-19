@@ -38,10 +38,22 @@ _MAX_OEMBED_BYTES = 64_000
 #: A video id is 11 characters of base64url.
 _VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _SHORT_PATH_PREFIXES = ("/shorts/", "/embed/")
+#: Path segments that satisfy `_VIDEO_ID_RE` but are playlist embeds, not ids.
+#: ``/embed/videoseries?list=…`` is the shape blogs embed; yt-dlp would route it
+#: to its playlist extractor and `--playlist-items 1` would save the first entry
+#: as if it were the requested video.
+_NOT_VIDEO_IDS = frozenset({"videoseries"})
 _NOT_A_VIDEO = (
     "This YouTube URL is not a single video; playlists, channels and search "
     "results are not supported."
 )
+
+
+def _as_video_id(candidate: str) -> str:
+    """*candidate* if it is an 11-character video id, otherwise ``""``."""
+    if candidate in _NOT_VIDEO_IDS:
+        return ""
+    return candidate if _VIDEO_ID_RE.match(candidate) else ""
 
 
 def _video_id(url: str) -> str:
@@ -61,18 +73,15 @@ def _video_id(url: str) -> str:
     path = parts.path.rstrip("/") or "/"
 
     if host == "youtu.be":
-        candidate = path.lstrip("/")
-        return candidate if _VIDEO_ID_RE.match(candidate) else ""
+        return _as_video_id(path.lstrip("/"))
 
     if path == "/watch":
         values = parse_qs(parts.query).get("v") or []
-        candidate = values[0].strip() if values else ""
-        return candidate if _VIDEO_ID_RE.match(candidate) else ""
+        return _as_video_id(values[0].strip() if values else "")
 
     for prefix in _SHORT_PATH_PREFIXES:
         if path.startswith(prefix):
-            candidate = path[len(prefix) :]
-            return candidate if _VIDEO_ID_RE.match(candidate) else ""
+            return _as_video_id(path[len(prefix) :])
     return ""
 
 

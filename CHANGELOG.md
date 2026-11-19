@@ -4,6 +4,24 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-19
+
+### Fixed
+
+- `https://www.youtube.com/embed/videoseries?list=…` was accepted as a single
+  video: `videoseries` is 11 characters from `[A-Za-z0-9_-]`, so it satisfied the
+  id regex, reached yt-dlp as a playlist embed, and `--playlist-items 1` saved
+  the playlist's first entry under the requested URL instead of refusing it. The
+  literal is refused by name now (`/embed/videoseries`, `youtu.be/videoseries`),
+  and the list-shape refusal test covers those forms.
+
+### Docs
+
+- README and `skills/web-save-video` now scope the SSRF guarantee to the direct
+  and HLS backends. YouTube downloads are fetched by `yt-dlp`, which does its own
+  networking, so reserved-address filtering and connection pinning do not apply
+  to them — the plugin's own checks there are URL shape, size and timeout.
+
 ## 2026-11-18 (1.1.0)
 
 ### Added

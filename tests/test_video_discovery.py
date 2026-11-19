@@ -176,6 +176,12 @@ class YoutubeDiscoveryTests(unittest.TestCase):
             "https://www.youtube.com/watch",
             "https://www.youtube.com/results?search_query=x",
             "https://youtu.be/",
+            # `videoseries` is 11 characters, so it satisfied the id regex; a
+            # playlist embed then reached yt-dlp and its first entry was saved
+            # silently. The literal is refused by name now.
+            "https://www.youtube.com/embed/videoseries?list=PL123",
+            "https://www.youtube.com/embed/videoseries",
+            "https://youtu.be/videoseries",
         ):
             with self.subTest(url=url):
                 with mock.patch(

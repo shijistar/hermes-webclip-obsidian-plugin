@@ -46,7 +46,9 @@ Reported as a failure, never as a silent zero:
 - **Live streams** (no `EXT-X-ENDLIST`) — only what elapsed would be captured
 - **Private / link-local / non-default-port addresses** — the page chose the URL,
   so it is resolved once, every answer must be public, and the connection is
-  pinned to that address
+  pinned to that address. Direct and HLS downloads only: YouTube is fetched by
+  `yt-dlp`, which does its own networking, so there only the URL-shape check and
+  the size/timeout limits apply
 - **Files over `[video].max_size_mb`** (default 500 MB), checked while writing
 - **Pages with no discoverable player** — says so instead of returning nothing
 

@@ -161,8 +161,12 @@ environment takes no part. Values are never forwarded to the extractor process.
 
 - URLs reject credentials, fragments, unsafe ports, malformed hosts, and
   non-HTTP schemes; redirects are revalidated.
-- Image and video downloads block reserved and private IP ranges, pin the
-  connection to the approved address, and reject non-default ports.
+- Image downloads, and direct or HLS video downloads, block reserved and private
+  IP ranges, pin the connection to the approved address, and reject non-default
+  ports. YouTube is the exception: `yt-dlp` does its own networking, so the URL
+  shape is checked before it runs and `--ignore-config`, `--no-playlist`,
+  `--playlist-items 1`, `--max-filesize` plus the plugin's size and timeout
+  limits apply — but address filtering and connection pinning do not.
 - Vault writes stay inside the configured vault, reject symlinks, and use
   same-directory temporary files with `fsync` and atomic replacement.
 - The extractor child receives only an allowlisted environment; credential-like
