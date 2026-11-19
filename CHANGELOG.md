@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   and HLS backends. YouTube downloads are fetched by `yt-dlp`, which does its own
   networking, so reserved-address filtering and connection pinning do not apply
   to them — the plugin's own checks there are URL shape, size and timeout.
+- `after-install.md` now covers a named-profile install as well as the default
+  profile: it shows the command for both layouts, offers the natural-language
+  route (ask Hermes to run the bundled `post-install.sh` instead of copying a
+  path), states the restart and re-run behaviour instead of leaving them
+  implicit, and tells custom-home users to point `[video].ytdlp` at the
+  downloaded binary.
 
 ## 2026-11-18 (1.1.0)
 
