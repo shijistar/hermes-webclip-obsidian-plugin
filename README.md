@@ -23,8 +23,16 @@ and two agent skills in the same tree.
 
 ## Requirements
 
-- Linux, macOS, or WSL. The implementation uses `fcntl` locks and POSIX process
-  groups; Windows is not supported.
+- Linux, macOS, or WSL2. The implementation uses `fcntl` locks and POSIX process
+  groups, which is why WSL2 — not native Windows — is the supported way to run
+  the plugin on a Windows machine.
+- **Windows (native) is not supported.** `fcntl` is imported at module load, so
+  the plugin fails to import there rather than degrading gracefully; nothing
+  else about the platform is tested either.
+- **On WSL2, keep the vault inside the Linux filesystem** (for example
+  `~/vault`), not under `/mnt/c/...`. Git sync and file locking across the
+  Windows drive bridge are slower, and a native Linux path avoids the
+  path-translation edge cases that bridge introduces.
 - Hermes Agent with standalone plugin support.
 - Python 3.11+ and PyYAML (declared in `plugin.yaml`).
 - Node.js 18+ and Git; Playwright Chromium is installed by the extractor's
