@@ -8,6 +8,8 @@
  * actually contain the article the title promises?
  *
  * Everything here is local string work — no extra network, no new config.
+ * Fatal outcomes are deliberately narrow (see `assessExtraction`): a challenge,
+ * and a short body that neither names the article nor reads as prose.
  */
 
 export const MIN_LENGTH_FOR_WEAK_PASS = 800;
@@ -49,6 +51,7 @@ const LATIN_STOPWORDS = new Set([
 ]);
 
 const CJK_RUN = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+$/u;
+const CJK_SPLIT = /([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+)/u;
 
 /** NFKC, lowercase, punctuation folded to single spaces. */
 export function normalizeForMatch(text) {
@@ -59,42 +62,66 @@ export function normalizeForMatch(text) {
     .trim();
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
- * Return the matched challenge signature, or '' when the page looks genuine.
- * Title hits are decisive; body hits only look at the head of the document so
- * a real article quoting "verify you are human" is not rejected.
+ * Return `{ sign, where }` for a challenge page, or null.
+ *
+ * Body signatures are decisive. A title hit is only a suspicion — "Access
+ * Denied: A Year Inside the Filter" is a legitimate article title — so the
+ * caller weighs it against the body before failing the extraction.
  */
 export function detectChallenge({ title = '', text = '' } = {}) {
   const normalizedTitle = normalizeForMatch(title);
   for (const sign of CHALLENGE_TITLE_SIGNS) {
-    if (normalizedTitle.includes(sign)) return sign;
+    if (normalizedTitle.includes(sign)) return { sign, where: 'title' };
   }
   const head = normalizeForMatch(text).slice(0, 2000);
   for (const sign of CHALLENGE_BODY_SIGNS) {
-    if (head.includes(sign)) return sign;
+    if (head.includes(sign)) return { sign, where: 'body' };
   }
-  return '';
+  return null;
+}
+
+function pushSegments(word, seen) {
+  // Splitting on a capture group keeps both sides: even indices are the
+  // non-CJK chunks, odd indices the Han/kana runs they were split from.
+  word.split(CJK_SPLIT).forEach((segment, index) => {
+    if (!segment) return;
+    if (index % 2 === 1) {
+      if (segment.length === 1) seen.add(segment);
+      for (let position = 0; position + 1 < segment.length; position += 1) {
+        seen.add(segment.slice(position, position + 2));
+      }
+      return;
+    }
+    if (segment.length >= 3 && !LATIN_STOPWORDS.has(segment)) seen.add(segment);
+  });
 }
 
 /**
  * Title tokens used for corroboration. Latin titles contribute words; CJK has
  * no spaces, so a Han run contributes its 2-grams instead (标题 "分布式系统" →
- * 分布/布式/式系/系统).
+ * 分布/布式/式系/系统). Mixed-script words ("AI分布式") split per script.
  */
 export function titleTokens(title) {
   const seen = new Set();
   for (const word of normalizeForMatch(title).split(/\s+/)) {
-    if (!word) continue;
-    if (CJK_RUN.test(word)) {
-      if (word.length === 1) seen.add(word);
-      for (let index = 0; index + 1 < word.length; index += 1) {
-        seen.add(word.slice(index, index + 2));
-      }
-      continue;
-    }
-    if (word.length >= 3 && !LATIN_STOPWORDS.has(word)) seen.add(word);
+    if (word) pushSegments(word, seen);
   }
   return [...seen];
+}
+
+/** Latin tokens match on word boundaries, so "rapid" no longer matches "rapidly". */
+function containsToken(body, token) {
+  if (CJK_RUN.test(token)) return body.includes(token);
+  const pattern = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapeRegExp(token)}(?![\\p{L}\\p{N}])`,
+    'u',
+  );
+  return pattern.test(body);
 }
 
 /** Share of the title's tokens that reappear in the body. */
@@ -102,7 +129,7 @@ export function titleCorroboration({ title = '', markdown = '' } = {}) {
   const tokens = titleTokens(title);
   if (tokens.length === 0) return { ratio: 0, tokens: 0, verdict: 'unknown' };
   const body = normalizeForMatch(markdown);
-  const hits = tokens.filter(token => body.includes(token)).length;
+  const hits = tokens.filter(token => containsToken(body, token)).length;
   const ratio = hits / tokens.length;
   const verdict = ratio >= STRONG_RATIO ? 'strong' : ratio >= WEAK_RATIO ? 'weak' : 'none';
   return { ratio, tokens: tokens.length, verdict };
@@ -117,10 +144,12 @@ function looksLikeProse(text) {
 /**
  * Classify an extraction as strong / weak / challenge / fake.
  *
- * Fail-open by design: only two combinations are fatal — a challenge page, and
- * a body that neither echoes the title, nor reads as prose, nor carries enough
- * text to be an article. A long body whose heading was rewritten still passes,
- * marked weak.
+ * Fatal only when:
+ *   - a challenge is present: a body signature always; a title signature while
+ *     the body does not corroborate that title;
+ *   - the body is short, never names the article, and does not read as prose.
+ * A long body, a prose post, a render that merely grew slowly, or a title that
+ * only resembles a challenge signature all save — marked weak.
  */
 export function assessExtraction({
   result,
@@ -131,15 +160,21 @@ export function assessExtraction({
   const markdown = String(result?.markdown ?? '');
   const length = markdown.trim().length;
 
-  // A video page legitimately has a caption-only body.
+  const challenge = detectChallenge({ title: result?.title ?? '', text: markdown });
+  const corroboration = titleCorroboration({ title: result?.title ?? '', markdown });
+
+  // A challenge is a challenge even when the page also carries a video tag.
+  if (challenge && (challenge.where === 'body' || corroboration.verdict !== 'strong')) {
+    return { verdict: 'challenge', reason: challenge.sign };
+  }
+
+  // A video page legitimately has a caption-only body. A title that merely
+  // resembles a challenge signature also lands here.
   if (allowVideoStub && Array.isArray(result?.videos) && result.videos.length > 0) {
     return { verdict: 'strong', reason: 'video' };
   }
 
-  const challenge = detectChallenge({ title: result?.title ?? '', text: markdown });
-  if (challenge) return { verdict: 'challenge', reason: challenge };
-
-  const corroboration = titleCorroboration({ title: result?.title ?? '', markdown });
+  if (challenge) return { verdict: 'weak', reason: '' };
 
   // A short body that never names the article and does not read as prose is a
   // shell or a wall. Real short posts still save — they just save as weak.
@@ -157,7 +192,9 @@ export function assessExtraction({
     length < staticBody.trim().length * RENDER_GAIN_RATIO &&
     corroboration.verdict !== 'strong'
   ) {
-    return { verdict: 'fake', reason: 'no-render-gain', corroboration };
+    // The gain heuristic is a hint, not a verdict: fail-open wins, so this only
+    // downgrades to weak instead of discarding a possible real article.
+    return { verdict: 'weak', reason: 'no-render-gain', corroboration };
   }
 
   return {

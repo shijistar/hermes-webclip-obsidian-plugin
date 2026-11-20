@@ -328,7 +328,9 @@ DEFAULT_RETRY_SLEEP_S = 2.0
 def _retry_delay(exc: ClipError) -> float:
     header = (exc.retry_after or "").strip()
     if header.isdigit():
-        return min(float(header), MAX_RETRY_SLEEP_S)
+        # `Retry-After: 0` is legal and means "now"; sleeping zero would retry a
+        # rate limit immediately, so the floor is one second.
+        return max(1.0, min(float(header), MAX_RETRY_SLEEP_S))
     return DEFAULT_RETRY_SLEEP_S
 
 
@@ -344,6 +346,7 @@ def run_extractor_with_fallback(
     try:
         return run_extractor(plugin_root, url, no_browser=no_browser)
     except ClipError as exc:
+        first = exc
         if exc.status in RETRYABLE_STATUSES:
             time.sleep(_retry_delay(exc))
             try:
@@ -356,4 +359,8 @@ def run_extractor_with_fallback(
         if _is_netease_video_url(url):
             html = _fetch_netease_video_html(url)
             return _parse_netease_video_html(html, url)
-        raise exc
+        if exc is not first:
+            # Keep the rate-limit verdict visible in the chain instead of
+            # replacing it silently with whatever the retry happened to hit.
+            raise exc from first
+        raise

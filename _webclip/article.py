@@ -23,8 +23,6 @@ def _decode_json_object(raw: bytes) -> Mapping[str, object]:
 # absent: a bot wall re-scores every attempt, so retrying it makes things worse.
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
-_BOT_WALL_SERVERS = ("cloudflare", "akamai", "sucuri", "imperva")
-
 # Codes that already carry a verdict; their message is the whole answer.
 _VERDICT_MESSAGES = {
     "CHALLENGE_PAGE": (
@@ -42,8 +40,10 @@ def _status_message(payload: Mapping[str, object]) -> str:
     status = payload.get("status")
     if not isinstance(status, int) or isinstance(status, bool):
         return "Web extraction failed (HTTP_STATUS)."
-    server = str(payload.get("server") or "").lower()
-    challenged = bool(payload.get("cfMitigated")) or any(sign in server for sign in _BOT_WALL_SERVERS)
+    # `cf-mitigated` is set on a managed challenge specifically. Plenty of
+    # ordinary sites answer 403 behind Cloudflare without challenging, so the
+    # server banner alone must not be read as "bot wall".
+    challenged = bool(payload.get("cfMitigated"))
     if status == 401:
         return (
             "The page is reachable but requires credentials (HTTP 401). "

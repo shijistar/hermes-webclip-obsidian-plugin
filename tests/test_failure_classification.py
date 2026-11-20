@@ -45,12 +45,12 @@ class StatusMessageTests(unittest.TestCase):
         self.assertIn("credentials", str(error))
         self.assertIn("will not help", str(error))
 
-    def test_403_with_cloudflare_server_is_a_bot_wall(self):
+    def test_403_behind_cloudflare_without_cf_mitigated_stays_generic(self):
         error = _extractor_failure(
             {"ok": False, "code": "HTTP_STATUS", "status": 403, "server": "cloudflare"}
         )
-        self.assertIn("bot wall", str(error))
-        self.assertIn("real browser", str(error))
+        self.assertIn("usually a bot wall", str(error))
+        self.assertIn("a retry rarely helps", str(error))
 
     def test_403_with_cf_mitigated_header_is_a_bot_wall(self):
         error = _extractor_failure(
@@ -115,6 +115,18 @@ class RetryTests(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self.assertEqual(len(calls), 2)
         sleep.assert_called_once_with(3.0)
+
+    def test_retry_after_zero_still_waits_a_second(self):
+        def fake(plugin_root, url, no_browser=False):
+            raise ClipError("rate limited", status=429, retry_after="0")
+
+        with mock.patch.object(sites_module, "run_extractor", fake), mock.patch.object(
+            sites_module.time, "sleep"
+        ) as sleep:
+            with self.assertRaises(ClipError):
+                sites_module.run_extractor_with_fallback(Path("/tmp"), self.url)
+
+        sleep.assert_called_once_with(1.0)
 
     def test_retry_delay_is_capped(self):
         def fake(plugin_root, url, no_browser=False):

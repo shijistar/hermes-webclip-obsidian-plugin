@@ -18,11 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   waiting out the 30 s navigation timeout; a body that never names the article
   is refused rather than written to the vault as a note.
 - Post-extraction verification in the extractor: the rendered body must
-  corroborate its own title (Latin words, CJK bigrams; a browser render must
-  also out-grow the static fetch by 20 %). Weak matches still save, marked
-  `extraction_verified: weak` in the frontmatter; only a challenge page or a
-  short body that never echoes the title is fatal. Video pages that opt into
-  caption-only extraction are exempt.
+  corroborate its own title (Latin words on word boundaries, CJK bigrams;
+  mixed-script titles split per script; a browser render must also out-grow the
+  static fetch by 20 %). Weak matches still save, marked
+  `extraction_verified: weak` in the frontmatter. Only a challenge page, or a
+  short body that neither echoes the title nor reads as prose, is fatal — a
+  title that merely resembles a challenge signature and a render that grew
+  slowly both stay saved. Video pages that opt into caption-only extraction are
+  exempt, unless the page is itself a challenge.
 
 ### Changed
 
