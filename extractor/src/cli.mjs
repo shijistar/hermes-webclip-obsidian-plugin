@@ -21,6 +21,8 @@ const PUBLIC_ERRORS = {
   EXTRACTION_FAILED: 'Article extraction failed.',
   QUALITY_GATE: 'The page did not contain a substantial article.',
   BROWSER_FAILED: 'Browser extraction failed.',
+  CHALLENGE_PAGE: 'The site served a browser challenge instead of the page.',
+  FAKE_SUCCESS: 'The page did not contain the article its title promised.',
   USAGE: 'Usage: node src/cli.mjs <url> [--no-browser] [--with-videos]',
 };
 
@@ -49,7 +51,17 @@ async function main(argv) {
     const code = typeof cause?.code === 'string' && Object.hasOwn(PUBLIC_ERRORS, cause.code)
       ? cause.code
       : 'EXTRACTION_FAILED';
-    output({ ok: false, error: PUBLIC_ERRORS[code], code });
+    const payload = { ok: false, error: PUBLIC_ERRORS[code], code };
+    // Machine-readable context: without the status a caller cannot tell a bot
+    // wall (403) from an auth failure (401) or a rate limit (429).
+    const details = cause?.details;
+    if (details && typeof details === 'object') {
+      if (Number.isInteger(details.status)) payload.status = details.status;
+      for (const key of ['retryAfter', 'cfMitigated', 'server']) {
+        if (typeof details[key] === 'string' && details[key]) payload[key] = details[key].slice(0, 64);
+      }
+    }
+    output(payload);
     process.exitCode = 1;
   }
 }

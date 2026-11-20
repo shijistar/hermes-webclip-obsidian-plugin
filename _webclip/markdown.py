@@ -302,6 +302,9 @@ def render_note(
         **({"favorite": True} if favorite else {}),
         **({"fetched_url": fetched_url} if fetched_url != source else {}),
         "extraction_method": checked["method"],
+        # Only surfaced when the body did not fully corroborate the title, so
+        # the default frontmatter stays unchanged for healthy clips.
+        **({"extraction_verified": "weak"} if checked.get("verification") == "weak" else {}),
         "status": "needs-review",
         "category": "Inbox",
         "word_count": checked["wordCount"],

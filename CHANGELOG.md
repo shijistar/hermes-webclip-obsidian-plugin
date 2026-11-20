@@ -4,6 +4,34 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-20
+
+### Added
+
+- Failure classification. `HTTP_STATUS` errors now carry the status code and the
+  challenge headers (`cf-mitigated`, `server`, `retry-after`) through the
+  extractor's JSON, so the plugin answers "requires credentials" (401), "bot
+  wall, do not retry" (403 + challenge headers), "rate limited" (429) and
+  "server error" (5xx) instead of one opaque `Web extraction failed (HTTP_STATUS)`.
+- `CHALLENGE_PAGE` and `FAKE_SUCCESS` verdicts. A managed challenge is detected
+  from the interstitial title and abandoned after a 6 s settle window instead of
+  waiting out the 30 s navigation timeout; a body that never names the article
+  is refused rather than written to the vault as a note.
+- Post-extraction verification in the extractor: the rendered body must
+  corroborate its own title (Latin words, CJK bigrams; a browser render must
+  also out-grow the static fetch by 20 %). Weak matches still save, marked
+  `extraction_verified: weak` in the frontmatter; only a challenge page or a
+  short body that never echoes the title is fatal. Video pages that opt into
+  caption-only extraction are exempt.
+
+### Changed
+
+- A 429 or 5xx is retried exactly once, honouring `Retry-After` up to 5 s. A 403
+  is never retried: every attempt re-scores a bot wall.
+- The yt-dlp 403 message no longer says "retry later" — a 403 there is either an
+  unavailable stream from this network or an identity/egress gate, and it now
+  names both and the remedies that actually change the verdict.
+
 ## 2026-11-19
 
 ### Fixed

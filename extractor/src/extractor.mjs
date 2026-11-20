@@ -11,10 +11,13 @@ import {
   resolveAndValidateUrl,
 } from './network-policy.mjs';
 import { collectVideos } from './video-collect.mjs';
+import { assessExtraction, detectChallenge } from './verify.mjs';
 
 export const MIN_MARKDOWN_CHARS = 200;
 export const MAX_BROWSER_REQUESTS = 80;
 export const BROWSER_TIMEOUT_MS = 30_000;
+/** How long a managed challenge gets to clear before the rung is abandoned. */
+export const CHALLENGE_SETTLE_MS = 6_000;
 export const MAX_BROWSER_RESOURCE_BYTES = 4 * 1024 * 1024;
 export const MAX_BROWSER_TOTAL_BYTES = 32 * 1024 * 1024;
 
@@ -410,6 +413,32 @@ export function buildSecureRouteHandler({
   };
 }
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function readTitle(page) {
+  try {
+    return await page.title();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * A managed challenge answers 200 with an interstitial and holds it until the
+ * score clears. Waiting the full browser timeout on a page that will never
+ * render costs half a minute and teaches nothing; give the challenge a short
+ * window, then fail with a code the caller can act on.
+ */
+async function waitForChallengeClear(page, settleMs = CHALLENGE_SETTLE_MS) {
+  if (!detectChallenge({ title: await readTitle(page) })) return true;
+  const deadline = Date.now() + settleMs;
+  while (Date.now() < deadline) {
+    await sleep(1000);
+    if (!detectChallenge({ title: await readTitle(page) })) return true;
+  }
+  return false;
+}
+
 async function extractWithPlaywright(inputUrl, {
   resolver,
   allowNonDefaultPorts,
@@ -449,6 +478,12 @@ async function extractWithPlaywright(inputUrl, {
 
     const page = await context.newPage();
     await page.goto(approved.url.href, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    if (!(await waitForChallengeClear(page))) {
+      throw new ExtractorError(
+        'CHALLENGE_PAGE',
+        'The site answered with a browser challenge instead of the page.',
+      );
+    }
     const finalUrl = page.url();
     await resolveAndValidateUrl(finalUrl, { resolver, allowNonDefaultPorts });
     const result = await extractHtml(await page.content(), finalUrl);
@@ -461,6 +496,23 @@ async function extractWithPlaywright(inputUrl, {
     await closeQuietly(context);
     await closeQuietly(browser);
   }
+}
+
+function withVerification(result, { method, staticBody = '', allowVideoStub = false }) {
+  const assessment = assessExtraction({ result, method, staticBody, allowVideoStub });
+  if (assessment.verdict === 'challenge') {
+    throw new ExtractorError(
+      'CHALLENGE_PAGE',
+      'The page served a bot challenge instead of the article.',
+    );
+  }
+  if (assessment.verdict === 'fake') {
+    throw new ExtractorError(
+      'FAKE_SUCCESS',
+      'The page did not contain the article its title promised.',
+    );
+  }
+  return { ...result, verification: assessment.verdict };
 }
 
 /** Fetch and extract a URL statically, with an isolated Chromium fallback for low-quality pages. */
@@ -481,16 +533,24 @@ export async function extractUrl(inputUrl, options = {}) {
   const staticResult = await extractHtml(fetched.html, fetched.finalUrl);
   const withVideos = options.withVideos === true;
   if (meetsQualityGate(staticResult, { allowVideoStub: withVideos })) {
-    return { ...staticResult, url: normalizeUrl(fetched.finalUrl).href, method: 'static' };
+    return withVerification(
+      { ...staticResult, url: normalizeUrl(fetched.finalUrl).href, method: 'static' },
+      { method: 'static', allowVideoStub: withVideos },
+    );
   }
   if (options.allowBrowser === false || options.dynamic === false || options.browser === false) throw qualityError();
 
-  return extractWithPlaywright(normalized.href, {
+  const browserResult = await extractWithPlaywright(normalized.href, {
     resolver: options.resolver,
     allowNonDefaultPorts: options.allowNonDefaultPorts,
     browserLauncher: options.browserLauncher,
     timeoutMs: options.browserTimeoutMs || BROWSER_TIMEOUT_MS,
     maxRequests: options.maxBrowserRequests || MAX_BROWSER_REQUESTS,
     withVideos,
+  });
+  return withVerification(browserResult, {
+    method: 'playwright',
+    staticBody: staticResult.markdown,
+    allowVideoStub: withVideos,
   });
 }

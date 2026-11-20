@@ -7,7 +7,9 @@ from datetime import timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 import re
+import time
 
+from .article import RETRYABLE_STATUSES
 from .core import ClipError, MAX_STDERR_BYTES, MAX_STDOUT_BYTES
 from .extract import run_extractor
 from .proc import _run_bounded
@@ -319,17 +321,39 @@ def _parse_wechat_html(html: str, url: str) -> dict[str, object]:
     }
 
 
+MAX_RETRY_SLEEP_S = 5.0
+DEFAULT_RETRY_SLEEP_S = 2.0
+
+
+def _retry_delay(exc: ClipError) -> float:
+    header = (exc.retry_after or "").strip()
+    if header.isdigit():
+        return min(float(header), MAX_RETRY_SLEEP_S)
+    return DEFAULT_RETRY_SLEEP_S
+
+
 def run_extractor_with_fallback(
     plugin_root: Path, url: str, no_browser: bool = False
 ) -> dict[str, object]:
-    """Run the Node.js extractor; fall back to curl for WeChat/video URLs on failure."""
+    """Run the Node.js extractor, with a bounded retry and site fallbacks.
+
+    A rate limit or a 5xx is worth exactly one retry — the second attempt is
+    where a transient window closes. A 403 is not in that set: a bot wall
+    re-scores every request, so retrying it only makes the verdict worse.
+    """
     try:
         return run_extractor(plugin_root, url, no_browser=no_browser)
-    except ClipError:
+    except ClipError as exc:
+        if exc.status in RETRYABLE_STATUSES:
+            time.sleep(_retry_delay(exc))
+            try:
+                return run_extractor(plugin_root, url, no_browser=no_browser)
+            except ClipError as retry_exc:
+                exc = retry_exc
         if _is_wechat_url(url):
             html = _fetch_wechat_html(url)
             return _parse_wechat_html(html, url)
         if _is_netease_video_url(url):
             html = _fetch_netease_video_html(url)
             return _parse_netease_video_html(html, url)
-        raise
+        raise exc

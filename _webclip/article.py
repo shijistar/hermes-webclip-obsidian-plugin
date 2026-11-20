@@ -19,11 +19,72 @@ def _decode_json_object(raw: bytes) -> Mapping[str, object]:
     return payload
 
 
+# Statuses where one bounded retry can genuinely help. 403 is deliberately
+# absent: a bot wall re-scores every attempt, so retrying it makes things worse.
+RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+_BOT_WALL_SERVERS = ("cloudflare", "akamai", "sucuri", "imperva")
+
+# Codes that already carry a verdict; their message is the whole answer.
+_VERDICT_MESSAGES = {
+    "CHALLENGE_PAGE": (
+        "The site answered with a browser challenge instead of the page. Repeating the "
+        "same request will not clear it — use the site's API or a real browser session."
+    ),
+    "FAKE_SUCCESS": (
+        "The page loaded but its body was not the article its title promised (JS shell or "
+        "wall). Nothing was saved."
+    ),
+}
+
+
+def _status_message(payload: Mapping[str, object]) -> str:
+    status = payload.get("status")
+    if not isinstance(status, int) or isinstance(status, bool):
+        return "Web extraction failed (HTTP_STATUS)."
+    server = str(payload.get("server") or "").lower()
+    challenged = bool(payload.get("cfMitigated")) or any(sign in server for sign in _BOT_WALL_SERVERS)
+    if status == 401:
+        return (
+            "The page is reachable but requires credentials (HTTP 401). "
+            "Sign in first; retrying the same request will not help."
+        )
+    if status == 403 and challenged:
+        return (
+            "The site answered with a bot wall (HTTP 403, challenge). This is not a "
+            "network fault: open it in a real browser or use the site's API — a retry "
+            "only re-scores the request."
+        )
+    if status == 403:
+        return (
+            "The site refused the request (HTTP 403). This is usually a bot wall or an "
+            "egress/identity gate; a retry rarely helps."
+        )
+    if status == 429:
+        return (
+            "The site is rate limiting this client (HTTP 429). Back off and retry later; "
+            "repeating the request immediately keeps the score high."
+        )
+    if status >= 500:
+        return f"The site returned a server error (HTTP {status}); retry later."
+    return f"The site returned an unsuccessful status (HTTP {status})."
+
+
 def _extractor_failure(payload: Mapping[str, object]) -> ClipError:
     code = payload.get("code")
-    if isinstance(code, str) and _SAFE_ERROR_CODE.fullmatch(code):
-        return ClipError(f"Web extraction failed ({code}).")
-    return ClipError("Web extraction failed.")
+    if not (isinstance(code, str) and _SAFE_ERROR_CODE.fullmatch(code)):
+        return ClipError("Web extraction failed.")
+    if code in _VERDICT_MESSAGES:
+        return ClipError(_VERDICT_MESSAGES[code])
+    if code == "HTTP_STATUS":
+        status = payload.get("status")
+        retry_after = payload.get("retryAfter")
+        return ClipError(
+            _status_message(payload),
+            status=status if isinstance(status, int) and not isinstance(status, bool) else None,
+            retry_after=retry_after if isinstance(retry_after, str) else None,
+        )
+    return ClipError(f"Web extraction failed ({code}).")
 
 
 _MAX_VIDEO_CANDIDATES = 20
@@ -85,6 +146,10 @@ def _validate_success_payload(
         checked[field] = value
     if not checked["title"] or not checked["method"]:
         raise ClipError("The extractor returned incomplete or invalid article data.")
+    # Optional: older extractors do not report how well the body matched the title.
+    verification = data.get("verification")
+    if isinstance(verification, str) and verification in {"strong", "weak"}:
+        checked["verification"] = verification
     keywords = data.get("keywords")
     if not isinstance(keywords, list) or len(keywords) > 128:
         raise ClipError("The extractor returned incomplete or invalid article data.")
