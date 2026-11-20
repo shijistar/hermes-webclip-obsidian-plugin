@@ -17,7 +17,7 @@ export const MIN_MARKDOWN_CHARS = 200;
 export const MAX_BROWSER_REQUESTS = 80;
 export const BROWSER_TIMEOUT_MS = 30_000;
 /** How long a managed challenge gets to clear before the rung is abandoned. */
-export const CHALLENGE_SETTLE_MS = 6_000;
+export const CHALLENGE_SETTLE_MS = 12_000;
 export const MAX_BROWSER_RESOURCE_BYTES = 4 * 1024 * 1024;
 export const MAX_BROWSER_TOTAL_BYTES = 32 * 1024 * 1024;
 

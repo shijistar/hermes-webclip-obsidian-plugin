@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   wall, do not retry" (403 + challenge headers), "rate limited" (429) and
   "server error" (5xx) instead of one opaque `Web extraction failed (HTTP_STATUS)`.
 - `CHALLENGE_PAGE` and `FAKE_SUCCESS` verdicts. A managed challenge is detected
-  from the interstitial title and abandoned after a 6 s settle window instead of
+  from the interstitial title and abandoned after a 12 s settle window instead of
   waiting out the 30 s navigation timeout; a body that never names the article
   is refused rather than written to the vault as a note.
 - Post-extraction verification in the extractor: the rendered body must
