@@ -41,7 +41,23 @@ _GITHUB_REMOTE_SSH = re.compile(r"^git@github\.com:([^/]+)/([^/]+?)(?:\.git)?$")
 
 
 class ClipError(Exception):
-    """An expected error whose message is safe to show to the user."""
+    """An expected error whose message is safe to show to the user.
+
+    ``status`` and ``retry_after`` carry the extractor's machine-readable
+    context when it had one, so callers can classify a failure (bot wall vs
+    auth vs rate limit) instead of pattern-matching the message.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        retry_after: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.retry_after = retry_after
 
 
 def _normalize_text(value: str) -> str:

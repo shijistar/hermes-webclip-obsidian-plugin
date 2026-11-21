@@ -11,10 +11,13 @@ import {
   resolveAndValidateUrl,
 } from './network-policy.mjs';
 import { collectVideos } from './video-collect.mjs';
+import { assessExtraction, detectChallenge } from './verify.mjs';
 
 export const MIN_MARKDOWN_CHARS = 200;
 export const MAX_BROWSER_REQUESTS = 80;
 export const BROWSER_TIMEOUT_MS = 30_000;
+/** How long a managed challenge gets to clear before the rung is abandoned. */
+export const CHALLENGE_SETTLE_MS = 12_000;
 export const MAX_BROWSER_RESOURCE_BYTES = 4 * 1024 * 1024;
 export const MAX_BROWSER_TOTAL_BYTES = 32 * 1024 * 1024;
 
@@ -28,10 +31,12 @@ const GENERIC_TITLES = new Set([
 ]);
 
 export class ExtractorError extends Error {
-  constructor(code, message) {
+  constructor(code, message, details = {}) {
     super(message);
     this.name = 'ExtractorError';
     this.code = code;
+    // Machine-readable context the CLI forwards (e.g. `marker` on a challenge).
+    this.details = details;
   }
 }
 
@@ -410,6 +415,59 @@ export function buildSecureRouteHandler({
   };
 }
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function readTitle(page) {
+  try {
+    return await page.title();
+  } catch {
+    return '';
+  }
+}
+
+/** Inner text of the rendered page, used to tell a challenge from an article. */
+async function readBodyText(page) {
+  try {
+    const text = await page.evaluate(() =>
+      document.body ? document.body.innerText : '',
+    );
+    return typeof text === 'string' ? text : '';
+  } catch {
+    return '';
+  }
+}
+
+async function challengeState(page) {
+  return detectChallenge({ title: await readTitle(page), text: await readBodyText(page) });
+}
+
+/**
+ * A managed challenge answers 200 with an interstitial and holds it until the
+ * score clears. Waiting the full browser timeout on a page that will never
+ * render costs half a minute and teaches nothing; give the challenge a short
+ * window, then decide from the body.
+ *
+ * A body signature is decisive, so a real interstitial still fails fast. A title
+ * that merely resembles a challenge signature is handed back to
+ * `assessExtraction`, which can accept a page whose body corroborates it —
+ * otherwise an article titled "Access Denied: …" would be rejected here while
+ * the static path accepted it.
+ *
+ * Returns null when extraction may continue, or the blocking `{ sign, where }`
+ * so the caller can name the marker in the error it raises.
+ */
+export async function waitForChallengeClear(page, settleMs = CHALLENGE_SETTLE_MS) {
+  let state = await challengeState(page);
+  if (!state) return null;
+  const deadline = Date.now() + settleMs;
+  while (Date.now() < deadline) {
+    await sleep(1000);
+    state = await challengeState(page);
+    if (!state) return null;
+  }
+  return state.where === 'body' ? state : null;
+}
+
 async function extractWithPlaywright(inputUrl, {
   resolver,
   allowNonDefaultPorts,
@@ -449,6 +507,14 @@ async function extractWithPlaywright(inputUrl, {
 
     const page = await context.newPage();
     await page.goto(approved.url.href, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    const blocked = await waitForChallengeClear(page);
+    if (blocked) {
+      throw new ExtractorError(
+        'CHALLENGE_PAGE',
+        'The site answered with a browser challenge instead of the page.',
+        { marker: blocked.sign },
+      );
+    }
     const finalUrl = page.url();
     await resolveAndValidateUrl(finalUrl, { resolver, allowNonDefaultPorts });
     const result = await extractHtml(await page.content(), finalUrl);
@@ -461,6 +527,24 @@ async function extractWithPlaywright(inputUrl, {
     await closeQuietly(context);
     await closeQuietly(browser);
   }
+}
+
+function withVerification(result, { method, staticBody = '', allowVideoStub = false }) {
+  const assessment = assessExtraction({ result, method, staticBody, allowVideoStub });
+  if (assessment.verdict === 'challenge') {
+    throw new ExtractorError(
+      'CHALLENGE_PAGE',
+      'The page served a bot challenge instead of the article.',
+      { marker: assessment.reason },
+    );
+  }
+  if (assessment.verdict === 'fake') {
+    throw new ExtractorError(
+      'FAKE_SUCCESS',
+      'The page did not contain the article its title promised.',
+    );
+  }
+  return { ...result, verification: assessment.verdict };
 }
 
 /** Fetch and extract a URL statically, with an isolated Chromium fallback for low-quality pages. */
@@ -481,16 +565,24 @@ export async function extractUrl(inputUrl, options = {}) {
   const staticResult = await extractHtml(fetched.html, fetched.finalUrl);
   const withVideos = options.withVideos === true;
   if (meetsQualityGate(staticResult, { allowVideoStub: withVideos })) {
-    return { ...staticResult, url: normalizeUrl(fetched.finalUrl).href, method: 'static' };
+    return withVerification(
+      { ...staticResult, url: normalizeUrl(fetched.finalUrl).href, method: 'static' },
+      { method: 'static', allowVideoStub: withVideos },
+    );
   }
   if (options.allowBrowser === false || options.dynamic === false || options.browser === false) throw qualityError();
 
-  return extractWithPlaywright(normalized.href, {
+  const browserResult = await extractWithPlaywright(normalized.href, {
     resolver: options.resolver,
     allowNonDefaultPorts: options.allowNonDefaultPorts,
     browserLauncher: options.browserLauncher,
     timeoutMs: options.browserTimeoutMs || BROWSER_TIMEOUT_MS,
     maxRequests: options.maxBrowserRequests || MAX_BROWSER_REQUESTS,
     withVideos,
+  });
+  return withVerification(browserResult, {
+    method: 'playwright',
+    staticBody: staticResult.markdown,
+    allowVideoStub: withVideos,
   });
 }

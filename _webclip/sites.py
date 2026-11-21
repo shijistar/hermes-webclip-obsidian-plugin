@@ -7,7 +7,9 @@ from datetime import timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 import re
+import time
 
+from .article import RETRYABLE_STATUSES
 from .core import ClipError, MAX_STDERR_BYTES, MAX_STDOUT_BYTES
 from .extract import run_extractor
 from .proc import _run_bounded
@@ -319,17 +321,53 @@ def _parse_wechat_html(html: str, url: str) -> dict[str, object]:
     }
 
 
+MAX_RETRY_SLEEP_S = 5.0
+DEFAULT_RETRY_SLEEP_S = 2.0
+_RETRY_AFTER_SECONDS = re.compile(r"[0-9]+")
+
+
+def _retry_delay(exc: ClipError) -> float:
+    header = (exc.retry_after or "").strip()
+    # `str.isdigit()` accepts non-decimal digits such as "²", which `float()`
+    # then rejects with a ValueError that would escape the retry entirely, so
+    # match ASCII digits explicitly. The HTTP-date form is legal but rare:
+    # a single early retry costs nothing, so it takes the default delay.
+    if _RETRY_AFTER_SECONDS.fullmatch(header):
+        # `Retry-After: 0` is legal and means "now"; sleeping zero would retry a
+        # rate limit immediately, so the floor is one second.
+        return max(1.0, min(float(header), MAX_RETRY_SLEEP_S))
+    return DEFAULT_RETRY_SLEEP_S
+
+
 def run_extractor_with_fallback(
     plugin_root: Path, url: str, no_browser: bool = False
 ) -> dict[str, object]:
-    """Run the Node.js extractor; fall back to curl for WeChat/video URLs on failure."""
+    """Run the Node.js extractor, with a bounded retry and site fallbacks.
+
+    A rate limit or a transient server error is worth exactly one retry — the
+    second attempt is where a transient window closes. A 403 is not in that set:
+    a bot wall re-scores every request, so retrying it only makes the verdict
+    worse. Nor is every 5xx: 501, 505 and 508 answer the same way twice, so they
+    fail on the first response instead of costing a second round trip.
+    """
     try:
         return run_extractor(plugin_root, url, no_browser=no_browser)
-    except ClipError:
+    except ClipError as exc:
+        first = exc
+        if exc.status in RETRYABLE_STATUSES:
+            time.sleep(_retry_delay(exc))
+            try:
+                return run_extractor(plugin_root, url, no_browser=no_browser)
+            except ClipError as retry_exc:
+                exc = retry_exc
         if _is_wechat_url(url):
             html = _fetch_wechat_html(url)
             return _parse_wechat_html(html, url)
         if _is_netease_video_url(url):
             html = _fetch_netease_video_html(url)
             return _parse_netease_video_html(html, url)
+        if exc is not first:
+            # Keep the rate-limit verdict visible in the chain instead of
+            # replacing it silently with whatever the retry happened to hit.
+            raise exc from first
         raise

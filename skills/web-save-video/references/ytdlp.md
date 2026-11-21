@@ -52,7 +52,7 @@ a traceback and never a silent zero.
 
 | Upstream symptom | Message |
 | --- | --- |
-| `HTTP Error 403` | "YouTube refused the download (HTTP 403); retry later." |
+| `HTTP Error 403` | "YouTube refused the download (HTTP 403). Either the selected stream is not served to this network or the request is gated on identity/egress; retrying the same command will not help — try a progressive format, browser cookies, or a residential exit." |
 | sign-in / age gate | "YouTube requires a signed-in account for this video." |
 | `Requested format is not available` | "YouTube offered no downloadable format for this video." |
 | anything else | "yt-dlp could not download this video." — stderr is **not** echoed, it can contain signed URLs |

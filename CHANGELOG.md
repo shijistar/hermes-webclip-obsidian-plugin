@@ -4,6 +4,43 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-20
+
+### Added
+
+- Failure classification. `HTTP_STATUS` errors now carry the status code and the
+  challenge headers (`cf-mitigated`, `server`, `retry-after`) through the
+  extractor's JSON, so the plugin answers "requires credentials" (401), "bot
+  wall, do not retry" (403 + challenge headers), "rate limited" (429) and
+  "server error" (5xx) instead of one opaque `Web extraction failed (HTTP_STATUS)`.
+- A `CHALLENGE_PAGE` failure names the marker it matched (`Marker: "verify you
+  are human"`), so a body that merely quotes a wall phrase can be told apart
+  from a page that really served one.
+- `CHALLENGE_PAGE` and `FAKE_SUCCESS` verdicts. A managed challenge is detected
+  from the interstitial body first (a title that merely resembles one is weighed
+  against the body) and abandoned after a 12 s settle window instead of waiting
+  out the 30 s navigation timeout; a body that never names the article is
+  refused rather than written to the vault as a note.
+- Post-extraction verification in the extractor: the rendered body must
+  corroborate its own title (Latin words on word boundaries, CJK bigrams;
+  mixed-script titles split per script; a browser render must also out-grow the
+  static fetch by 20 %). Weak matches still save, marked
+  `extraction_verified: weak` in the frontmatter. Only a challenge page, or a
+  short body that neither echoes the title nor reads as prose, is fatal — a
+  title that merely resembles a challenge signature and a render that grew
+  slowly both stay saved. Video pages that opt into caption-only extraction are
+  exempt, unless the page is itself a challenge.
+
+### Changed
+
+- A 429 or one of 500/502/503/504 is retried exactly once (501, 505 and 508 are
+  permanent answers, so they fail immediately), honouring a numeric `Retry-After` between
+  1 s and 5 s (malformed values and the rarer HTTP-date form take the 2 s
+  default). A 403 is never retried: every attempt re-scores a bot wall.
+- The yt-dlp 403 message no longer says "retry later" — a 403 there is either an
+  unavailable stream from this network or an identity/egress gate, and it now
+  names both and the remedies that actually change the verdict.
+
 ## 2026-11-19
 
 ### Fixed

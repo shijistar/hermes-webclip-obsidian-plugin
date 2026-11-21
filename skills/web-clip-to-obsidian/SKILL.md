@@ -1,7 +1,7 @@
 ---
 name: web-clip-to-obsidian
 description: Clip, save, favorite web articles to Obsidian; 剪藏 抓取 收藏
-version: 1.14.0
+version: 1.15.2
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
@@ -325,7 +325,14 @@ live in `references/` and are linked from the rule they belong to.
 - **Image confirmation is opt-in**: the agent default is `--save-images no`, so a plain clip writes the note immediately with `image_mode: remote` and never returns `PendingClipResult`. Only `--save-images ask` returns `PendingClipResult`, and in that mode nothing is saved until `resume_pending('yes'|'no')` runs — ask via a `clarify` card with two lettered options (labels in the user's language, A = remote, B = local), then map A→`'no'` and B→`'yes'`.
 - **Always return the GitHub URL**: after a save, report `ClipResult.github_url` so the user can preview the note. The URL may already carry the `preview_url_params` query parameters configured in `config.toml`; do not strip or duplicate them (see `docs/preview-link-params.md`).
 - **Pre-clip repo hygiene (both repos)**: before clipping, confirm the vault (`~/Obsidian`) and the plugin source repo are both on a clean `master`; a leftover feature branch would take the clip commit. Run `git switch master && git pull --ff-only` and `git status --short` in each repo.
-- **Dry-run preflight**: run `node extractor/src/cli.mjs <url> --no-browser` once and check `ok:true`, a non-empty `author` and a sane markdown length before `service.run()`; this catches 404s and anti-bot walls early.
+- **Dry-run preflight**: run `node extractor/src/cli.mjs <url> --no-browser` once and check `ok:true`, a non-empty `author` and a sane markdown length before `service.run()`; this catches 404s and anti-bot walls early. The preflight calls the CLI directly, so it does **not** get the plugin's retry: on a 429 or 500/502/503/504 proceed to `service.run()`, where the bounded retry lives, instead of treating it as a failed clip. A 403 at preflight still means stop.
+- **Failure codes are verdicts, not retry hints**: `CHALLENGE_PAGE` means a bot
+  challenge answered instead of the page — do not repeat the same request; go to
+  the real-browser ladder. `FAKE_SUCCESS` means the body was a JS shell or a wall,
+  so nothing was saved. A 429 or 500/502/503/504 is retried once automatically, while a 403 is
+  never retried (each attempt only re-scores it). A note whose body did not fully
+  echo its title carries `extraction_verified: weak` in the frontmatter — spot-check
+  it before citing.
 - **Hash protection on re-clip**: an existing note whose content changed raises `The saved page changed; rerun with --refresh to update it.` Check whether the note already exists and ask keep-vs-refresh instead of overwriting; `--refresh --save-images yes` refreshes and localizes.
 - **Image policy**: always pass `--save-images no` unless the user asked for local images (`yes`) or asked to be prompted (`ask`); never ask the user which mode to use. In a batch, every spec that extracts a page must carry an explicit `yes` or `no` — `ask` is rejected because one pending confirmation cannot represent several articles; marker-only specs are exempt. See `references/batch-processing.md`.
 - **One-step non-interactive clip**: `service.run('<url> --refresh --save-images yes|no --no-browser')` clips in a single call and returns `ClipResult` with no pending step.

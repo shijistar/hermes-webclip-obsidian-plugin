@@ -1,6 +1,6 @@
 {
   "name": "@tiny-codes/web-clip-extractor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Node.js content-extraction engine for the hermes-webclip-obsidian-plugin (published to npm; the Hermes plugin consumes it as a dependency).",
   "type": "module",
   "engines": {
@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/cli.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs && node --check src/video-collect.mjs",
+    "check": "node --check src/cli.mjs && node --check src/error-payload.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs && node --check src/video-collect.mjs && node --check src/verify.mjs",
     "prepare": "npx playwright install chromium"
   },
   "dependencies": {

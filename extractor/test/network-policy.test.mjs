@@ -97,6 +97,31 @@ test('fetchHtml enforces the redirect limit', async () => {
   );
 });
 
+test('fetchHtml attaches the status and challenge headers to HTTP_STATUS errors', async () => {
+  const resolver = async () => [{ address: '93.184.216.34', family: 4 }];
+  const requestImpl = async () => ({
+    statusCode: 403,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cf-mitigated': 'challenge',
+      server: 'cloudflare',
+      'retry-after': '30',
+    },
+    body: Buffer.from('<html><title>Just a moment...</title></html>'),
+  });
+
+  await assert.rejects(
+    fetchHtml('https://example.com/blocked', { resolver, requestImpl }),
+    error =>
+      error instanceof PolicyError &&
+      error.code === 'HTTP_STATUS' &&
+      error.details?.status === 403 &&
+      error.details?.cfMitigated === 'challenge' &&
+      error.details?.server === 'cloudflare' &&
+      error.details?.retryAfter === '30',
+  );
+});
+
 test('fetchHtml accepts only HTML and XHTML response content types', async () => {
   const resolver = async () => [{ address: '93.184.216.34', family: 4 }];
   const requestImpl = async () => ({

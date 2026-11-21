@@ -15,10 +15,13 @@ const HTML_CONTENT_TYPES = new Set(['text/html', 'application/xhtml+xml']);
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 export class PolicyError extends Error {
-  constructor(code, message) {
+  constructor(code, message, details = undefined) {
     super(message);
     this.name = 'PolicyError';
     this.code = code;
+    // Optional machine-readable context (e.g. the HTTP status behind
+    // HTTP_STATUS) so callers can classify the failure instead of guessing.
+    if (details) this.details = details;
   }
 }
 
@@ -126,8 +129,8 @@ export function isBlockedIp(address) {
   return BLOCKED_IPV6_RANGES.some(([base, prefix]) => ipv6InCidr(ipv6, base, prefix));
 }
 
-function error(code, message) {
-  return new PolicyError(code, message);
+function error(code, message, details = undefined) {
+  return new PolicyError(code, message, details);
 }
 
 /** Parse and canonicalize a URL before any DNS or network operation. */
@@ -414,7 +417,19 @@ export async function fetchHtml(
     }
 
     if (statusCode < 200 || statusCode >= 300) {
-      throw error('HTTP_STATUS', 'The server returned an unsuccessful status.');
+      // The status is the single most useful fact here: 401, 403 (bot wall),
+      // 429 and 5xx demand completely different next steps, and a caller that
+      // only sees "HTTP_STATUS" cannot tell them apart.
+      const details = { status: statusCode };
+      for (const [key, header] of [
+        ['retryAfter', 'retry-after'],
+        ['cfMitigated', 'cf-mitigated'],
+        ['server', 'server'],
+      ]) {
+        const value = firstHeader(response.headers, header);
+        if (value) details[key] = String(value).slice(0, 64);
+      }
+      throw error('HTTP_STATUS', 'The server returned an unsuccessful status.', details);
     }
     if (!HTML_CONTENT_TYPES.has(contentType(response.headers))) {
       throw error('UNSUPPORTED_CONTENT_TYPE', 'The response is not HTML.');

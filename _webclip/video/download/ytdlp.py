@@ -132,7 +132,16 @@ def _reason(stderr: bytes) -> str:
     if _SIZE_RE.search(text):
         return "The video is larger than the configured size limit."
     if "403" in text or "Forbidden" in text:
-        return "YouTube refused the download (HTTP 403); retry later."
+        # Two different 403s land here: the m3u8_native format answering from
+        # this network (measured) and YouTube gating the request on
+        # identity/egress. Retrying the identical command fixes neither, so
+        # point at the two things that do change the verdict.
+        return (
+            "YouTube refused the download (HTTP 403). Either the selected stream is not "
+            "served to this network or the request is gated on identity/egress; retrying "
+            "the same command will not help — try a progressive format, browser cookies, "
+            "or a residential exit."
+        )
     # A bare `"age" in text` matched "webpage", "message" and "storage" too, so
     # an ordinary failure was reported as a login wall (measured).
     if _SIGN_IN_RE.search(text):
