@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Mapping
 import json
+import re
 
 from .core import ClipError, _SAFE_ERROR_CODE
 from .urls import _validate_http_url, normalize_url
@@ -22,6 +23,11 @@ def _decode_json_object(raw: bytes) -> Mapping[str, object]:
 # Statuses where one bounded retry can genuinely help. 403 is deliberately
 # absent: a bot wall re-scores every attempt, so retrying it makes things worse.
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+# A challenge marker is the literal string the extractor matched (an English or
+# Chinese UI phrase). Keep it to printable characters so it cannot inject
+# line breaks or quotes into a note the user reads.
+_SAFE_MARKER = re.compile(r"""[A-Za-z0-9 '\-\u4e00-\u9fff]{1,60}""")
 
 # Codes that already carry a verdict; their message is the whole answer.
 _VERDICT_MESSAGES = {
@@ -75,7 +81,11 @@ def _extractor_failure(payload: Mapping[str, object]) -> ClipError:
     if not (isinstance(code, str) and _SAFE_ERROR_CODE.fullmatch(code)):
         return ClipError("Web extraction failed.")
     if code in _VERDICT_MESSAGES:
-        return ClipError(_VERDICT_MESSAGES[code])
+        message = _VERDICT_MESSAGES[code]
+        marker = payload.get("marker")
+        if code == "CHALLENGE_PAGE" and isinstance(marker, str) and _SAFE_MARKER.fullmatch(marker):
+            message = f'{message} Marker: "{marker}".'
+        return ClipError(message)
     if code == "HTTP_STATUS":
         status = payload.get("status")
         retry_after = payload.get("retryAfter")

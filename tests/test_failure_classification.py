@@ -95,6 +95,34 @@ class StatusMessageTests(unittest.TestCase):
         self.assertIn("QUALITY_GATE", str(_extractor_failure({"code": "QUALITY_GATE"})))
 
 
+class ChallengeMarkerTests(unittest.TestCase):
+    def test_the_marker_is_named_in_the_message(self):
+        error = _extractor_failure(
+            {"ok": False, "code": "CHALLENGE_PAGE", "marker": "verify you are human"}
+        )
+        self.assertIn('Marker: "verify you are human"', str(error))
+
+    def test_a_chinese_marker_is_named_too(self):
+        error = _extractor_failure(
+            {"ok": False, "code": "CHALLENGE_PAGE", "marker": "\u8bf7\u5b8c\u6210\u5b89\u5168\u9a8c\u8bc1"}
+        )
+        self.assertIn("Marker: \"\u8bf7\u5b8c\u6210\u5b89\u5168\u9a8c\u8bc1\"", str(error))
+
+    def test_an_unsafe_marker_is_dropped(self):
+        # A quote or a newline would break the sentence the user reads.
+        for marker in ['a"b', "line\nbreak", "x" * 61]:
+            error = _extractor_failure(
+                {"ok": False, "code": "CHALLENGE_PAGE", "marker": marker}
+            )
+            self.assertNotIn("Marker:", str(error))
+
+    def test_a_marker_on_another_code_is_ignored(self):
+        error = _extractor_failure(
+            {"ok": False, "code": "FAKE_SUCCESS", "marker": "verify you are human"}
+        )
+        self.assertNotIn("Marker:", str(error))
+
+
 class RetryTests(unittest.TestCase):
     url = "https://example.com/article"
 

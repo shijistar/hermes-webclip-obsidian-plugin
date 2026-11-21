@@ -31,10 +31,12 @@ const GENERIC_TITLES = new Set([
 ]);
 
 export class ExtractorError extends Error {
-  constructor(code, message) {
+  constructor(code, message, details = {}) {
     super(message);
     this.name = 'ExtractorError';
     this.code = code;
+    // Machine-readable context the CLI forwards (e.g. `marker` on a challenge).
+    this.details = details;
   }
 }
 
@@ -451,18 +453,19 @@ async function challengeState(page) {
  * otherwise an article titled "Access Denied: …" would be rejected here while
  * the static path accepted it.
  *
- * Returns true when extraction may continue.
+ * Returns null when extraction may continue, or the blocking `{ sign, where }`
+ * so the caller can name the marker in the error it raises.
  */
 export async function waitForChallengeClear(page, settleMs = CHALLENGE_SETTLE_MS) {
   let state = await challengeState(page);
-  if (!state) return true;
+  if (!state) return null;
   const deadline = Date.now() + settleMs;
   while (Date.now() < deadline) {
     await sleep(1000);
     state = await challengeState(page);
-    if (!state) return true;
+    if (!state) return null;
   }
-  return state.where !== 'body';
+  return state.where === 'body' ? state : null;
 }
 
 async function extractWithPlaywright(inputUrl, {
@@ -504,10 +507,12 @@ async function extractWithPlaywright(inputUrl, {
 
     const page = await context.newPage();
     await page.goto(approved.url.href, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
-    if (!(await waitForChallengeClear(page))) {
+    const blocked = await waitForChallengeClear(page);
+    if (blocked) {
       throw new ExtractorError(
         'CHALLENGE_PAGE',
         'The site answered with a browser challenge instead of the page.',
+        { marker: blocked.sign },
       );
     }
     const finalUrl = page.url();
@@ -530,6 +535,7 @@ function withVerification(result, { method, staticBody = '', allowVideoStub = fa
     throw new ExtractorError(
       'CHALLENGE_PAGE',
       'The page served a bot challenge instead of the article.',
+      { marker: assessment.reason },
     );
   }
   if (assessment.verdict === 'fake') {

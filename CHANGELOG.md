@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   extractor's JSON, so the plugin answers "requires credentials" (401), "bot
   wall, do not retry" (403 + challenge headers), "rate limited" (429) and
   "server error" (5xx) instead of one opaque `Web extraction failed (HTTP_STATUS)`.
+- A `CHALLENGE_PAGE` failure names the marker it matched (`Marker: "verify you
+  are human"`), so a body that merely quotes a wall phrase can be told apart
+  from a page that really served one.
 - `CHALLENGE_PAGE` and `FAKE_SUCCESS` verdicts. A managed challenge is detected
   from the interstitial body first (a title that merely resembles one is weighed
   against the body) and abandoned after a 12 s settle window instead of waiting

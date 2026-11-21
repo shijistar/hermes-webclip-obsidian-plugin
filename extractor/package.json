@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/cli.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs && node --check src/video-collect.mjs && node --check src/verify.mjs",
+    "check": "node --check src/cli.mjs && node --check src/error-payload.mjs && node --check src/extractor.mjs && node --check src/network-policy.mjs && node --check src/video-collect.mjs && node --check src/verify.mjs",
     "prepare": "npx playwright install chromium"
   },
   "dependencies": {

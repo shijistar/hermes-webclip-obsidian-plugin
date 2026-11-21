@@ -11,19 +11,21 @@ const page = (title, text) => ({
 const ARTICLE = 'Access denied is a common outcome in content moderation. '.repeat(40);
 
 test('a challenge-like title over an article body is not fatal', async () => {
-  const clear = await waitForChallengeClear(
+  const blocked = await waitForChallengeClear(
     page('Access Denied: A Year Inside the Filter', ARTICLE),
     0,
   );
-  assert.equal(clear, true);
+  assert.equal(blocked, null);
 });
 
 test('a body signature is fatal even when the title looks harmless', async () => {
-  const clear = await waitForChallengeClear(
+  const blocked = await waitForChallengeClear(
     page('Some article', 'Please enable JavaScript and cookies to continue.'),
     0,
   );
-  assert.equal(clear, false);
+  assert.equal(blocked.where, 'body');
+  // The sign travels to the error so the caller can name the marker.
+  assert.equal(blocked.sign, 'enable javascript and cookies to continue');
 });
 
 test('an interstitial that clears inside the window continues', async () => {
@@ -36,13 +38,13 @@ test('an interstitial that clears inside the window continues', async () => {
       return first ? 'Checking your browser before accessing the site.' : ARTICLE;
     },
   };
-  const clear = await waitForChallengeClear(clearing, 1_500);
-  assert.equal(clear, true);
+  const blocked = await waitForChallengeClear(clearing, 1_500);
+  assert.equal(blocked, null);
 });
 
 test('a page with no challenge costs no settle time', async () => {
   const started = Date.now();
-  const clear = await waitForChallengeClear(page('An article', ARTICLE), 12_000);
-  assert.equal(clear, true);
+  const blocked = await waitForChallengeClear(page('An article', ARTICLE), 12_000);
+  assert.equal(blocked, null);
   assert.ok(Date.now() - started < 500);
 });
