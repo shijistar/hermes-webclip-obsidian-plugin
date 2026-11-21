@@ -423,20 +423,46 @@ async function readTitle(page) {
   }
 }
 
+/** Inner text of the rendered page, used to tell a challenge from an article. */
+async function readBodyText(page) {
+  try {
+    const text = await page.evaluate(() =>
+      document.body ? document.body.innerText : '',
+    );
+    return typeof text === 'string' ? text : '';
+  } catch {
+    return '';
+  }
+}
+
+async function challengeState(page) {
+  return detectChallenge({ title: await readTitle(page), text: await readBodyText(page) });
+}
+
 /**
  * A managed challenge answers 200 with an interstitial and holds it until the
  * score clears. Waiting the full browser timeout on a page that will never
  * render costs half a minute and teaches nothing; give the challenge a short
- * window, then fail with a code the caller can act on.
+ * window, then decide from the body.
+ *
+ * A body signature is decisive, so a real interstitial still fails fast. A title
+ * that merely resembles a challenge signature is handed back to
+ * `assessExtraction`, which can accept a page whose body corroborates it —
+ * otherwise an article titled "Access Denied: …" would be rejected here while
+ * the static path accepted it.
+ *
+ * Returns true when extraction may continue.
  */
-async function waitForChallengeClear(page, settleMs = CHALLENGE_SETTLE_MS) {
-  if (!detectChallenge({ title: await readTitle(page) })) return true;
+export async function waitForChallengeClear(page, settleMs = CHALLENGE_SETTLE_MS) {
+  let state = await challengeState(page);
+  if (!state) return true;
   const deadline = Date.now() + settleMs;
   while (Date.now() < deadline) {
     await sleep(1000);
-    if (!detectChallenge({ title: await readTitle(page) })) return true;
+    state = await challengeState(page);
+    if (!state) return true;
   }
-  return false;
+  return state.where !== 'body';
 }
 
 async function extractWithPlaywright(inputUrl, {

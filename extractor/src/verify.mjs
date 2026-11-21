@@ -62,6 +62,12 @@ export function normalizeForMatch(text) {
     .trim();
 }
 
+// Signatures are compared against normalized text, so they must be normalized
+// too: `cf-browser-verification` would otherwise never match "cf browser
+// verification" and the marker would be dead weight.
+const TITLE_SIGNS = CHALLENGE_TITLE_SIGNS.map(sign => normalizeForMatch(sign));
+const BODY_SIGNS = CHALLENGE_BODY_SIGNS.map(sign => normalizeForMatch(sign));
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -69,18 +75,20 @@ function escapeRegExp(value) {
 /**
  * Return `{ sign, where }` for a challenge page, or null.
  *
- * Body signatures are decisive. A title hit is only a suspicion — "Access
- * Denied: A Year Inside the Filter" is a legitimate article title — so the
- * caller weighs it against the body before failing the extraction.
+ * Body signatures are checked first and are decisive: a challenge page repeats
+ * its own headline in the body ("Verify you are human" twice), so letting a
+ * title match win would let the page corroborate itself and pass. A title hit
+ * on its own is only a suspicion — "Access Denied: A Year Inside the Filter" is
+ * a legitimate article title — and the caller weighs it against the body.
  */
 export function detectChallenge({ title = '', text = '' } = {}) {
-  const normalizedTitle = normalizeForMatch(title);
-  for (const sign of CHALLENGE_TITLE_SIGNS) {
-    if (normalizedTitle.includes(sign)) return { sign, where: 'title' };
+  const body = normalizeForMatch(text).slice(0, 2000);
+  for (const sign of BODY_SIGNS) {
+    if (body.includes(sign)) return { sign, where: 'body' };
   }
-  const head = normalizeForMatch(text).slice(0, 2000);
-  for (const sign of CHALLENGE_BODY_SIGNS) {
-    if (head.includes(sign)) return { sign, where: 'body' };
+  const normalizedTitle = normalizeForMatch(title);
+  for (const sign of TITLE_SIGNS) {
+    if (normalizedTitle.includes(sign)) return { sign, where: 'title' };
   }
   return null;
 }

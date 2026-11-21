@@ -128,6 +128,30 @@ class RetryTests(unittest.TestCase):
 
         sleep.assert_called_once_with(1.0)
 
+    def test_non_ascii_digits_fall_back_to_the_default_delay(self):
+        # "²".isdigit() is true but float("²") raises, which would escape the
+        # retry entirely; the header must be matched as ASCII digits.
+        error = ClipError("rate limited", status=429, retry_after="\u00b2")
+        self.assertEqual(sites_module._retry_delay(error), sites_module.DEFAULT_RETRY_SLEEP_S)
+
+    def test_non_ascii_retry_after_still_retries_once(self):
+        calls = []
+
+        def fake(plugin_root, url, no_browser=False):
+            calls.append(url)
+            if len(calls) == 1:
+                raise ClipError("rate limited", status=429, retry_after="\u00b2")
+            return {"ok": True}
+
+        with mock.patch.object(sites_module, "run_extractor", fake), mock.patch.object(
+            sites_module.time, "sleep"
+        ) as sleep:
+            result = sites_module.run_extractor_with_fallback(Path("/tmp"), self.url)
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(len(calls), 2)
+        sleep.assert_called_once_with(sites_module.DEFAULT_RETRY_SLEEP_S)
+
     def test_retry_delay_is_capped(self):
         def fake(plugin_root, url, no_browser=False):
             raise ClipError("rate limited", status=429, retry_after="999")

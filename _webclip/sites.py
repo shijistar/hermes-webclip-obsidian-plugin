@@ -323,11 +323,16 @@ def _parse_wechat_html(html: str, url: str) -> dict[str, object]:
 
 MAX_RETRY_SLEEP_S = 5.0
 DEFAULT_RETRY_SLEEP_S = 2.0
+_RETRY_AFTER_SECONDS = re.compile(r"[0-9]+")
 
 
 def _retry_delay(exc: ClipError) -> float:
     header = (exc.retry_after or "").strip()
-    if header.isdigit():
+    # `str.isdigit()` accepts non-decimal digits such as "²", which `float()`
+    # then rejects with a ValueError that would escape the retry entirely, so
+    # match ASCII digits explicitly. The HTTP-date form is legal but rare:
+    # a single early retry costs nothing, so it takes the default delay.
+    if _RETRY_AFTER_SECONDS.fullmatch(header):
         # `Retry-After: 0` is legal and means "now"; sleeping zero would retry a
         # rate limit immediately, so the floor is one second.
         return max(1.0, min(float(header), MAX_RETRY_SLEEP_S))

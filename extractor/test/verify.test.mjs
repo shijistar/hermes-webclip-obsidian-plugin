@@ -81,6 +81,25 @@ test('titleCorroboration rates a matching CJK body as strong', () => {
   assert.equal(result.verdict, 'strong');
 });
 
+test('detectChallenge normalises hyphenated body signatures', () => {
+  const found = detectChallenge({
+    title: 'Some article',
+    text: 'cf-browser-verification is running, please wait',
+  });
+  assert.equal(found.where, 'body');
+  assert.equal(found.sign, 'cf browser verification');
+});
+
+test('a body signature outranks a corroborated challenge title', () => {
+  const body =
+    'Verify you are human. Please enable JavaScript and cookies to continue. '.repeat(5);
+  const assessment = assessExtraction({
+    result: { title: 'Verify you are human', markdown: body },
+    method: 'static',
+  });
+  assert.equal(assessment.verdict, 'challenge');
+});
+
 test('assessExtraction rejects a challenge page', () => {
   const assessment = assessExtraction({
     result: { title: 'Just a moment...', markdown: 'Checking your browser before accessing the site. '.repeat(20) },
