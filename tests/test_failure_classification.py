@@ -192,7 +192,24 @@ class RetryTests(unittest.TestCase):
 
         sleep.assert_called_once_with(sites_module.MAX_RETRY_SLEEP_S)
 
-    def test_bot_wall_is_never_retried(self):
+    def test_a_permanent_5xx_is_not_retried(self):
+        # 501 answers the same way twice; a retry only costs a round trip.
+        calls = []
+
+        def fake(plugin_root, url, no_browser=False):
+            calls.append(url)
+            raise ClipError("not implemented", status=501)
+
+        with mock.patch.object(sites_module, "run_extractor", fake), mock.patch.object(
+            sites_module.time, "sleep"
+        ) as sleep:
+            with self.assertRaises(ClipError):
+                sites_module.run_extractor_with_fallback(Path("/tmp"), self.url)
+
+        self.assertEqual(len(calls), 1)
+        sleep.assert_not_called()
+
+    def test_a_403_is_never_retried(self):
         calls = []
 
         def fake(plugin_root, url, no_browser=False):

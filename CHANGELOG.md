@@ -33,7 +33,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
-- A 429 or 5xx is retried exactly once, honouring a numeric `Retry-After` between
+- A 429 or one of 500/502/503/504 is retried exactly once (501, 505 and 508 are
+  permanent answers, so they fail immediately), honouring a numeric `Retry-After` between
   1 s and 5 s (malformed values and the rarer HTTP-date form take the 2 s
   default). A 403 is never retried: every attempt re-scores a bot wall.
 - The yt-dlp 403 message no longer says "retry later" — a 403 there is either an

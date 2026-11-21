@@ -22,6 +22,9 @@ def _decode_json_object(raw: bytes) -> Mapping[str, object]:
 
 # Statuses where one bounded retry can genuinely help. 403 is deliberately
 # absent: a bot wall re-scores every attempt, so retrying it makes things worse.
+# 501/505/508 are absent for the opposite reason: they are permanent answers
+# (unsupported feature, HTTP version, loop detected), so a second attempt only
+# costs a round trip before the same verdict.
 RETRYABLE_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 # A challenge marker is the literal string the extractor matched (an English or

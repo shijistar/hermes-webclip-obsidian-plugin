@@ -344,9 +344,11 @@ def run_extractor_with_fallback(
 ) -> dict[str, object]:
     """Run the Node.js extractor, with a bounded retry and site fallbacks.
 
-    A rate limit or a 5xx is worth exactly one retry — the second attempt is
-    where a transient window closes. A 403 is not in that set: a bot wall
-    re-scores every request, so retrying it only makes the verdict worse.
+    A rate limit or a transient server error is worth exactly one retry — the
+    second attempt is where a transient window closes. A 403 is not in that set:
+    a bot wall re-scores every request, so retrying it only makes the verdict
+    worse. Nor is every 5xx: 501, 505 and 508 answer the same way twice, so they
+    fail on the first response instead of costing a second round trip.
     """
     try:
         return run_extractor(plugin_root, url, no_browser=no_browser)
