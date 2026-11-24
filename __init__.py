@@ -23,12 +23,13 @@ _RESUME_PENDING_SCHEMA = {
     "additionalProperties": False,
 }
 
-# Both skills ship inside the plugin package and are registered here, so the
+# All skills ship inside the plugin package and are registered here, so the
 # package holds the only copy. The name is the registration name; the path is
 # where the file lives.
 _SKILLS = (
     ("web-clip-to-obsidian", "skills/web-clip-to-obsidian/SKILL.md"),
     ("web-save-video", "skills/web-save-video/SKILL.md"),
+    ("webclip-maintenance", "skills/webclip-maintenance/SKILL.md"),
 )
 
 
