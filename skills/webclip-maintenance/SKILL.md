@@ -28,11 +28,12 @@ surface, not the user-facing clipping workflow. Clipping an article is
 ```text
 command (/webclip, /save-video)
   -> _webclip/config.py     options, config.toml, flag parsing
+  -> _webclip/git_sync.py   acquire the VaultLock, Git preflight (before any scan)
   -> _webclip/extract.py    node extractor call, JSON contract
   -> _webclip/markdown.py   sanitization, frontmatter, managed markers
   -> _webclip/images.py     remote image fetch and localisation
   -> _webclip/notes.py      note discovery, identity, refresh decisions
-  -> _webclip/git_sync.py   vault lock, staging, commit, push
+  -> _webclip/git_sync.py   staging, commit, push (under the same lock)
   -> _webclip/report.py     receipt text returned to chat
 ```
 
@@ -47,9 +48,9 @@ subsystem), `extractor/src/` (Node.js: `network-policy.mjs`, `verify.mjs`,
 ## Tests you must run
 
 ```bash
-python3 -m pytest tests/ -v     # all plugin suites
-cd extractor && npm test        # only when extractor/src changed
-cd extractor && npm run check   # only when extractor/src changed
+python3 -m pytest tests/ -v      # all plugin suites
+(cd extractor && npm test)       # only when extractor/src changed
+(cd extractor && npm run check)  # only when extractor/src changed
 ```
 
 The registration suites count what is registered; they do not settle for "no
@@ -72,7 +73,7 @@ says where this plugin implements each one and what proves it;
 | 4 | Failure cleanup | `images.py`, `service.py` | `tests/test_integration.py`, `tests/test_security_regressions.py` |
 | 5 | Pending identity binding | `pending.py` | `tests/test_integration.py` |
 | 6 | Video quality gate | `_webclip/video/`, `extractor/src/extractor.mjs`, `extractor/src/video-collect.mjs` | `extractor/test/extractor.test.mjs`, `extractor/test/video-collect.test.mjs` |
-| 7 | Safe HTML subset survives | `markdown.py` | `tests/test_security_regressions.py` |
+| 7 | Safe HTML subset survives | `markdown.py` | `tests/test_security_regressions.py`, `tests/test_web_to_obsidian.py` (VideoTagSanitizationTests) |
 | 8 | Plugin-managed frontmatter keys | `notes.py` | `tests/test_web_to_obsidian.py` |
 | 9 | Content-addressed identity | `markdown.py`, `notes.py`, `urls.py` | `tests/test_web_to_obsidian.py` |
 | 10 | Output is an injection surface | `report.py` | `tests/test_web_to_obsidian.py` |

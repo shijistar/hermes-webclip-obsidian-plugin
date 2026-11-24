@@ -6,9 +6,12 @@ contract and wins where the two disagree.
 
 ## Implemented
 
-- SSRF-safe HTTP for extraction and media downloads: redirect revalidation and
-  private, link-local and IPv6 rejection in `_webclip/netguard.py`, used by
-  `_webclip/images.py`.
+- SSRF-safe HTTP for video media downloads: resolve-then-pin plus per-hop
+  redirect revalidation in `_webclip/netguard.py`, reusing the blocked-network
+  table and pinned connection classes defined in `_webclip/images.py` (one
+  definition of "public"). Image downloads keep their own guards in
+  `_webclip/images.py`; the extractor's policy is separate, in
+  `extractor/src/network-policy.mjs`.
 - Sanitization of untrusted Markdown and HTML in `_webclip/markdown.py`.
 - Remote image detection and localisation behind a yes/no decision, bound to the
   destination context and expiring (`_webclip/pending.py`).
@@ -18,9 +21,9 @@ contract and wins where the two disagree.
   staged; a second lock contender fails closed (`_webclip/git_sync.py`).
 - Extractor failure classification: HTTP status and challenge headers cross the
   process boundary, and the message layer maps them to a verdict
-  (`extractor/error-payload.mjs`, `_webclip/extract.py`).
+  (`extractor/src/error-payload.mjs`, `_webclip/extract.py`).
 - Post-extraction corroboration of body against title
-  (`extractor/verify.mjs`).
+  (`extractor/src/verify.mjs`).
 
 ## Partial
 
