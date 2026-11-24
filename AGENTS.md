@@ -10,7 +10,7 @@ dated notes into an Obsidian vault, and synchronizes them via guarded Git.
 | ------------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | repo root    | Hermes plugin package: config, safe vault writes, image handling, Git sync | `__init__.py`, `web_to_obsidian.py`, `plugin.yaml`, `config.example.toml`                          |
 | `extractor/` | Hardened Node.js extraction engine (Defuddle static + Playwright fallback) | `src/cli.mjs`, `src/extractor.mjs`, `src/network-policy.mjs`, `package.json`                                      |
-| `skills/`    | Hermes agent skills registered by the plugin (clip + video)                | `web-clip-to-obsidian/SKILL.md`, `web-save-video/SKILL.md`                                                        |
+| `skills/`    | Hermes agent skills registered by the plugin (clip, video, maintenance)    | `web-clip-to-obsidian/SKILL.md`, `web-save-video/SKILL.md`, `webclip-maintenance/SKILL.md`                        |
 | `tests/`     | Python plugin test suites                                                  | `conftest.py`, `test_web_to_obsidian.py`, `test_integration.py`, `test_plugin.py`, `test_security_regressions.py` |
 
 The repo root **is** the plugin package: `plugin.yaml`, `__init__.py`, and
@@ -69,9 +69,12 @@ hermes-webclip-obsidian-plugin/
     │   ├── SKILL.md            # workflow instructions + version in frontmatter
     │   ├── README.md
     │   └── references/         # site quirks & fallback deep-dives
-    └── web-save-video/
-        ├── SKILL.md            # /save-video workflow + version in frontmatter
-        └── references/         # platform matrix, discovery, HLS, naming, storage
+    ├── web-save-video/
+    │   ├── SKILL.md            # /save-video workflow + version in frontmatter
+    │   └── references/         # platform matrix, discovery, HLS, naming, storage
+    └── webclip-maintenance/
+        ├── SKILL.md            # pipeline map, tests, check-to-module mapping
+        └── references/         # implementation-status.md
 ```
 
 ## Build & test

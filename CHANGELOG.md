@@ -4,6 +4,22 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-24
+
+### Added
+
+- A `webclip-maintenance` skill, registered as
+  `webclip-obsidian:webclip-maintenance` and shipped inside the package. It
+  records the pipeline order, the test commands a change must satisfy, and the
+  mapping from the twelve class-level ingestion checks to the modules and tests
+  that implement them, so maintenance knowledge travels with the plugin instead
+  of living in one local skill library.
+- `skills/webclip-maintenance/references/implementation-status.md`: what is
+  implemented, partial, absent, out of scope, plus the WSL2 Vault position and
+  the managed-region refresh semantics.
+
+`plugin.yaml` moves to 1.3.0; the two existing skills keep their versions.
+
 ## 2026-11-20
 
 ### Added

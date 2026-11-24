@@ -55,7 +55,7 @@ deliberately narrow: anything not named here may change in a minor release.
 | `videos` entries | L2 | The field set inside each entry. The array is always present and may be empty; `--with-videos` only widens the quality gate so a page whose content is just a video player still extracts. |
 | Extractor error codes | L2 | The set of `code` values may grow. |
 | Programmatic entry points | L2 | `build_handler` and `resume_pending` keep their signatures. |
-| Skill names and triggers | L1 | `webclip-obsidian:web-clip-to-obsidian`, `webclip-obsidian:web-save-video`, and the phrases that load them. |
+| Skill names and triggers | L1 | `webclip-obsidian:web-clip-to-obsidian`, `webclip-obsidian:web-save-video`, `webclip-obsidian:webclip-maintenance`, and the phrases that load them. |
 | Tool names | L1 | The `provides_tools` name in `plugin.yaml`; renaming it breaks agent sessions already in flight. |
 | `/save-video` batch behaviour | L2 | Up to 10 URLs per call, a failed candidate does not abort the rest, a duplicate gets a `-1` suffix, then `-2`. |
 
@@ -107,8 +107,9 @@ npm install                     # installs Node deps; the prepare hook installs 
 cp "$REPO/config.example.toml" "$HERMES_HOME/plugins/webclip-obsidian/config.toml"
 ```
 
-The plugin registers its skill in `register()`, so it lives inside the package and
-nothing is copied into a profile. It resolves as
+The plugin registers its skills in `register()`, so they live inside the package
+and nothing is copied into a profile. Each resolves as
+`webclip-obsidian:<skill-name>` — for example
 `webclip-obsidian:web-clip-to-obsidian`.
 
 For a named profile, set `HERMES_HOME` to that profile before the commands.

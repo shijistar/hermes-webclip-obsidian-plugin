@@ -81,15 +81,16 @@ class PluginRegistrationTests(unittest.TestCase):
             context.tool_calls[0]["name"], "web_to_obsidian_resume_pending"
         )
 
-    def test_registers_both_skills_under_the_plugin_namespace(self):
+    def test_registers_all_skills_under_the_plugin_namespace(self):
         plugin = self._load_plugin()
         context = FakeContext()
         plugin.register(context)
 
-        self.assertEqual(len(context.skill_calls), 2)
+        self.assertEqual(len(context.skill_calls), 3)
         registered = {call[0][0]: call for call in context.skill_calls}
         self.assertEqual(
-            set(registered), {"web-clip-to-obsidian", "web-save-video"}
+            set(registered),
+            {"web-clip-to-obsidian", "web-save-video", "webclip-maintenance"},
         )
         for name, (args, kwargs) in registered.items():
             skill_md = args[1]                  # path is the second positional arg
@@ -135,7 +136,7 @@ class PluginRegistrationTests(unittest.TestCase):
 
         self.assertEqual(len(context.command_calls), 2)   # both commands still there
         self.assertEqual(len(context.tool_calls), 1)      # the resume tool too
-        self.assertEqual(len(context.skill_calls), 2)     # damaged one degrades to {}
+        self.assertEqual(len(context.skill_calls), 3)     # damaged one degrades to {}
         damaged = [call for call in context.skill_calls if call[0][0] == "web-save-video"]
         self.assertEqual(damaged[0][1]["frontmatter"], {})
         self.assertEqual(damaged[0][1]["description"], "")

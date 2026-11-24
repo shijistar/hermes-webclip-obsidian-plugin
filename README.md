@@ -6,7 +6,7 @@ repository — commit and push it with guarded automatic synchronization. A seco
 command, `/save-video`, downloads the videos on a page to local disk.
 
 The repository is the Hermes plugin package, with a bundled Node.js extractor
-and two agent skills in the same tree.
+and three agent skills in the same tree.
 
 ## Features
 
@@ -192,6 +192,7 @@ Details: [`PLUGIN.md`](PLUGIN.md#network-and-content-safety),
 | Extractor CLI and error codes | [`extractor/README.md`](extractor/README.md) |
 | Article-clipping skill | [`skills/web-clip-to-obsidian/README.md`](skills/web-clip-to-obsidian/README.md) |
 | Video skill: platforms, HLS, storage | [`skills/web-save-video/SKILL.md`](skills/web-save-video/SKILL.md) |
+| Maintenance skill: pipeline map, tests, state | [`skills/webclip-maintenance/SKILL.md`](skills/webclip-maintenance/SKILL.md) |
 | Contributor guide and release workflow | [`AGENTS.md`](AGENTS.md) |
 | Version history | [`CHANGELOG.md`](CHANGELOG.md) |
 
