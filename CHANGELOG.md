@@ -4,6 +4,21 @@ All notable changes to the hermes-webclip-obsidian-plugin will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## 2026-11-26
+
+### Changed
+
+- The `web-save-video` description now fits the 60-character budget the skill
+  index applies to frontmatter: `Download web videos to local disk; HLS/mp4 via
+  ffmpeg; 下载视频 保存视频 视频下载` (69 characters) became `Download web videos
+  locally; HLS/mp4 via ffmpeg; 下载视频 保存视频` (58), so the index shows the whole
+  line instead of `Download web videos to local disk; HLS/mp4 via ffmpeg...`.
+  The English keywords, `HLS/mp4`, `ffmpeg` and the two distinct Chinese triggers
+  are kept; the dropped `视频下载` only restated `下载视频` in another word order.
+
+`skills/web-save-video` moves to 1.1.2; the plugin and the other two skills keep
+their versions.
+
 ## 2026-11-24
 
 ### Added

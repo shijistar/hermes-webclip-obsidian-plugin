@@ -1,7 +1,7 @@
 ---
 name: web-save-video
-description: Download web videos to local disk; HLS/mp4 via ffmpeg; 下载视频 保存视频 视频下载
-version: 1.1.1
+description: Download web videos locally; HLS/mp4 via ffmpeg; 下载视频 保存视频
+version: 1.1.2
 author: Hermes Agent / Fengbao Li
 metadata:
   hermes:
